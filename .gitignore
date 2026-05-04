@@ -1,0 +1,11 @@
+node_modules/
+dist/
+artifacts/
+output/
+.vitest-attachments/
+.playwright-cli/
+playwright-report/
+e2e/__screenshots__/
+-background
+.DS_Store
+*.log

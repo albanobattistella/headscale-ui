@@ -1,0 +1,41 @@
+{
+  "name": "headscale-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --bun node_modules/vite/bin/vite.js --host 127.0.0.1",
+    "build": "bun --bun node_modules/vue-tsc/bin/vue-tsc.js -p tsconfig.app.json --noEmit && bun --bun node_modules/vite/bin/vite.js build",
+    "preview": "bun --bun node_modules/vite/bin/vite.js preview --host 127.0.0.1",
+    "lint": "bun --bun node_modules/@biomejs/biome/bin/biome check .",
+    "format": "bun --bun node_modules/@biomejs/biome/bin/biome format --write .",
+    "test": "bun test src",
+    "test:e2e": "bun --bun node_modules/vitest/vitest.mjs --config vitest.e2e.config.ts --run",
+    "check": "bun run lint && bun run test && bun run build && bun run test:e2e"
+  },
+  "dependencies": {
+    "@vueuse/core": "^14.3.0",
+    "axios": "latest",
+    "class-variance-authority": "latest",
+    "clsx": "latest",
+    "lucide-vue-next": "latest",
+    "reka-ui": "^2.9.6",
+    "tailwind-merge": "latest",
+    "tailwindcss": "latest",
+    "vue": "latest",
+    "vue-i18n": "latest",
+    "vue-router": "latest"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "latest",
+    "@tailwindcss/vite": "latest",
+    "@vitejs/plugin-vue": "latest",
+    "@vitest/browser-webdriverio": "^4.1.5",
+    "@vue/tsconfig": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "vitest": "latest",
+    "vitest-browser-vue": "latest",
+    "vue-tsc": "latest"
+  }
+}
