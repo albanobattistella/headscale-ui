@@ -774,20 +774,39 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
 
   await page.getByTestId("section-access").click();
   await expect.element(page.getByTestId("policy-editor")).toBeVisible();
+  await expect.element(page.getByTestId("policy-simple-source")).toBeVisible();
+  await expect.element(page.getByTestId("policy-template-ops-ssh")).toBeVisible();
+  await expect.element(page.getByTestId("policy-summary-warnings-count")).toBeVisible();
   await expect.element(page.getByTestId("policy-drop-source")).toBeVisible();
 
+  const clickOnlyRules = countByTestIdPrefix("policy-rule-");
+  await page.getByTestId("policy-simple-source").selectOptions("alice@example.com");
+  await page.getByTestId("policy-simple-destination").selectOptions("tag:server");
+  await page.getByTestId("policy-simple-ports").selectOptions("22");
+  await expect.element(page.getByTestId("policy-rule-preview")).toHaveTextContent("Alice");
+  await expect.element(page.getByTestId("policy-rule-preview")).toHaveTextContent("tag:server");
+  await expect.element(page.getByTestId("policy-rule-preview")).toHaveTextContent("SSH");
+  clickDomTestId("add-policy-rule");
+  await expect.poll(() => countByTestIdPrefix("policy-rule-")).toBe(clickOnlyRules + 1);
+
+  await page.getByTestId("policy-tab-groups").click();
+  await expect.element(page.getByTestId("policy-group-name")).toBeVisible();
   const initialGroups = countByTestIdPrefix("policy-group-");
   await page.getByTestId("policy-group-name").selectOptions("group:dev");
   dragPolicyListChoiceTo("policy-member-source-alice-example-com", "policy-group-members");
   await page.getByTestId("add-policy-group").click();
   await expect.poll(() => countByTestIdPrefix("policy-group-")).toBe(initialGroups + 1);
 
+  await page.getByTestId("policy-tab-tags").click();
+  await expect.element(page.getByTestId("policy-tag-name")).toBeVisible();
   const initialTagOwners = countByTestIdPrefix("policy-tag-owner-");
   await page.getByTestId("policy-tag-name").selectOptions("tag:db");
   dragPolicyListChoiceTo("policy-owner-source-group-ops", "policy-tag-owners");
   await page.getByTestId("add-policy-tag-owner").click();
   await expect.poll(() => countByTestIdPrefix("policy-tag-owner-")).toBe(initialTagOwners + 1);
 
+  await page.getByTestId("policy-tab-rules").click();
+  await expect.element(page.getByTestId("policy-drop-source")).toBeVisible();
   dragPolicyChoiceTo("policy-choice-source-group-dev", "policy-drop-source");
   dragPolicyChoiceTo("policy-choice-destination-tag-db", "policy-drop-destination");
   dragPolicyChoiceTo("policy-choice-ports-443", "policy-drop-ports");
@@ -808,6 +827,11 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   const savedWithUiChanges = latestSavedPolicy();
   expect(savedWithUiChanges.acls).toContainEqual({
     action: "accept",
+    src: ["alice@example.com"],
+    dst: ["tag:server:22"],
+  });
+  expect(savedWithUiChanges.acls).toContainEqual({
+    action: "accept",
     src: ["group:dev"],
     dst: ["tag:db:443"],
   });
@@ -818,8 +842,12 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   window.__headscaleUiOperationCalls = [];
   clickLastByTestIdPrefix("remove-policy-rule-");
   await expect.poll(() => countByTestIdPrefix("policy-rule-")).toBe(initialRules);
+  await page.getByTestId("policy-tab-groups").click();
+  await expect.element(page.getByTestId("policy-group-name")).toBeVisible();
   clickLastByTestIdPrefix("remove-policy-group-");
   await expect.poll(() => countByTestIdPrefix("policy-group-")).toBe(initialGroups);
+  await page.getByTestId("policy-tab-tags").click();
+  await expect.element(page.getByTestId("policy-tag-name")).toBeVisible();
   clickLastByTestIdPrefix("remove-policy-tag-owner-");
   await expect.poll(() => countByTestIdPrefix("policy-tag-owner-")).toBe(initialTagOwners);
 
