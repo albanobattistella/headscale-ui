@@ -237,8 +237,10 @@ function expectRecentDeviceStatusColors() {
   expect(recentExpired?.className).toContain("rose");
 }
 
-function countByTestIdPrefix(prefix: string) {
-  return document.querySelectorAll<HTMLElement>(`[data-testid^="${prefix}"]`).length;
+function countTableRowsByTestIdPrefix(prefix: string) {
+  return Array.from(document.querySelectorAll<HTMLElement>(`[data-testid^="${prefix}"]`)).filter(
+    (element) => element.tagName === "TR",
+  ).length;
 }
 
 function operationCount(id: string) {
@@ -1068,11 +1070,13 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
 
   await page.getByTestId("section-access").click();
   await expect.element(page.getByTestId("policy-editor")).toBeVisible();
-  await expect.element(page.getByTestId("policy-simple-source")).toBeVisible();
+  await expect.element(page.getByTestId("open-policy-rule-dialog")).toBeVisible();
   await expect.element(page.getByTestId("policy-summary-warnings-count")).toBeVisible();
   await expect.element(page.getByTestId("policy-rule-builder")).toBeVisible();
 
-  const clickOnlyRules = countByTestIdPrefix("policy-rule-");
+  const clickOnlyRules = countTableRowsByTestIdPrefix("policy-rule-");
+  await page.getByTestId("open-policy-rule-dialog").click();
+  await expect.element(page.getByTestId("policy-rule-dialog")).toBeVisible();
   await page.getByTestId("policy-simple-source").selectOptions("alice@example.com");
   await page.getByTestId("policy-simple-destination").selectOptions("tag:server");
   await page.getByTestId("policy-simple-ports").selectOptions("22");
@@ -1080,28 +1084,36 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   await expect.element(page.getByTestId("policy-rule-preview")).toHaveTextContent("tag:server");
   await expect.element(page.getByTestId("policy-rule-preview")).toHaveTextContent("SSH");
   clickDomTestId("add-policy-rule");
-  await expect.poll(() => countByTestIdPrefix("policy-rule-")).toBe(clickOnlyRules + 1);
+  await expect.poll(() => countTableRowsByTestIdPrefix("policy-rule-")).toBe(clickOnlyRules + 1);
 
   await page.getByTestId("policy-tab-groups").click();
+  const initialGroups = countTableRowsByTestIdPrefix("policy-group-");
+  await page.getByTestId("open-policy-group-dialog").click();
+  await expect.element(page.getByTestId("policy-group-dialog")).toBeVisible();
   await expect.element(page.getByTestId("policy-group-name")).toBeVisible();
-  const initialGroups = countByTestIdPrefix("policy-group-");
   await page.getByTestId("policy-group-name").selectOptions("group:dev");
   await page.getByTestId("policy-group-member-select").selectOptions("alice@example.com");
   await page.getByTestId("add-policy-group-member").click();
   await page.getByTestId("add-policy-group").click();
-  await expect.poll(() => countByTestIdPrefix("policy-group-")).toBe(initialGroups + 1);
+  await expect.poll(() => countTableRowsByTestIdPrefix("policy-group-")).toBe(initialGroups + 1);
 
   await page.getByTestId("policy-tab-tags").click();
+  const initialTagOwners = countTableRowsByTestIdPrefix("policy-tag-owner-");
+  await page.getByTestId("open-policy-tag-owner-dialog").click();
+  await expect.element(page.getByTestId("policy-tag-owner-dialog")).toBeVisible();
   await expect.element(page.getByTestId("policy-tag-name")).toBeVisible();
-  const initialTagOwners = countByTestIdPrefix("policy-tag-owner-");
   await page.getByTestId("policy-tag-name").selectOptions("tag:db");
   await page.getByTestId("policy-tag-owner-select").selectOptions("group:ops");
   await page.getByTestId("add-policy-tag-owner-selection").click();
   await page.getByTestId("add-policy-tag-owner").click();
-  await expect.poll(() => countByTestIdPrefix("policy-tag-owner-")).toBe(initialTagOwners + 1);
+  await expect
+    .poll(() => countTableRowsByTestIdPrefix("policy-tag-owner-"))
+    .toBe(initialTagOwners + 1);
 
   await page.getByTestId("policy-tab-rules").click();
   await expect.element(page.getByTestId("policy-rule-builder")).toBeVisible();
+  await page.getByTestId("open-policy-rule-dialog").click();
+  await expect.element(page.getByTestId("policy-rule-dialog")).toBeVisible();
   await page.getByTestId("policy-simple-source").selectOptions("group:dev");
   await page.getByTestId("policy-simple-destination").selectOptions("tag:db");
   await page.getByTestId("policy-simple-ports").selectOptions("443");
@@ -1109,9 +1121,9 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   await expect.element(page.getByTestId("policy-rule-preview")).toHaveTextContent("tag:db");
   await expect.element(page.getByTestId("policy-rule-preview")).toHaveTextContent("HTTPS");
 
-  const initialRules = countByTestIdPrefix("policy-rule-");
+  const initialRules = countTableRowsByTestIdPrefix("policy-rule-");
   clickDomTestId("add-policy-rule");
-  await expect.poll(() => countByTestIdPrefix("policy-rule-")).toBe(initialRules + 1);
+  await expect.poll(() => countTableRowsByTestIdPrefix("policy-rule-")).toBe(initialRules + 1);
 
   expectNoRawPolicyEditor();
   await page.getByTestId("policy-tab-review").click();
@@ -1140,15 +1152,15 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   await page.getByTestId("policy-tab-rules").click();
   await expect.element(page.getByTestId("policy-rule-builder")).toBeVisible();
   clickLastByTestIdPrefix("remove-policy-rule-");
-  await expect.poll(() => countByTestIdPrefix("policy-rule-")).toBe(initialRules);
+  await expect.poll(() => countTableRowsByTestIdPrefix("policy-rule-")).toBe(initialRules);
   await page.getByTestId("policy-tab-groups").click();
-  await expect.element(page.getByTestId("policy-group-name")).toBeVisible();
+  await expect.element(page.getByTestId("open-policy-group-dialog")).toBeVisible();
   clickLastByTestIdPrefix("remove-policy-group-");
-  await expect.poll(() => countByTestIdPrefix("policy-group-")).toBe(initialGroups);
+  await expect.poll(() => countTableRowsByTestIdPrefix("policy-group-")).toBe(initialGroups);
   await page.getByTestId("policy-tab-tags").click();
-  await expect.element(page.getByTestId("policy-tag-name")).toBeVisible();
+  await expect.element(page.getByTestId("open-policy-tag-owner-dialog")).toBeVisible();
   clickLastByTestIdPrefix("remove-policy-tag-owner-");
-  await expect.poll(() => countByTestIdPrefix("policy-tag-owner-")).toBe(initialTagOwners);
+  await expect.poll(() => countTableRowsByTestIdPrefix("policy-tag-owner-")).toBe(initialTagOwners);
 
   expectNoRawPolicyEditor();
   await page.getByTestId("save-policy").click();

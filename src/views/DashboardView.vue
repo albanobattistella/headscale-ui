@@ -1072,6 +1072,9 @@ const policyRules = ref<PolicyRule[]>([]);
 const policyGroups = ref<PolicyGroup[]>([]);
 const policyTagOwners = ref<PolicyTagOwner[]>([]);
 const policyExtraSections = ref<Record<string, unknown>>({});
+const policyRuleDialogOpen = ref(false);
+const policyGroupDialogOpen = ref(false);
+const policyTagOwnerDialogOpen = ref(false);
 const policyRuleForm = reactive({
   source: "*",
   destination: "*",
@@ -2633,6 +2636,30 @@ function backToMachines() {
   lastCreatedInvite.value = "";
 }
 
+function openPolicyRuleDialog() {
+  policyRuleDialogOpen.value = true;
+}
+
+function handlePolicyRuleDialogOpen(open: boolean) {
+  policyRuleDialogOpen.value = open;
+}
+
+function openPolicyGroupDialog() {
+  policyGroupDialogOpen.value = true;
+}
+
+function handlePolicyGroupDialogOpen(open: boolean) {
+  policyGroupDialogOpen.value = open;
+}
+
+function openPolicyTagOwnerDialog() {
+  policyTagOwnerDialogOpen.value = true;
+}
+
+function handlePolicyTagOwnerDialogOpen(open: boolean) {
+  policyTagOwnerDialogOpen.value = open;
+}
+
 function addPolicyRule() {
   policyRules.value = [
     ...policyRules.value,
@@ -2644,6 +2671,7 @@ function addPolicyRule() {
       ports: policyRuleForm.ports || "*",
     },
   ];
+  handlePolicyRuleDialogOpen(false);
 }
 
 function removePolicyRule(id: string) {
@@ -2664,6 +2692,7 @@ function addPolicyGroup() {
       members: policyGroupForm.members,
     },
   ];
+  handlePolicyGroupDialogOpen(false);
 }
 
 function removePolicyGroup(id: string) {
@@ -2684,6 +2713,7 @@ function addPolicyTagOwner() {
       owners: policyTagOwnerForm.owners,
     },
   ];
+  handlePolicyTagOwnerDialogOpen(false);
 }
 
 function removePolicyTagOwner(id: string) {
@@ -4661,74 +4691,87 @@ onBeforeUnmount(stopHealthProbe);
                           {{ copy.policyQuickStartDescription }}
                         </p>
                       </div>
-
-                      <div class="mt-3 grid gap-3">
-                        <div>
-                          <Label for="policy-simple-source">{{ copy.policyWhoCanAccess }}</Label>
-                          <NativeSelect
-                            id="policy-simple-source"
-                            v-model="policyRuleForm.source"
-                            data-testid="policy-simple-source"
-                            class="mt-2"
-                          >
-                            <NativeSelectOption
-                              v-for="choice in policySourceChoices"
-                              :key="choice.id"
-                              :value="choice.value"
-                            >
-                              {{ choice.label }}
-                            </NativeSelectOption>
-                          </NativeSelect>
-                        </div>
-                        <div>
-                          <Label for="policy-simple-destination">{{ copy.policyWhatCanAccess }}</Label>
-                          <NativeSelect
-                            id="policy-simple-destination"
-                            v-model="policyRuleForm.destination"
-                            data-testid="policy-simple-destination"
-                            class="mt-2"
-                          >
-                            <NativeSelectOption
-                              v-for="choice in policyDestinationChoices"
-                              :key="choice.id"
-                              :value="choice.value"
-                            >
-                              {{ choice.label }}
-                            </NativeSelectOption>
-                          </NativeSelect>
-                        </div>
-                        <div>
-                          <Label for="policy-simple-ports">{{ copy.policyWhichService }}</Label>
-                          <NativeSelect
-                            id="policy-simple-ports"
-                            v-model="policyRuleForm.ports"
-                            data-testid="policy-simple-ports"
-                            class="mt-2"
-                          >
-                            <NativeSelectOption
-                              v-for="choice in policyServiceChoices"
-                              :key="choice.id"
-                              :value="choice.value"
-                            >
-                              {{ choice.label }}
-                            </NativeSelectOption>
-                          </NativeSelect>
-                        </div>
-                      </div>
-
-                      <div class="mt-3 grid gap-3 rounded-md border bg-background p-3">
-                        <p class="text-sm" data-testid="policy-rule-preview">
-                          <span class="block text-xs font-medium text-muted-foreground">
-                            {{ copy.policySimplePreview }}
-                          </span>
-                          {{ policyRulePreview }}
-                        </p>
-                        <Button type="button" data-testid="add-policy-rule" @click="addPolicyRule">
-                          <Plus class="h-4 w-4" aria-hidden="true" />
-                          {{ copy.addRule }}
-                        </Button>
-                      </div>
+                      <Button type="button" class="mt-3 w-full" data-testid="open-policy-rule-dialog" @click="openPolicyRuleDialog">
+                        <Plus class="h-4 w-4" aria-hidden="true" />
+                        {{ copy.addRule }}
+                      </Button>
                     </div>
+
+                    <Dialog :open="policyRuleDialogOpen" @update:open="handlePolicyRuleDialogOpen">
+                      <DialogContent class="sm:max-w-xl" data-testid="policy-rule-dialog">
+                        <DialogHeader>
+                          <DialogTitle>{{ copy.policyQuickStartTitle }}</DialogTitle>
+                          <DialogDescription>{{ copy.policyQuickStartDescription }}</DialogDescription>
+                        </DialogHeader>
+                        <form class="grid gap-3" data-testid="policy-rule-form" @submit.prevent="addPolicyRule">
+                          <div>
+                            <Label for="policy-simple-source">{{ copy.policyWhoCanAccess }}</Label>
+                            <NativeSelect
+                              id="policy-simple-source"
+                              v-model="policyRuleForm.source"
+                              data-testid="policy-simple-source"
+                              class="mt-2"
+                            >
+                              <NativeSelectOption
+                                v-for="choice in policySourceChoices"
+                                :key="choice.id"
+                                :value="choice.value"
+                              >
+                                {{ choice.label }}
+                              </NativeSelectOption>
+                            </NativeSelect>
+                          </div>
+                          <div>
+                            <Label for="policy-simple-destination">{{ copy.policyWhatCanAccess }}</Label>
+                            <NativeSelect
+                              id="policy-simple-destination"
+                              v-model="policyRuleForm.destination"
+                              data-testid="policy-simple-destination"
+                              class="mt-2"
+                            >
+                              <NativeSelectOption
+                                v-for="choice in policyDestinationChoices"
+                                :key="choice.id"
+                                :value="choice.value"
+                              >
+                                {{ choice.label }}
+                              </NativeSelectOption>
+                            </NativeSelect>
+                          </div>
+                          <div>
+                            <Label for="policy-simple-ports">{{ copy.policyWhichService }}</Label>
+                            <NativeSelect
+                              id="policy-simple-ports"
+                              v-model="policyRuleForm.ports"
+                              data-testid="policy-simple-ports"
+                              class="mt-2"
+                            >
+                              <NativeSelectOption
+                                v-for="choice in policyServiceChoices"
+                                :key="choice.id"
+                                :value="choice.value"
+                              >
+                                {{ choice.label }}
+                              </NativeSelectOption>
+                            </NativeSelect>
+                          </div>
+                          <div class="rounded-md border bg-background p-3">
+                            <p class="text-sm" data-testid="policy-rule-preview">
+                              <span class="block text-xs font-medium text-muted-foreground">
+                                {{ copy.policySimplePreview }}
+                              </span>
+                              {{ policyRulePreview }}
+                            </p>
+                          </div>
+                          <DialogFooter>
+                            <Button type="submit" data-testid="add-policy-rule">
+                              <Plus class="h-4 w-4" aria-hidden="true" />
+                              {{ copy.addRule }}
+                            </Button>
+                          </DialogFooter>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
                   </div>
 
                   <div class="grid content-start gap-2 rtl:lg:order-1">
@@ -4790,53 +4833,71 @@ onBeforeUnmount(stopHealthProbe);
                   <div class="grid gap-3 lg:grid-cols-[24rem_minmax(0,1fr)] rtl:lg:grid-cols-[minmax(0,1fr)_24rem]">
                     <div class="grid gap-3 rounded-md border bg-secondary/20 p-3 rtl:lg:order-2">
                       <h2 class="font-semibold">{{ copy.groups }}</h2>
-                      <div>
-                        <Label for="policy-group-name">{{ copy.groupName }}</Label>
-                        <NativeSelect id="policy-group-name" v-model="policyGroupForm.name" data-testid="policy-group-name" class="mt-2">
-                          <NativeSelectOption v-for="groupName in policyGroupNameChoices" :key="groupName" :value="groupName">
-                            {{ groupName }}
-                          </NativeSelectOption>
-                        </NativeSelect>
-                      </div>
-                      <div>
-                        <Label for="policy-group-member-select">{{ copy.selectGroupMember }}</Label>
-                        <div class="mt-2 grid gap-2">
-                          <NativeSelect
-                            id="policy-group-member-select"
-                            v-model="policyGroupMemberSelection"
-                            data-testid="policy-group-member-select"
-                          >
-                            <NativeSelectOption value="" disabled>{{ copy.selectGroupMember }}</NativeSelectOption>
-                            <NativeSelectOption
-                              v-for="choice in policyMemberChoices"
-                              :key="choice.id"
-                              :value="choice.value"
-                            >
-                              {{ choice.label }}
-                            </NativeSelectOption>
-                          </NativeSelect>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            data-testid="add-policy-group-member"
-                            @click="addSelectedPolicyGroupMember"
-                          >
-                            <Plus class="h-4 w-4" aria-hidden="true" />
-                            {{ copy.addSelectedMember }}
-                          </Button>
-                        </div>
-                      </div>
-                      <div class="rounded-md border bg-background px-3 py-2" data-testid="policy-group-members">
-                        <p class="text-xs font-medium text-muted-foreground">{{ copy.selectedMembers }}</p>
-                        <p class="mt-1 min-h-6 break-all text-sm font-medium">
-                          {{ policyGroupForm.members || copy.selectGroupMember }}
-                        </p>
-                      </div>
-                      <Button type="button" data-testid="add-policy-group" @click="addPolicyGroup">
+                      <p class="text-sm text-muted-foreground">{{ copy.groupMemberPicker }}</p>
+                      <Button type="button" data-testid="open-policy-group-dialog" @click="openPolicyGroupDialog">
                         <Plus class="h-4 w-4" aria-hidden="true" />
                         {{ copy.addGroup }}
                       </Button>
                     </div>
+
+                    <Dialog :open="policyGroupDialogOpen" @update:open="handlePolicyGroupDialogOpen">
+                      <DialogContent class="sm:max-w-xl" data-testid="policy-group-dialog">
+                        <DialogHeader>
+                          <DialogTitle>{{ copy.addGroup }}</DialogTitle>
+                          <DialogDescription>{{ copy.groupMemberPicker }}</DialogDescription>
+                        </DialogHeader>
+                        <form class="grid gap-3" data-testid="policy-group-form" @submit.prevent="addPolicyGroup">
+                          <div>
+                            <Label for="policy-group-name">{{ copy.groupName }}</Label>
+                            <NativeSelect id="policy-group-name" v-model="policyGroupForm.name" data-testid="policy-group-name" class="mt-2">
+                              <NativeSelectOption v-for="groupName in policyGroupNameChoices" :key="groupName" :value="groupName">
+                                {{ groupName }}
+                              </NativeSelectOption>
+                            </NativeSelect>
+                          </div>
+                          <div>
+                            <Label for="policy-group-member-select">{{ copy.selectGroupMember }}</Label>
+                            <div class="mt-2 grid gap-2">
+                              <NativeSelect
+                                id="policy-group-member-select"
+                                v-model="policyGroupMemberSelection"
+                                data-testid="policy-group-member-select"
+                              >
+                                <NativeSelectOption value="" disabled>{{ copy.selectGroupMember }}</NativeSelectOption>
+                                <NativeSelectOption
+                                  v-for="choice in policyMemberChoices"
+                                  :key="choice.id"
+                                  :value="choice.value"
+                                >
+                                  {{ choice.label }}
+                                </NativeSelectOption>
+                              </NativeSelect>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                data-testid="add-policy-group-member"
+                                @click="addSelectedPolicyGroupMember"
+                              >
+                                <Plus class="h-4 w-4" aria-hidden="true" />
+                                {{ copy.addSelectedMember }}
+                              </Button>
+                            </div>
+                          </div>
+                          <div class="rounded-md border bg-background px-3 py-2" data-testid="policy-group-members">
+                            <p class="text-xs font-medium text-muted-foreground">{{ copy.selectedMembers }}</p>
+                            <p class="mt-1 min-h-6 break-all text-sm font-medium">
+                              {{ policyGroupForm.members || copy.selectGroupMember }}
+                            </p>
+                          </div>
+                          <DialogFooter>
+                            <Button type="submit" data-testid="add-policy-group">
+                              <Plus class="h-4 w-4" aria-hidden="true" />
+                              {{ copy.addGroup }}
+                            </Button>
+                          </DialogFooter>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
 
                     <div class="grid content-start gap-3 rtl:lg:order-1">
                       <p class="text-sm text-muted-foreground">{{ copy.groupMemberPicker }}</p>
@@ -4872,53 +4933,71 @@ onBeforeUnmount(stopHealthProbe);
                   <div class="grid gap-3 lg:grid-cols-[24rem_minmax(0,1fr)] rtl:lg:grid-cols-[minmax(0,1fr)_24rem]">
                     <div class="grid gap-3 rounded-md border bg-secondary/20 p-3 rtl:lg:order-2">
                       <h2 class="font-semibold">{{ copy.tagOwners }}</h2>
-                      <div>
-                        <Label for="policy-tag-name">{{ copy.tagName }}</Label>
-                        <NativeSelect id="policy-tag-name" v-model="policyTagOwnerForm.tag" data-testid="policy-tag-name" class="mt-2">
-                          <NativeSelectOption v-for="tagName in policyTagNameChoices" :key="tagName" :value="tagName">
-                            {{ tagName }}
-                          </NativeSelectOption>
-                        </NativeSelect>
-                      </div>
-                      <div>
-                        <Label for="policy-tag-owner-select">{{ copy.selectTagOwner }}</Label>
-                        <div class="mt-2 grid gap-2">
-                          <NativeSelect
-                            id="policy-tag-owner-select"
-                            v-model="policyTagOwnerSelection"
-                            data-testid="policy-tag-owner-select"
-                          >
-                            <NativeSelectOption value="" disabled>{{ copy.selectTagOwner }}</NativeSelectOption>
-                            <NativeSelectOption
-                              v-for="choice in policyOwnerChoices"
-                              :key="choice.id"
-                              :value="choice.value"
-                            >
-                              {{ choice.label }}
-                            </NativeSelectOption>
-                          </NativeSelect>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            data-testid="add-policy-tag-owner-selection"
-                            @click="addSelectedPolicyTagOwner"
-                          >
-                            <Plus class="h-4 w-4" aria-hidden="true" />
-                            {{ copy.addSelectedOwner }}
-                          </Button>
-                        </div>
-                      </div>
-                      <div class="rounded-md border bg-background px-3 py-2" data-testid="policy-tag-owners">
-                        <p class="text-xs font-medium text-muted-foreground">{{ copy.selectedOwners }}</p>
-                        <p class="mt-1 min-h-6 break-all text-sm font-medium">
-                          {{ policyTagOwnerForm.owners || copy.selectTagOwner }}
-                        </p>
-                      </div>
-                      <Button type="button" data-testid="add-policy-tag-owner" @click="addPolicyTagOwner">
+                      <p class="text-sm text-muted-foreground">{{ copy.tagOwnerPicker }}</p>
+                      <Button type="button" data-testid="open-policy-tag-owner-dialog" @click="openPolicyTagOwnerDialog">
                         <Plus class="h-4 w-4" aria-hidden="true" />
                         {{ copy.addTagOwner }}
                       </Button>
                     </div>
+
+                    <Dialog :open="policyTagOwnerDialogOpen" @update:open="handlePolicyTagOwnerDialogOpen">
+                      <DialogContent class="sm:max-w-xl" data-testid="policy-tag-owner-dialog">
+                        <DialogHeader>
+                          <DialogTitle>{{ copy.addTagOwner }}</DialogTitle>
+                          <DialogDescription>{{ copy.tagOwnerPicker }}</DialogDescription>
+                        </DialogHeader>
+                        <form class="grid gap-3" data-testid="policy-tag-owner-form" @submit.prevent="addPolicyTagOwner">
+                          <div>
+                            <Label for="policy-tag-name">{{ copy.tagName }}</Label>
+                            <NativeSelect id="policy-tag-name" v-model="policyTagOwnerForm.tag" data-testid="policy-tag-name" class="mt-2">
+                              <NativeSelectOption v-for="tagName in policyTagNameChoices" :key="tagName" :value="tagName">
+                                {{ tagName }}
+                              </NativeSelectOption>
+                            </NativeSelect>
+                          </div>
+                          <div>
+                            <Label for="policy-tag-owner-select">{{ copy.selectTagOwner }}</Label>
+                            <div class="mt-2 grid gap-2">
+                              <NativeSelect
+                                id="policy-tag-owner-select"
+                                v-model="policyTagOwnerSelection"
+                                data-testid="policy-tag-owner-select"
+                              >
+                                <NativeSelectOption value="" disabled>{{ copy.selectTagOwner }}</NativeSelectOption>
+                                <NativeSelectOption
+                                  v-for="choice in policyOwnerChoices"
+                                  :key="choice.id"
+                                  :value="choice.value"
+                                >
+                                  {{ choice.label }}
+                                </NativeSelectOption>
+                              </NativeSelect>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                data-testid="add-policy-tag-owner-selection"
+                                @click="addSelectedPolicyTagOwner"
+                              >
+                                <Plus class="h-4 w-4" aria-hidden="true" />
+                                {{ copy.addSelectedOwner }}
+                              </Button>
+                            </div>
+                          </div>
+                          <div class="rounded-md border bg-background px-3 py-2" data-testid="policy-tag-owners">
+                            <p class="text-xs font-medium text-muted-foreground">{{ copy.selectedOwners }}</p>
+                            <p class="mt-1 min-h-6 break-all text-sm font-medium">
+                              {{ policyTagOwnerForm.owners || copy.selectTagOwner }}
+                            </p>
+                          </div>
+                          <DialogFooter>
+                            <Button type="submit" data-testid="add-policy-tag-owner">
+                              <Plus class="h-4 w-4" aria-hidden="true" />
+                              {{ copy.addTagOwner }}
+                            </Button>
+                          </DialogFooter>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
 
                     <div class="grid content-start gap-3 rtl:lg:order-1">
                       <p class="text-sm text-muted-foreground">{{ copy.tagOwnerPicker }}</p>
