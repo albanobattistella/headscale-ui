@@ -792,6 +792,24 @@ test("covers the empty machine state and add-first-device flow", async () => {
   await expect.element(page.getByTestId("setup-tags")).toHaveValue("");
 });
 
+test("renames a machine from the user detail device path", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+
+  await page.getByTestId("section-members").click();
+  await page.getByTestId("member-detail-link-alice").click();
+  await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Alice Ops");
+  await page.getByTestId("user-detail-device-1").click();
+  await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("alice-laptop");
+  await page.getByTestId("device-detail-rename").click();
+  await expect.element(page.getByTestId("rename-node-dialog")).toBeVisible();
+  await page.getByTestId("rename-node-dialog-input").fill("alice-from-user");
+  await page.getByTestId("rename-node-confirm").click();
+
+  await page.getByTestId("section-devices").click();
+  await expect.element(page.getByTestId("device-1")).toHaveTextContent("alice-from-user");
+});
+
 test("covers user filters, user export and member deletion", async () => {
   await renderLogin();
   await connectWithDefaults();

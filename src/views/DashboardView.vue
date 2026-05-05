@@ -3348,6 +3348,70 @@ onBeforeUnmount(stopHealthProbe);
           </DialogContent>
         </Dialog>
 
+        <Dialog :open="renameDialogOpen" @update:open="handleRenameDialogOpen">
+          <DialogContent v-if="selectedRenameNode" data-testid="rename-node-dialog">
+            <DialogHeader>
+              <DialogTitle>{{ copy.renameMachineTitle }}</DialogTitle>
+              <DialogDescription>
+                {{ copy.renameMachineDescription }}
+              </DialogDescription>
+            </DialogHeader>
+            <div class="grid gap-2">
+              <Label for="rename-node-dialog-input">{{ copy.machineName }}</Label>
+              <Input
+                id="rename-node-dialog-input"
+                v-model="renameDrafts[selectedRenameNode.id]"
+                data-testid="rename-node-dialog-input"
+                @keydown.enter.prevent="confirmRenameNode"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" data-testid="rename-node-cancel" @click="handleRenameDialogOpen(false)">
+                {{ copy.cancel }}
+              </Button>
+              <Button data-testid="rename-node-confirm" @click="confirmRenameNode">
+                {{ copy.saveName }}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog :open="expireDialogOpen" @update:open="handleExpireDialogOpen">
+          <AlertDialogContent v-if="selectedExpireNode" data-testid="expire-node-dialog">
+            <AlertDialogHeader>
+              <AlertDialogTitle>{{ copy.expireMachineTitle }}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {{ copy.expireMachineDescription }}
+                <span class="mt-2 block font-medium text-foreground">{{ selectedExpireNode.name }}</span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="expire-node-cancel">{{ copy.cancel }}</AlertDialogCancel>
+              <Button variant="destructive" data-testid="expire-node-confirm" @click="confirmExpireNode">
+                {{ copy.confirmExpire }}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog :open="removeDialogOpen" @update:open="handleRemoveDialogOpen">
+          <AlertDialogContent v-if="selectedRemoveNode" data-testid="remove-node-dialog">
+            <AlertDialogHeader>
+              <AlertDialogTitle>{{ copy.removeMachineTitle }}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {{ copy.removeMachineDescription }}
+                <span class="mt-2 block font-medium text-foreground">{{ selectedRemoveNode.name }}</span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="remove-node-cancel">{{ copy.cancel }}</AlertDialogCancel>
+              <Button variant="destructive" data-testid="remove-node-confirm" @click="confirmRemoveNode">
+                {{ copy.confirmRemove }}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <section v-if="activeSection === 'home'" class="space-y-3 lg:space-y-4">
           <div class="grid gap-3 lg:flex lg:items-end lg:justify-between">
             <div>
@@ -3860,69 +3924,6 @@ onBeforeUnmount(stopHealthProbe);
             </div>
           </div>
 
-          <Dialog :open="renameDialogOpen" @update:open="handleRenameDialogOpen">
-            <DialogContent v-if="selectedRenameNode" data-testid="rename-node-dialog">
-              <DialogHeader>
-                <DialogTitle>{{ copy.renameMachineTitle }}</DialogTitle>
-                <DialogDescription>
-                  {{ copy.renameMachineDescription }}
-                </DialogDescription>
-              </DialogHeader>
-              <div class="grid gap-2">
-                <Label for="rename-node-dialog-input">{{ copy.machineName }}</Label>
-                <Input
-                  id="rename-node-dialog-input"
-                  v-model="renameDrafts[selectedRenameNode.id]"
-                  data-testid="rename-node-dialog-input"
-                  @keydown.enter.prevent="confirmRenameNode"
-                />
-              </div>
-              <DialogFooter>
-                <Button variant="outline" data-testid="rename-node-cancel" @click="handleRenameDialogOpen(false)">
-                  {{ copy.cancel }}
-                </Button>
-                <Button data-testid="rename-node-confirm" @click="confirmRenameNode">
-                  {{ copy.saveName }}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <AlertDialog :open="expireDialogOpen" @update:open="handleExpireDialogOpen">
-            <AlertDialogContent v-if="selectedExpireNode" data-testid="expire-node-dialog">
-              <AlertDialogHeader>
-                <AlertDialogTitle>{{ copy.expireMachineTitle }}</AlertDialogTitle>
-                <AlertDialogDescription>
-                  {{ copy.expireMachineDescription }}
-                  <span class="mt-2 block font-medium text-foreground">{{ selectedExpireNode.name }}</span>
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel data-testid="expire-node-cancel">{{ copy.cancel }}</AlertDialogCancel>
-                <Button variant="destructive" data-testid="expire-node-confirm" @click="confirmExpireNode">
-                  {{ copy.confirmExpire }}
-                </Button>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
-          <AlertDialog :open="removeDialogOpen" @update:open="handleRemoveDialogOpen">
-            <AlertDialogContent v-if="selectedRemoveNode" data-testid="remove-node-dialog">
-              <AlertDialogHeader>
-                <AlertDialogTitle>{{ copy.removeMachineTitle }}</AlertDialogTitle>
-                <AlertDialogDescription>
-                  {{ copy.removeMachineDescription }}
-                  <span class="mt-2 block font-medium text-foreground">{{ selectedRemoveNode.name }}</span>
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel data-testid="remove-node-cancel">{{ copy.cancel }}</AlertDialogCancel>
-                <Button variant="destructive" data-testid="remove-node-confirm" @click="confirmRemoveNode">
-                  {{ copy.confirmRemove }}
-                </Button>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </section>
 
         <section v-else-if="activeSection === 'members'" class="space-y-3 lg:space-y-4">
