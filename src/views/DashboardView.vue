@@ -745,6 +745,94 @@ const productCopy: Record<Locale, ProductCopy> = {
     invitesTitle: "مفاتيح الدخول",
     routesTitle: "المسارات",
     accessTitle: "التحكم بالوصول",
+    accessSubtitle: "صمم قوائم ACL والمجموعات وملكية الوسوم من دون تعديل JSON الخام.",
+    policyDesigner: "مصمم السياسة",
+    ruleBuilder: "منشئ قواعد الوصول",
+    source: "من",
+    destination: "إلى",
+    ports: "الخدمة",
+    policyObjectPicker: "اختر العناصر من القوائم",
+    policyDropHint: "اختر من القائمة",
+    selectedRule: "القاعدة المحددة",
+    sourceChoices: "الأشخاص والمجموعات",
+    destinationChoices: "الأجهزة والوسوم",
+    serviceChoices: "الخدمات",
+    anySource: "الجميع",
+    anySourceDescription: "كل المستخدمين والمجموعات والأجهزة الموسومة",
+    anyDestination: "كل الأجهزة",
+    anyDestinationDescription: "كل جهاز في هذه الشبكة",
+    anyService: "كل الخدمات",
+    anyServiceDescription: "كل المنافذ",
+    userChoiceDescription: "حساب مستخدم",
+    groupChoiceDescription: "مجموعة محفوظة",
+    tagChoiceDescription: "أجهزة موسومة",
+    deviceChoiceDescription: "عنوان جهاز محدد",
+    serviceSsh: "SSH",
+    serviceHttps: "HTTPS",
+    serviceDns: "DNS",
+    serviceSshDescription: "المنفذ 22",
+    serviceHttpsDescription: "المنفذ 443",
+    serviceDnsDescription: "المنفذ 53",
+    policyRulePreview: "معاينة القاعدة",
+    allowTraffic: "السماح بالمرور",
+    addRule: "إضافة قاعدة",
+    groups: "المجموعات",
+    groupName: "اسم المجموعة",
+    groupMembers: "الأعضاء",
+    groupMemberPicker: "اختر المستخدمين من القائمة وأضفهم إلى هذه المجموعة.",
+    selectedMembers: "الأعضاء المحددون",
+    selectGroupMember: "اختر عضوا",
+    addSelectedMember: "إضافة عضو",
+    addGroup: "إضافة مجموعة",
+    tagOwners: "مالكو الوسوم",
+    tagName: "الوسم",
+    ownersList: "المالكون",
+    tagOwnerPicker: "اختر مستخدمين أو مجموعات وامنحهم هذا الوسم.",
+    selectedOwners: "المالكون المحددون",
+    selectTagOwner: "اختر مالكا",
+    addSelectedOwner: "إضافة مالك",
+    addTagOwner: "إضافة مالك وسم",
+    removeItem: "إزالة",
+    safetyReview: "مراجعة السلامة",
+    readyToSave: "جاهز للحفظ",
+    policyWarningOpenAccess: "تسمح قاعدة حاليا لكل مصدر بالوصول إلى كل وجهة.",
+    policyWarningExitRoute: "تحتاج مسارات الخروج إلى مراجعة صريحة قبل الموافقة.",
+    policySummary: "ملخص السياسة",
+    policy: "السياسة",
+    savePolicy: "حفظ السياسة",
+    policyWorkspaceSummary:
+      "تعرض القواعد كجمل واضحة. يتم حفظ أقسام السياسة المتقدمة كما هي عند الحفظ.",
+    policyRulesTab: "قواعد الوصول",
+    policyGroupsTab: "المجموعات",
+    policyTagOwnersTab: "وصول الوسوم",
+    policyReviewTab: "المراجعة",
+    policyOverviewRules: "القواعد",
+    policyOverviewGroups: "المجموعات",
+    policyOverviewTags: "وصول الوسوم",
+    policyOverviewWarnings: "التحذيرات",
+    policyQuickStartTitle: "إنشاء قاعدة وصول",
+    policyQuickStartDescription: "اختر من يمكنه الوصول إلى الأجهزة والخدمات. لا حاجة إلى JSON.",
+    policyWhoCanAccess: "من يمكنه الوصول",
+    policyWhatCanAccess: "ما الذي يمكنه الوصول إليه",
+    policyWhichService: "أي خدمة",
+    policySimplePreview: "معاينة بلغة واضحة",
+    policyAdvancedPicker: "خيارات القائمة",
+    policyAdvancedPickerDescription: "استخدم القوائم أعلاه لإنشاء القواعد من دون تعديل JSON.",
+    existingRules: "قواعد الوصول الحالية",
+    noPolicyRules: "لا توجد قواعد وصول بعد.",
+    highRisk: "مخاطرة عالية",
+    reviewNeeded: "تحتاج مراجعة",
+    noPolicyWarnings: "لم يتم العثور على مشكلات مانعة.",
+    preservedPolicySections: "أقسام السياسة المتقدمة المحفوظة",
+    preservedPolicySectionsDescription:
+      "لا يتم تعديل هذه الأقسام هنا، لكنها تبقى ضمن السياسة المحفوظة.",
+    noPreservedPolicySections: "لا توجد أقسام سياسة إضافية.",
+    policyRulesTableRule: "القاعدة",
+    policyRulesTableSource: "من",
+    policyRulesTableDestination: "الجهاز أو الوسم",
+    policyRulesTableService: "الخدمة",
+    policyRulesTableRisk: "المخاطرة",
+    policyRulesTableActions: "الإجراءات",
   },
 };
 
@@ -1289,7 +1377,9 @@ const policyExtraSectionKeys = computed(() => Object.keys(policyExtraSections.va
 const policyWorkspaceSummary = computed(() =>
   locale.value === "zh"
     ? `${policyRules.value.length} 条规则，${policyGroups.value.length} 个用户组，${policyTagOwners.value.length} 个标签授权，${policyRiskCount.value} 个风险。`
-    : `${policyRules.value.length} rules, ${policyGroups.value.length} groups, ${policyTagOwners.value.length} tag grants and ${policyRiskCount.value} warnings.`,
+    : locale.value === "ar"
+      ? `${policyRules.value.length} قاعدة، ${policyGroups.value.length} مجموعة، ${policyTagOwners.value.length} منح وسوم و ${policyRiskCount.value} تحذيرات.`
+      : `${policyRules.value.length} rules, ${policyGroups.value.length} groups, ${policyTagOwners.value.length} tag grants and ${policyRiskCount.value} warnings.`,
 );
 const themeLabel = computed(() => themeModeLabel(colorMode.value));
 const currentProfileLabel = computed(() => connectionForm.profileName || t("profile"));
@@ -1843,14 +1933,26 @@ function policyRuleSentence(source: string, destination: string, ports: string) 
   const serviceLabel = policyChoiceLabel("ports", ports);
 
   if (source === "*" && destination === "*" && ports === "*") {
-    return locale.value === "zh"
-      ? "高风险：所有来源可以访问所有设备的所有服务。"
-      : "High risk: everyone can reach every device on every service.";
+    if (locale.value === "zh") {
+      return "高风险：所有来源可以访问所有设备的所有服务。";
+    }
+
+    if (locale.value === "ar") {
+      return "مخاطرة عالية: يمكن للجميع الوصول إلى كل جهاز عبر كل الخدمات.";
+    }
+
+    return "High risk: everyone can reach every device on every service.";
   }
 
-  return locale.value === "zh"
-    ? `允许 ${sourceLabel} 访问 ${destinationLabel} 的 ${serviceLabel}。`
-    : `Allow ${sourceLabel} to reach ${destinationLabel} on ${serviceLabel}.`;
+  if (locale.value === "zh") {
+    return `允许 ${sourceLabel} 访问 ${destinationLabel} 的 ${serviceLabel}。`;
+  }
+
+  if (locale.value === "ar") {
+    return `السماح لـ ${sourceLabel} بالوصول إلى ${destinationLabel} عبر ${serviceLabel}.`;
+  }
+
+  return `Allow ${sourceLabel} to reach ${destinationLabel} on ${serviceLabel}.`;
 }
 
 function isPolicyRuleHighRisk(rule: Pick<PolicyRule, "source" | "destination" | "ports">) {
@@ -2613,7 +2715,7 @@ onBeforeUnmount(stopHealthProbe);
               <Button
                 type="button"
                 variant="ghost"
-                class="h-auto w-full justify-start px-0 py-0 text-left hover:bg-transparent"
+                class="h-auto w-full justify-start px-0 py-0 text-start hover:bg-transparent"
                 @click="loadProfile(profile.id)"
               >
                 <span>
@@ -2652,7 +2754,7 @@ onBeforeUnmount(stopHealthProbe);
               <span class="text-sm font-semibold leading-none sm:text-base">Headscale UI</span>
             </div>
 
-            <div class="ml-auto flex shrink-0 items-center gap-1">
+            <div class="ms-auto flex shrink-0 items-center gap-1">
               <DropdownMenu v-model:open="profileMenuOpen">
                 <DropdownMenuTrigger as-child>
                   <Button
@@ -2664,7 +2766,7 @@ onBeforeUnmount(stopHealthProbe);
                   >
                     <CircleUserRound class="h-5 w-5" aria-hidden="true" />
                     <span
-                      class="absolute -bottom-0.5 -right-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border"
+                      class="absolute -bottom-0.5 -end-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border"
                       :class="serverSignalClass"
                       :aria-label="serverSignalLabel"
                       :title="serverSignalLabel"
@@ -2701,7 +2803,7 @@ onBeforeUnmount(stopHealthProbe);
                         @click="chooseLocale(option)"
                       >
                         <span>{{ LOCALE_META[option].nativeLabel }}</span>
-                        <Check v-if="locale === option" class="ml-auto h-4 w-4" aria-hidden="true" />
+                        <Check v-if="locale === option" class="ms-auto h-4 w-4" aria-hidden="true" />
                       </DropdownMenuItem>
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
@@ -2728,7 +2830,7 @@ onBeforeUnmount(stopHealthProbe);
                         @click="chooseTheme(mode)"
                       >
                         <span>{{ themeModeLabel(mode) }}</span>
-                        <Check v-if="colorMode === mode" class="ml-auto h-4 w-4" aria-hidden="true" />
+                        <Check v-if="colorMode === mode" class="ms-auto h-4 w-4" aria-hidden="true" />
                       </DropdownMenuItem>
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
@@ -3028,7 +3130,7 @@ onBeforeUnmount(stopHealthProbe);
                   {{ copy.addDevice }}
                 </Button>
               </div>
-              <div class="pointer-events-none absolute bottom-0 right-0 hidden grid-cols-4 gap-0 p-4 sm:grid" aria-hidden="true">
+              <div class="pointer-events-none absolute bottom-0 end-0 hidden grid-cols-4 gap-0 p-4 sm:grid" aria-hidden="true">
                 <span class="h-12 w-12 rounded-tl-full bg-primary/90" />
                 <span class="h-12 w-12 rounded-full bg-primary/20" />
                 <span class="h-12 w-12 rounded-br-full bg-primary/80" />
@@ -3045,15 +3147,15 @@ onBeforeUnmount(stopHealthProbe);
                 <div class="w-full sm:max-w-sm">
                   <Label for="device-search" class="sr-only">{{ copy.searchDevices }}</Label>
                   <div class="relative">
-                    <Search class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                    <Input id="device-search" v-model="deviceSearch" data-testid="device-search" class="pl-8" :placeholder="copy.searchDevices" />
+                    <Search class="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                    <Input id="device-search" v-model="deviceSearch" data-testid="device-search" class="ps-8" :placeholder="copy.searchDevices" />
                   </div>
                 </div>
                 <div class="w-full sm:w-48">
                   <Label for="machine-filter" class="sr-only">{{ copy.filters }}</Label>
                   <div class="relative">
-                    <Filter class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                    <Select id="machine-filter" v-model="machineFilter" data-testid="machine-filter" class="pl-8">
+                    <Filter class="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                    <Select id="machine-filter" v-model="machineFilter" data-testid="machine-filter" class="ps-8">
                       <option value="all">{{ copy.allMachines }}</option>
                       <option value="online">{{ copy.onlineOnly }}</option>
                       <option value="offline">{{ copy.offlineOnly }}</option>
@@ -3063,7 +3165,7 @@ onBeforeUnmount(stopHealthProbe);
                     </Select>
                   </div>
                 </div>
-                <p class="whitespace-nowrap text-xs text-muted-foreground sm:ml-auto">{{ filteredNodes.length }} / {{ snapshot.nodes.length }}</p>
+                <p class="whitespace-nowrap text-xs text-muted-foreground sm:ms-auto">{{ filteredNodes.length }} / {{ snapshot.nodes.length }}</p>
                 <Button type="button" variant="outline" size="icon" data-testid="export-machines" :aria-label="copy.exportData" @click="exportMachines">
                   <Download class="h-4 w-4" aria-hidden="true" />
                 </Button>
@@ -3079,7 +3181,7 @@ onBeforeUnmount(stopHealthProbe);
                       <TableHead>{{ copy.devicesTableUser }}</TableHead>
                       <TableHead>{{ copy.devicesTableRoutes }}</TableHead>
                       <TableHead>{{ copy.devicesTableActivity }}</TableHead>
-                      <TableHead class="hidden text-right md:table-cell">{{ copy.actions }}</TableHead>
+                      <TableHead class="hidden text-end md:table-cell">{{ copy.actions }}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -3313,15 +3415,15 @@ onBeforeUnmount(stopHealthProbe);
               <div class="w-full sm:max-w-sm">
                 <Label for="user-search" class="sr-only">{{ copy.searchUsers }}</Label>
                 <div class="relative">
-                  <Search class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                  <Input id="user-search" v-model="userSearch" data-testid="user-search" class="pl-8" :placeholder="copy.searchUsers" />
+                  <Search class="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <Input id="user-search" v-model="userSearch" data-testid="user-search" class="ps-8" :placeholder="copy.searchUsers" />
                 </div>
               </div>
               <div class="w-full sm:w-44">
                 <Label for="user-filter" class="sr-only">{{ copy.filters }}</Label>
                 <div class="relative">
-                  <SlidersHorizontal class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                  <Select id="user-filter" v-model="userFilter" data-testid="user-filter" class="pl-8">
+                  <SlidersHorizontal class="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <Select id="user-filter" v-model="userFilter" data-testid="user-filter" class="ps-8">
                     <option value="all">{{ copy.allUsers }}</option>
                     <option value="owner">{{ copy.owners }}</option>
                     <option value="member">{{ copy.members }}</option>
@@ -3329,7 +3431,7 @@ onBeforeUnmount(stopHealthProbe);
                   </Select>
                 </div>
               </div>
-              <p class="whitespace-nowrap text-xs text-muted-foreground sm:ml-auto">{{ filteredUsers.length }} / {{ snapshot.users.length }}</p>
+              <p class="whitespace-nowrap text-xs text-muted-foreground sm:ms-auto">{{ filteredUsers.length }} / {{ snapshot.users.length }}</p>
               <Button type="button" variant="outline" size="icon" data-testid="export-users" :aria-label="copy.exportData" @click="exportUsers">
                 <Download class="h-4 w-4" aria-hidden="true" />
               </Button>
@@ -3347,7 +3449,7 @@ onBeforeUnmount(stopHealthProbe);
                     <TableHead>{{ copy.deviceCount }}</TableHead>
                     <TableHead>{{ copy.joined }}</TableHead>
                     <TableHead>{{ copy.authSource }}</TableHead>
-                    <TableHead class="hidden text-right md:table-cell">{{ copy.actions }}</TableHead>
+                    <TableHead class="hidden text-end md:table-cell">{{ copy.actions }}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -3410,12 +3512,12 @@ onBeforeUnmount(stopHealthProbe);
               <div class="w-full sm:max-w-sm">
                 <Label for="invite-search" class="sr-only">{{ copy.searchAuthKeys }}</Label>
                 <div class="relative">
-                  <Search class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <Search class="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                   <Input
                     id="invite-search"
                     v-model="inviteSearch"
                     data-testid="invite-search"
-                    class="pl-8"
+                    class="ps-8"
                     :placeholder="copy.searchAuthKeys"
                   />
                 </div>
@@ -3423,8 +3525,8 @@ onBeforeUnmount(stopHealthProbe);
               <div class="w-full sm:w-40">
                 <Label for="invite-filter" class="sr-only">{{ copy.filters }}</Label>
                 <div class="relative">
-                  <Filter class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                  <Select id="invite-filter" v-model="inviteFilter" data-testid="invite-filter" class="pl-8">
+                  <Filter class="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <Select id="invite-filter" v-model="inviteFilter" data-testid="invite-filter" class="ps-8">
                     <option value="all">{{ copy.invitesTitle }}</option>
                     <option value="ready">{{ copy.readyKeys }}</option>
                     <option value="used">{{ copy.used }}</option>
@@ -3433,7 +3535,7 @@ onBeforeUnmount(stopHealthProbe);
                   </Select>
                 </div>
               </div>
-              <p class="whitespace-nowrap text-xs text-muted-foreground sm:ml-auto">{{ filteredPreAuthKeys.length }} / {{ snapshot.preAuthKeys.length }}</p>
+              <p class="whitespace-nowrap text-xs text-muted-foreground sm:ms-auto">{{ filteredPreAuthKeys.length }} / {{ snapshot.preAuthKeys.length }}</p>
               <Button data-testid="open-create-invite" @click="openInviteDialog">
                 <Plus class="h-4 w-4" aria-hidden="true" />
                 {{ copy.createInvite }}
@@ -3448,7 +3550,7 @@ onBeforeUnmount(stopHealthProbe);
                     <TableHead>{{ copy.inviteKey }}</TableHead>
                     <TableHead>{{ copy.expires }}</TableHead>
                     <TableHead>{{ copy.aclTags }}</TableHead>
-                    <TableHead class="text-right">{{ copy.actions }}</TableHead>
+                    <TableHead class="text-end">{{ copy.actions }}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -3538,7 +3640,7 @@ onBeforeUnmount(stopHealthProbe);
                     <h2 class="font-semibold">
                       <button
                         type="button"
-                        class="inline-flex max-w-full items-center text-left underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        class="inline-flex max-w-full items-center text-start underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         :data-testid="`route-machine-link-${node.id}`"
                         :aria-label="`${copy.viewMachine}: ${node.name}`"
                         @click="jumpToMachine(node)"
@@ -3549,7 +3651,7 @@ onBeforeUnmount(stopHealthProbe);
                     <button
                       v-if="node.user"
                       type="button"
-                      class="mt-1 inline-flex max-w-full text-left text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      class="mt-1 inline-flex max-w-full text-start text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       :data-testid="`route-user-link-${node.id}`"
                       :aria-label="`${copy.viewUser}: ${nodeOwner(node)}`"
                       @click="jumpToUser(node.user)"
@@ -3742,8 +3844,8 @@ onBeforeUnmount(stopHealthProbe);
                   </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="rules" class="mt-3 grid gap-4 lg:grid-cols-[24rem_minmax(0,1fr)]">
-                  <div class="grid gap-4">
+                <TabsContent value="rules" class="mt-3 grid gap-4 lg:grid-cols-[24rem_minmax(0,1fr)] rtl:lg:grid-cols-[minmax(0,1fr)_24rem]">
+                  <div class="grid gap-4 rtl:lg:order-2">
                     <div class="rounded-md border bg-secondary/20 p-3" data-testid="policy-rule-builder">
                       <div>
                         <h2 class="font-semibold">{{ copy.policyQuickStartTitle }}</h2>
@@ -3821,7 +3923,7 @@ onBeforeUnmount(stopHealthProbe);
                     </div>
                   </div>
 
-                  <div class="grid content-start gap-2">
+                  <div class="grid content-start gap-2 rtl:lg:order-1">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                       <h2 class="font-semibold">{{ copy.existingRules }}</h2>
                       <p class="text-sm text-muted-foreground">{{ copy.policyWorkspaceSummary }}</p>
@@ -3834,7 +3936,7 @@ onBeforeUnmount(stopHealthProbe);
                           <TableHead>{{ copy.policyRulesTableDestination }}</TableHead>
                           <TableHead>{{ copy.policyRulesTableService }}</TableHead>
                           <TableHead>{{ copy.policyRulesTableRisk }}</TableHead>
-                          <TableHead class="text-right">{{ copy.policyRulesTableActions }}</TableHead>
+                          <TableHead class="text-end">{{ copy.policyRulesTableActions }}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -3859,7 +3961,7 @@ onBeforeUnmount(stopHealthProbe);
                               {{ isPolicyRuleHighRisk(rule) ? copy.highRisk : copy.readyToSave }}
                             </Badge>
                           </TableCell>
-                          <TableCell class="text-right">
+                          <TableCell class="text-end">
                             <Button
                               type="button"
                               variant="ghost"
@@ -3877,8 +3979,8 @@ onBeforeUnmount(stopHealthProbe);
                 </TabsContent>
 
                 <TabsContent value="groups" class="mt-3 grid gap-3">
-                  <div class="grid gap-3 lg:grid-cols-[24rem_minmax(0,1fr)]">
-                    <div class="grid gap-3 rounded-md border bg-secondary/20 p-3">
+                  <div class="grid gap-3 lg:grid-cols-[24rem_minmax(0,1fr)] rtl:lg:grid-cols-[minmax(0,1fr)_24rem]">
+                    <div class="grid gap-3 rounded-md border bg-secondary/20 p-3 rtl:lg:order-2">
                       <h2 class="font-semibold">{{ copy.groups }}</h2>
                       <div>
                         <Label for="policy-group-name">{{ copy.groupName }}</Label>
@@ -3928,14 +4030,14 @@ onBeforeUnmount(stopHealthProbe);
                       </Button>
                     </div>
 
-                    <div class="grid content-start gap-3">
+                    <div class="grid content-start gap-3 rtl:lg:order-1">
                       <p class="text-sm text-muted-foreground">{{ copy.groupMemberPicker }}</p>
                       <Table>
                         <TableHeader>
                           <TableRow>
                             <TableHead>{{ copy.groupName }}</TableHead>
                             <TableHead>{{ copy.groupMembers }}</TableHead>
-                            <TableHead class="text-right">{{ copy.actions }}</TableHead>
+                            <TableHead class="text-end">{{ copy.actions }}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -3946,7 +4048,7 @@ onBeforeUnmount(stopHealthProbe);
                           >
                             <TableCell class="font-medium">{{ group.name }}</TableCell>
                             <TableCell class="break-all text-muted-foreground">{{ group.members }}</TableCell>
-                            <TableCell class="text-right">
+                            <TableCell class="text-end">
                               <Button type="button" variant="ghost" size="sm" :data-testid="`remove-policy-group-${group.id}`" @click="removePolicyGroup(group.id)">
                                 {{ copy.removeItem }}
                               </Button>
@@ -3959,8 +4061,8 @@ onBeforeUnmount(stopHealthProbe);
                 </TabsContent>
 
                 <TabsContent value="tags" class="mt-3 grid gap-3">
-                  <div class="grid gap-3 lg:grid-cols-[24rem_minmax(0,1fr)]">
-                    <div class="grid gap-3 rounded-md border bg-secondary/20 p-3">
+                  <div class="grid gap-3 lg:grid-cols-[24rem_minmax(0,1fr)] rtl:lg:grid-cols-[minmax(0,1fr)_24rem]">
+                    <div class="grid gap-3 rounded-md border bg-secondary/20 p-3 rtl:lg:order-2">
                       <h2 class="font-semibold">{{ copy.tagOwners }}</h2>
                       <div>
                         <Label for="policy-tag-name">{{ copy.tagName }}</Label>
@@ -4010,14 +4112,14 @@ onBeforeUnmount(stopHealthProbe);
                       </Button>
                     </div>
 
-                    <div class="grid content-start gap-3">
+                    <div class="grid content-start gap-3 rtl:lg:order-1">
                       <p class="text-sm text-muted-foreground">{{ copy.tagOwnerPicker }}</p>
                       <Table>
                         <TableHeader>
                           <TableRow>
                             <TableHead>{{ copy.tagName }}</TableHead>
                             <TableHead>{{ copy.ownersList }}</TableHead>
-                            <TableHead class="text-right">{{ copy.actions }}</TableHead>
+                            <TableHead class="text-end">{{ copy.actions }}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -4028,7 +4130,7 @@ onBeforeUnmount(stopHealthProbe);
                           >
                             <TableCell class="font-medium">{{ tagOwner.tag }}</TableCell>
                             <TableCell class="break-all text-muted-foreground">{{ tagOwner.owners }}</TableCell>
-                            <TableCell class="text-right">
+                            <TableCell class="text-end">
                               <Button type="button" variant="ghost" size="sm" :data-testid="`remove-policy-tag-owner-${tagOwner.id}`" @click="removePolicyTagOwner(tagOwner.id)">
                                 {{ copy.removeItem }}
                               </Button>

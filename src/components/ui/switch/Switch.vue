@@ -47,7 +47,7 @@ defineEmits<{
       aria-hidden="true"
     />
     <span
-      class="pointer-events-none absolute left-0.5 h-4 w-4 rounded-full bg-background shadow-sm transition-transform peer-checked:translate-x-4"
+      class="pointer-events-none absolute start-0.5 h-4 w-4 rounded-full bg-background shadow-sm transition-transform ltr:peer-checked:translate-x-4 rtl:peer-checked:-translate-x-4"
       aria-hidden="true"
     />
   </label>

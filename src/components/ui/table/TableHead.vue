@@ -12,7 +12,7 @@ const props = defineProps<{
     data-slot="table-head"
     :class="
       cn(
-        'h-9 px-2 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground',
+        'h-9 px-2 text-start align-middle text-xs font-medium whitespace-nowrap text-muted-foreground',
         props.class
       )
     "

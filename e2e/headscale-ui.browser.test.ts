@@ -1001,6 +1001,37 @@ test("defaults to English and supports the United Nations official languages", a
   expect(document.documentElement.dir).toBe("rtl");
 });
 
+test("mirrors the access policy workspace in Arabic", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+
+  await chooseProfileMenuOption("locale-option-ar");
+  await selectSectionTab("access");
+  await expect.element(page.getByTestId("policy-rule-builder")).toBeVisible();
+
+  expect(document.documentElement.lang).toBe("ar");
+  expect(document.documentElement.dir).toBe("rtl");
+
+  const builder = document.querySelector<HTMLElement>('[data-testid="policy-rule-builder"]');
+  const table = document.querySelector<HTMLElement>("table");
+  expect(builder).toBeTruthy();
+  expect(table).toBeTruthy();
+
+  const builderRect = builder?.getBoundingClientRect();
+  const tableRect = table?.getBoundingClientRect();
+  expect(builderRect?.left).toBeGreaterThan(tableRect?.left ?? 0);
+  expect(builderRect?.right).toBeGreaterThan(tableRect?.right ?? 0);
+
+  const headings = Array.from(document.querySelectorAll<HTMLElement>("th"));
+  expect(getComputedStyle(headings[0] as HTMLElement).textAlign).toMatch(/^(right|start)$/);
+  expect(getComputedStyle(headings.at(-1) as HTMLElement).textAlign).toMatch(/^(left|end)$/);
+  expectNoHorizontalOverflow();
+
+  await page.viewport(390, 844);
+  await expect.element(page.getByTestId("policy-rule-builder")).toBeVisible();
+  expectNoHorizontalOverflow();
+});
+
 test("supports light, dark and system theme modes", async () => {
   await renderLogin();
   await connectWithDefaults();
