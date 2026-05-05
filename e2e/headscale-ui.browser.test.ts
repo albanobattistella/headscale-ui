@@ -194,6 +194,18 @@ function expectMachinesWorkbench() {
   ).toContain("Expired");
   expect(document.querySelector('[data-testid="device-tag-3-0"]')).toBeNull();
   expect(document.querySelector('[data-testid="device-pending-routes-1"]')).toBeNull();
+  const pendingRouteBadges = document.querySelectorAll<HTMLElement>(
+    '[data-testid^="device-pending-route-2-"]',
+  );
+  const approvedRouteBadge = document.querySelector<HTMLElement>(
+    '[data-testid="device-approved-route-2-0"]',
+  );
+  expect(pendingRouteBadges).toHaveLength(2);
+  expect(pendingRouteBadges[0]?.textContent).toContain("0.0.0.0/0");
+  expect(pendingRouteBadges[0]?.className).toContain("rose");
+  expect(approvedRouteBadge?.textContent).toContain("10.42.0.0/16");
+  expect(approvedRouteBadge?.className).toContain("emerald");
+  expect(pendingRouteBadges[0]?.className).not.toBe(approvedRouteBadge?.className);
   const deviceTableText = document.querySelector('[data-testid="machine-list"]')?.textContent ?? "";
   expect(deviceTableText).not.toMatch(/No tags|无标签|No pending routes|无待审路由/);
 }

@@ -2205,6 +2205,18 @@ function deviceTagClass(tag: string) {
   return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300";
 }
 
+function pendingRouteClass(route: string) {
+  if (isExitRoute(route)) {
+    return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300";
+  }
+
+  return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300";
+}
+
+function approvedRouteClass() {
+  return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300";
+}
+
 function keyTagClass(tag: string) {
   const normalizedTag = tag.toLowerCase();
   if (normalizedTag.includes("server")) {
@@ -3322,12 +3334,19 @@ onBeforeUnmount(stopHealthProbe);
                         <button
                           v-if="nodePendingRoutes(node).length"
                           type="button"
-                          class="inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          class="flex flex-wrap gap-1 rounded-md text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           :data-testid="`device-pending-routes-${node.id}`"
                           @click="jumpToRoutesForMachine(node)"
                         >
-                          <Badge variant="destructive" class="cursor-pointer hover:opacity-90">
-                            {{ nodePendingRoutes(node).length }} {{ copy.pendingRoutes }}
+                          <Badge
+                            v-for="(route, routeIndex) in nodePendingRoutes(node)"
+                            :key="route"
+                            variant="outline"
+                            class="cursor-pointer hover:opacity-90"
+                            :class="pendingRouteClass(route)"
+                            :data-testid="`device-pending-route-${node.id}-${routeIndex}`"
+                          >
+                            {{ route }}
                           </Badge>
                         </button>
                         <div
@@ -3335,7 +3354,15 @@ onBeforeUnmount(stopHealthProbe);
                           class="flex flex-wrap gap-1"
                           :class="{ 'mt-2': nodePendingRoutes(node).length }"
                         >
-                          <Badge v-for="route in node.approvedRoutes" :key="route" variant="secondary">{{ route }}</Badge>
+                          <Badge
+                            v-for="(route, routeIndex) in node.approvedRoutes"
+                            :key="route"
+                            variant="outline"
+                            :class="approvedRouteClass()"
+                            :data-testid="`device-approved-route-${node.id}-${routeIndex}`"
+                          >
+                            {{ route }}
+                          </Badge>
                         </div>
                       </TableCell>
                       <TableCell class="align-top md:min-w-44">
