@@ -3623,7 +3623,7 @@ onBeforeUnmount(stopHealthProbe);
               </div>
             </Card>
 
-            <div v-else class="space-y-2" data-testid="machine-table-shell">
+            <div v-else class="min-w-0 space-y-2" data-testid="machine-table-shell">
               <div class="flex flex-col gap-2 sm:flex-row sm:items-center" data-testid="machine-toolbar">
                 <div class="w-full sm:max-w-sm">
                   <Label for="device-search" class="sr-only">{{ copy.searchDevices }}</Label>
@@ -3654,7 +3654,7 @@ onBeforeUnmount(stopHealthProbe);
                   {{ copy.clearFilters }}
                 </Button>
               </div>
-              <Card class="min-w-0 overflow-hidden" data-testid="machine-list">
+              <Card class="w-full max-w-full min-w-0 overflow-x-auto" data-testid="machine-list">
                 <Table>
                   <TableHeader>
                     <TableRow>

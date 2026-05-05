@@ -645,6 +645,10 @@ test("supports consumer-friendly tailnet management flows", async () => {
 
   window.__headscaleUiOperationCalls = [];
   await page.getByTestId("section-routes").click();
+  await expect.element(page.getByTestId("route-node-3")).toBeVisible();
+  await page.getByTestId("route-user-link-3").click();
+  await expect.element(page.getByTestId("member-charlie")).toBeVisible();
+  await page.getByTestId("section-routes").click();
   await expect.element(page.getByTestId("route-available-2-0")).toHaveTextContent("10.42.0.0/16");
   await expect.element(page.getByTestId("route-approved-2-0")).toHaveTextContent("10.42.0.0/16");
   expect(document.querySelector('[data-testid="pending-routes-list-2"]')).toBeTruthy();

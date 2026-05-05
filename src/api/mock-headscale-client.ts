@@ -136,7 +136,7 @@ export function createInitialSnapshot(): HeadscaleSnapshot {
       expiry: "2026-04-21T00:00:00Z",
       registerMethod: "REGISTER_METHOD_OIDC",
       approvedRoutes: [],
-      availableRoutes: [],
+      availableRoutes: ["192.168.88.0/24"],
       subnetRoutes: [],
       tags: [],
     },

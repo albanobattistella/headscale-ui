@@ -24,12 +24,6 @@ const FLOW_TAGS = new Set([
   "TabsTrigger",
   "button",
 ]);
-const CONDITIONALLY_UNRENDERED_TARGETS = new Map([
-  [
-    "route-user-link-*",
-    "The default route fixture is tag-managed, so the user link is intentionally not rendered.",
-  ],
-]);
 
 function normalizeTestId(value: string) {
   return value
@@ -167,13 +161,7 @@ function collectInteractions(source: string) {
 
 const { targets, missingTestIds } = await collectSourceTargets();
 const interactions = collectInteractions(await Bun.file(E2E_FILE).text());
-const checkedTargets = targets.filter(
-  (target) => !CONDITIONALLY_UNRENDERED_TARGETS.has(target.testIdPattern),
-);
-const skippedTargets = targets.filter((target) =>
-  CONDITIONALLY_UNRENDERED_TARGETS.has(target.testIdPattern),
-);
-const missingCoverage = checkedTargets.filter(
+const missingCoverage = targets.filter(
   (target) =>
     !Array.from(interactions).some((interaction) =>
       patternsOverlap(target.testIdPattern, interaction),
@@ -198,5 +186,5 @@ if (missingTestIds.length > 0 || missingCoverage.length > 0) {
 }
 
 console.log(
-  `E2E button/flow coverage check passed: ${checkedTargets.length} controls covered by ${interactions.size} interactions, ${skippedTargets.length} conditional control documented.`,
+  `E2E button/flow coverage check passed: ${targets.length} controls covered by ${interactions.size} interactions.`,
 );
