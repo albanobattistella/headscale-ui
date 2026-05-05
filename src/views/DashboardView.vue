@@ -566,7 +566,7 @@ const productCopy: Record<Locale, ProductCopy> = {
     displayName: "显示名称",
     email: "邮箱",
     createMember: "创建用户",
-    deviceCount: "台设备",
+    deviceCount: "设备",
     memberDevices: "设备",
     deleteMember: "删除用户",
     noUsersMatch: "没有匹配筛选条件的用户。",
@@ -1089,6 +1089,14 @@ let healthProbeTimer: ReturnType<typeof window.setInterval> | null = null;
 let isHealthProbeRunning = false;
 let healthProbeGeneration = 0;
 let profileRouteSyncGeneration = 0;
+let nodeDetailRefreshGeneration = 0;
+let userDetailRefreshGeneration = 0;
+let inviteDialogRefreshGeneration = 0;
+let memberDialogRefreshGeneration = 0;
+let renameDialogRefreshGeneration = 0;
+let expireDialogRefreshGeneration = 0;
+let removeDialogRefreshGeneration = 0;
+let routeApprovalRefreshGeneration = 0;
 
 const sectionIcons = {
   home: Activity,
@@ -1668,6 +1676,119 @@ async function refreshSnapshot() {
   }
 }
 
+function currentNode(nodeId: string) {
+  return snapshot.value.nodes.find((node) => node.id === nodeId);
+}
+
+function currentUser(userId: string) {
+  return snapshot.value.users.find((user) => user.id === userId);
+}
+
+async function refreshNodeDetail(nodeId: string, generation: number) {
+  await refreshSnapshot();
+  if (generation !== nodeDetailRefreshGeneration || selectedDetailNode.value?.id !== nodeId) {
+    return;
+  }
+
+  selectedDetailNode.value = currentNode(nodeId) ?? null;
+}
+
+async function refreshUserDetail(userId: string, generation: number) {
+  await refreshSnapshot();
+  if (generation !== userDetailRefreshGeneration || selectedDetailUser.value?.id !== userId) {
+    return;
+  }
+
+  const nextUser = currentUser(userId);
+  selectedDetailUser.value = nextUser && hasVisibleUser(nextUser) ? nextUser : null;
+}
+
+async function refreshOpenInviteDialog(generation: number) {
+  await refreshSnapshot();
+  if (generation !== inviteDialogRefreshGeneration || !inviteDialogOpen.value) {
+    return;
+  }
+
+  if (!authKeyDialogUsers.value.some((user) => user.id === inviteForm.user)) {
+    inviteForm.user = authKeyDialogUsers.value[0]?.id ?? "";
+  }
+}
+
+async function refreshOpenMemberDialog(generation: number) {
+  await refreshSnapshot();
+  if (generation !== memberDialogRefreshGeneration || !memberDialogOpen.value) {
+    return;
+  }
+}
+
+async function refreshRenameDialogNode(nodeId: string, generation: number, draftAtOpen: string) {
+  await refreshSnapshot();
+  if (
+    generation !== renameDialogRefreshGeneration ||
+    !renameDialogOpen.value ||
+    selectedRenameNode.value?.id !== nodeId
+  ) {
+    return;
+  }
+
+  const nextNode = currentNode(nodeId);
+  if (!nextNode) {
+    handleRenameDialogOpen(false);
+    return;
+  }
+
+  selectedRenameNode.value = nextNode;
+  if (renameDrafts[nodeId] === draftAtOpen) {
+    renameDrafts[nodeId] = nextNode.givenName || nextNode.name;
+  }
+}
+
+async function refreshExpireDialogNode(nodeId: string, generation: number) {
+  await refreshSnapshot();
+  if (
+    generation !== expireDialogRefreshGeneration ||
+    !expireDialogOpen.value ||
+    selectedExpireNode.value?.id !== nodeId
+  ) {
+    return;
+  }
+
+  selectedExpireNode.value = currentNode(nodeId) ?? null;
+}
+
+async function refreshRemoveDialogNode(nodeId: string, generation: number) {
+  await refreshSnapshot();
+  if (
+    generation !== removeDialogRefreshGeneration ||
+    !removeDialogOpen.value ||
+    selectedRemoveNode.value?.id !== nodeId
+  ) {
+    return;
+  }
+
+  selectedRemoveNode.value = currentNode(nodeId) ?? null;
+}
+
+async function refreshRouteApprovalTarget(nodeId: string, route: string, generation: number) {
+  await refreshSnapshot();
+  if (
+    generation !== routeApprovalRefreshGeneration ||
+    !routeApprovalDialogOpen.value ||
+    selectedRouteApproval.value?.node.id !== nodeId ||
+    selectedRouteApproval.value?.route !== route
+  ) {
+    return;
+  }
+
+  const nextNode = currentNode(nodeId);
+  if (!nextNode?.availableRoutes.includes(route)) {
+    handleRouteApprovalDialogOpen(false);
+    return;
+  }
+
+  selectedRouteApproval.value = { node: nextNode, route };
+}
+
 function saveProfiles() {
   if (typeof localStorage === "undefined") {
     return;
@@ -1777,6 +1898,7 @@ async function syncProfileRoute() {
     setActiveSection(section);
 
     if (isAuthorized.value && connectionForm.profileId === profileId) {
+      await refreshSnapshot();
       return;
     }
 
@@ -1893,7 +2015,31 @@ function selectSection(section: ProductSection) {
 }
 
 function openInviteDialog() {
+  inviteDialogRefreshGeneration += 1;
+  const generation = inviteDialogRefreshGeneration;
   inviteDialogOpen.value = true;
+  void refreshOpenInviteDialog(generation);
+}
+
+function handleInviteDialogOpen(open: boolean) {
+  inviteDialogOpen.value = open;
+  if (!open) {
+    inviteDialogRefreshGeneration += 1;
+  }
+}
+
+function openMemberDialog() {
+  memberDialogRefreshGeneration += 1;
+  const generation = memberDialogRefreshGeneration;
+  memberDialogOpen.value = true;
+  void refreshOpenMemberDialog(generation);
+}
+
+function handleMemberDialogOpen(open: boolean) {
+  memberDialogOpen.value = open;
+  if (!open) {
+    memberDialogRefreshGeneration += 1;
+  }
 }
 
 function changeSection(nextSection: string) {
@@ -2221,7 +2367,7 @@ function jumpToMachine(node: HeadscaleNode) {
 function jumpToMachinesForUser(user: HeadscaleUser) {
   deviceSearch.value = user.email || user.name || userLabel(user);
   machineFilter.value = "all";
-  selectedDetailUser.value = null;
+  handleUserDetailsOpen(false);
   selectSection("devices");
 }
 
@@ -2236,8 +2382,11 @@ function jumpToUser(user?: HeadscaleUser) {
 }
 
 function openNodeDetails(node: HeadscaleNode) {
-  selectedDetailUser.value = null;
+  nodeDetailRefreshGeneration += 1;
+  const generation = nodeDetailRefreshGeneration;
+  handleUserDetailsOpen(false);
   selectedDetailNode.value = node;
+  void refreshNodeDetail(node.id, generation);
 }
 
 function openUserDetails(user?: HeadscaleUser) {
@@ -2245,45 +2394,53 @@ function openUserDetails(user?: HeadscaleUser) {
     return;
   }
 
-  selectedDetailNode.value = null;
+  userDetailRefreshGeneration += 1;
+  const generation = userDetailRefreshGeneration;
+  handleNodeDetailsOpen(false);
   selectedDetailUser.value = user;
+  void refreshUserDetail(user.id, generation);
 }
 
 function handleNodeDetailsOpen(open: boolean) {
   if (!open) {
+    nodeDetailRefreshGeneration += 1;
     selectedDetailNode.value = null;
   }
 }
 
 function handleUserDetailsOpen(open: boolean) {
   if (!open) {
+    userDetailRefreshGeneration += 1;
     selectedDetailUser.value = null;
   }
 }
 
 function openInviteDialogForUser(user: HeadscaleUser) {
+  inviteDialogRefreshGeneration += 1;
+  const generation = inviteDialogRefreshGeneration;
   inviteForm.user = user.id;
-  selectedDetailUser.value = null;
+  handleUserDetailsOpen(false);
   inviteDialogOpen.value = true;
+  void refreshOpenInviteDialog(generation);
 }
 
 function openRenameDialogFromDetails(node: HeadscaleNode) {
-  selectedDetailNode.value = null;
+  handleNodeDetailsOpen(false);
   openRenameDialog(node);
 }
 
 function openExpireDialogFromDetails(node: HeadscaleNode) {
-  selectedDetailNode.value = null;
+  handleNodeDetailsOpen(false);
   openExpireDialog(node);
 }
 
 function openRemoveDialogFromDetails(node: HeadscaleNode) {
-  selectedDetailNode.value = null;
+  handleNodeDetailsOpen(false);
   openRemoveDialog(node);
 }
 
 function jumpToRoutesFromDetails(node: HeadscaleNode) {
-  selectedDetailNode.value = null;
+  handleNodeDetailsOpen(false);
   void jumpToRoutesForMachine(node);
 }
 
@@ -2560,7 +2717,7 @@ async function createMember() {
   memberForm.name = "";
   memberForm.displayName = "";
   memberForm.email = "";
-  memberDialogOpen.value = false;
+  handleMemberDialogOpen(false);
 }
 
 async function deleteMember(user: HeadscaleUser) {
@@ -2586,7 +2743,7 @@ async function createInvite(payload: AuthKeyDialogPayload) {
     });
     lastCreatedInvite.value = response.preAuthKey.key;
     await refreshSnapshot();
-    inviteDialogOpen.value = false;
+    handleInviteDialogOpen(false);
   } catch (error) {
     lastError.value = error instanceof Error ? error.message : String(error);
   } finally {
@@ -2624,6 +2781,7 @@ async function deleteNode(node: HeadscaleNode) {
 function handleRenameDialogOpen(open: boolean) {
   renameDialogOpen.value = open;
   if (!open) {
+    renameDialogRefreshGeneration += 1;
     selectedRenameNode.value = null;
   }
 }
@@ -2631,6 +2789,7 @@ function handleRenameDialogOpen(open: boolean) {
 function handleExpireDialogOpen(open: boolean) {
   expireDialogOpen.value = open;
   if (!open) {
+    expireDialogRefreshGeneration += 1;
     selectedExpireNode.value = null;
   }
 }
@@ -2638,6 +2797,7 @@ function handleExpireDialogOpen(open: boolean) {
 function handleRemoveDialogOpen(open: boolean) {
   removeDialogOpen.value = open;
   if (!open) {
+    removeDialogRefreshGeneration += 1;
     selectedRemoveNode.value = null;
   }
 }
@@ -2645,29 +2805,43 @@ function handleRemoveDialogOpen(open: boolean) {
 function handleRouteApprovalDialogOpen(open: boolean) {
   routeApprovalDialogOpen.value = open;
   if (!open) {
+    routeApprovalRefreshGeneration += 1;
     selectedRouteApproval.value = null;
   }
 }
 
 function openRenameDialog(node: HeadscaleNode) {
+  renameDialogRefreshGeneration += 1;
+  const generation = renameDialogRefreshGeneration;
+  const draftAtOpen = node.givenName || node.name;
   selectedRenameNode.value = node;
-  renameDrafts[node.id] = renameDrafts[node.id] || node.givenName || node.name;
+  renameDrafts[node.id] = draftAtOpen;
   renameDialogOpen.value = true;
+  void refreshRenameDialogNode(node.id, generation, draftAtOpen);
 }
 
 function openExpireDialog(node: HeadscaleNode) {
+  expireDialogRefreshGeneration += 1;
+  const generation = expireDialogRefreshGeneration;
   selectedExpireNode.value = node;
   expireDialogOpen.value = true;
+  void refreshExpireDialogNode(node.id, generation);
 }
 
 function openRemoveDialog(node: HeadscaleNode) {
+  removeDialogRefreshGeneration += 1;
+  const generation = removeDialogRefreshGeneration;
   selectedRemoveNode.value = node;
   removeDialogOpen.value = true;
+  void refreshRemoveDialogNode(node.id, generation);
 }
 
 function openRouteApprovalDialog(node: HeadscaleNode, route: string) {
+  routeApprovalRefreshGeneration += 1;
+  const generation = routeApprovalRefreshGeneration;
   selectedRouteApproval.value = { node, route };
   routeApprovalDialogOpen.value = true;
+  void refreshRouteApprovalTarget(node.id, route, generation);
 }
 
 function approvedRoutesWith(node: HeadscaleNode, route: string) {
@@ -3105,7 +3279,7 @@ onBeforeUnmount(stopHealthProbe);
           :defaults="authKeyDialogDefaults"
           :labels="authKeyDialogLabels"
           :is-submitting="isCreatingInvite"
-          @update:open="inviteDialogOpen = $event"
+          @update:open="handleInviteDialogOpen"
           @submit="createInvite"
         />
 
@@ -3932,7 +4106,7 @@ onBeforeUnmount(stopHealthProbe);
             <p class="mt-1 text-sm text-muted-foreground">{{ copy.membersSubtitle }}</p>
           </div>
 
-          <Dialog :open="memberDialogOpen" @update:open="memberDialogOpen = $event">
+          <Dialog :open="memberDialogOpen" @update:open="handleMemberDialogOpen">
             <DialogContent data-testid="member-create-dialog" class="sm:max-w-xl">
               <DialogHeader>
                 <DialogTitle>{{ copy.addMember }}</DialogTitle>
@@ -3954,7 +4128,7 @@ onBeforeUnmount(stopHealthProbe);
                   <Input id="member-email" v-model="memberForm.email" data-testid="member-email" class="mt-2" />
                 </div>
                 <DialogFooter>
-                  <Button type="button" variant="outline" data-testid="cancel-create-member" @click="memberDialogOpen = false">
+                  <Button type="button" variant="outline" data-testid="cancel-create-member" @click="handleMemberDialogOpen(false)">
                     {{ copy.cancel }}
                   </Button>
                   <Button type="submit" data-testid="create-member">
@@ -3991,7 +4165,7 @@ onBeforeUnmount(stopHealthProbe);
               <Button type="button" variant="outline" size="icon" data-testid="export-users" :aria-label="copy.exportData" @click="exportUsers">
                 <Download class="h-4 w-4" aria-hidden="true" />
               </Button>
-              <Button data-testid="open-create-member" @click="memberDialogOpen = true">
+              <Button data-testid="open-create-member" @click="openMemberDialog">
                 <Plus class="h-4 w-4" aria-hidden="true" />
                 {{ copy.addMember }}
               </Button>
@@ -4002,7 +4176,7 @@ onBeforeUnmount(stopHealthProbe);
                   <TableRow>
                     <TableHead>{{ copy.membersTitle }}</TableHead>
                     <TableHead>{{ copy.role }}</TableHead>
-                    <TableHead>{{ copy.memberDevices }}</TableHead>
+                    <TableHead data-testid="member-devices-header">{{ copy.memberDevices }}</TableHead>
                     <TableHead>{{ copy.joined }}</TableHead>
                     <TableHead>{{ copy.authSource }}</TableHead>
                     <TableHead class="hidden text-end md:table-cell">{{ copy.actions }}</TableHead>
@@ -4059,11 +4233,7 @@ onBeforeUnmount(stopHealthProbe);
                       <Badge variant="outline">{{ userRole(user) }}</Badge>
                     </TableCell>
                     <TableCell class="align-top md:min-w-28">
-                      <div
-                        v-if="userDevices(user).length"
-                        class="flex flex-col items-start gap-1"
-                        :data-testid="`member-device-tags-${user.name}`"
-                      >
+                      <div v-if="userDevices(user).length" class="grid justify-items-start gap-1" :data-testid="`member-device-tags-${user.name}`">
                         <button
                           v-for="node in userDevices(user)"
                           :key="node.id"

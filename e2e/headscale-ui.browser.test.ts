@@ -241,6 +241,10 @@ function countByTestIdPrefix(prefix: string) {
   return document.querySelectorAll<HTMLElement>(`[data-testid^="${prefix}"]`).length;
 }
 
+function operationCount(id: string) {
+  return window.__headscaleUiOperationCalls?.filter((call) => call.id === id).length ?? 0;
+}
+
 function clickLastByTestIdPrefix(prefix: string) {
   const elements = Array.from(document.querySelectorAll<HTMLElement>(`[data-testid^="${prefix}"]`));
   const element = elements.at(-1);
@@ -515,6 +519,46 @@ test("keeps the login panel open when a real server is unreachable", async () =>
   await expect.element(page.getByTestId("connect-form")).toBeVisible();
   expect(document.querySelector('[data-testid="section-home"]')).toBeNull();
   expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
+});
+
+test("refreshes data on every section change and repeated dialog open", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+  window.__headscaleUiOperationCalls = [];
+
+  await page.getByTestId("section-devices").click();
+  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(0);
+  const afterDevices = operationCount("node.list");
+
+  await page.getByTestId("section-members").click();
+  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterDevices);
+  const afterMembers = operationCount("node.list");
+
+  await page.getByTestId("member-detail-link-alice").click();
+  await expect.element(page.getByTestId("user-detail-dialog")).toBeVisible();
+  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterMembers);
+  const afterFirstUserDialog = operationCount("node.list");
+  await userEvent.keyboard("{Escape}");
+
+  await page.getByTestId("member-detail-link-alice").click();
+  await expect.element(page.getByTestId("user-detail-dialog")).toBeVisible();
+  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterFirstUserDialog);
+  const afterSecondUserDialog = operationCount("node.list");
+  await userEvent.keyboard("{Escape}");
+
+  await page.getByTestId("section-invites").click();
+  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterSecondUserDialog);
+  const afterInvites = operationCount("node.list");
+
+  await page.getByTestId("open-create-invite").click();
+  await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
+  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterInvites);
+  const afterFirstInviteDialog = operationCount("node.list");
+  await page.getByTestId("cancel-create-invite").click();
+
+  await page.getByTestId("open-create-invite").click();
+  await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
+  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterFirstInviteDialog);
 });
 
 test("supports language and theme selectors before login", async () => {
@@ -829,7 +873,7 @@ test("covers user filters, user export and member deletion", async () => {
     '[data-testid="member-device-tags-charlie"]',
   );
   expect(memberDeviceTags).toBeTruthy();
-  expect(getComputedStyle(memberDeviceTags as HTMLElement).flexDirection).toBe("column");
+  expect(getComputedStyle(memberDeviceTags as HTMLElement).display).toBe("grid");
   await expect
     .element(page.getByTestId("member-device-tag-charlie-3"))
     .toHaveTextContent("old-phone");
@@ -1326,6 +1370,10 @@ test("defaults to English and supports the United Nations official languages", a
   await chooseProfileMenuOption("locale-option-zh");
   await expect.element(page.getByTestId("section-devices")).toHaveTextContent("机器");
   await page.getByTestId("section-members").click();
+  expect(document.querySelector('[data-testid="member-devices-header"]')?.textContent?.trim()).toBe(
+    "设备",
+  );
+  expect(document.querySelector('[data-testid="user-table"]')?.textContent).not.toContain("台设备");
   selectDomTestId("user-filter", "service");
   expect(document.querySelector('[data-testid="member-tagged-devices"]')).toBeNull();
   await expect.element(page.getByTestId("user-table")).toHaveTextContent("没有匹配筛选条件的用户");
