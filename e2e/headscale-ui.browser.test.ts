@@ -576,6 +576,21 @@ test("supports consumer-friendly tailnet management flows", async () => {
 
   await page.getByTestId("section-devices").click();
   expectMachinesWorkbench();
+  await page.getByTestId("device-detail-link-1").click();
+  await expect.element(page.getByTestId("device-detail-dialog")).toBeVisible();
+  await expect.element(page.getByTestId("device-detail-status-1")).toHaveTextContent("Online");
+  await page.getByTestId("device-detail-owner-1").click();
+  await expect.element(page.getByTestId("user-detail-dialog")).toBeVisible();
+  await expect.element(page.getByTestId("user-detail-device-1")).toHaveTextContent("alice-laptop");
+  await page.getByTestId("user-detail-device-1").click();
+  await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("alice-laptop");
+  await userEvent.keyboard("{Escape}");
+  await page.getByTestId("device-detail-link-2").click();
+  await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("edge-router");
+  await page.getByTestId("device-detail-view-routes").click();
+  await expect.element(page.getByTestId("route-node-2")).toBeVisible();
+  expect(window.location.pathname.endsWith("/routes")).toBe(true);
+  await page.getByTestId("section-devices").click();
   await page.getByTestId("machine-filter").selectOptions("routes");
   await page.getByTestId("device-pending-routes-2").click();
   await expect.element(page.getByTestId("route-node-2")).toBeVisible();
@@ -719,6 +734,18 @@ test("covers user filters, user export and member deletion", async () => {
   ).toBeTruthy();
   inputDomTestId("user-search", "charlie");
   await expect.element(page.getByTestId("member-charlie")).toBeVisible();
+  await page.getByTestId("member-detail-link-charlie").click();
+  await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Charlie");
+  await page.getByTestId("user-detail-create-auth-key").click();
+  await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
+  await expect.element(page.getByTestId("invite-user")).toHaveValue("3");
+  await page.getByTestId("cancel-create-invite").click();
+  await page.getByTestId("member-actions-trigger-charlie").click();
+  await page.getByTestId("view-member-machines-charlie").click();
+  await expect.element(page.getByTestId("device-search")).toHaveValue("charlie@example.com");
+  await expect.element(page.getByTestId("device-3")).toBeVisible();
+  await page.getByTestId("section-members").click();
+  inputDomTestId("user-search", "charlie");
   expect(document.querySelector('[data-testid="member-alice"]')).toBeNull();
   inputDomTestId("user-search", "");
   selectDomTestId("user-filter", "service");
@@ -741,6 +768,7 @@ test("covers user filters, user export and member deletion", async () => {
   await page.getByTestId("member-email").fill("erin@example.test");
   await page.getByTestId("create-member").click();
   await expect.element(page.getByTestId("member-erin")).toBeVisible();
+  await page.getByTestId("member-actions-trigger-erin").click();
   await page.getByTestId("delete-member-erin").click();
   expect(document.querySelector('[data-testid="member-erin"]')).toBeNull();
 });
@@ -753,6 +781,9 @@ test("covers auth-key filters, expiration and deletion", async () => {
   await page.getByTestId("section-invites").click();
   await expect.element(page.getByTestId("invite-table")).toBeVisible();
   expect(document.querySelector('[data-testid="invite-1"]')?.closest("table")).toBeTruthy();
+  await page.getByTestId("invite-owner-link-1").click();
+  await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Alice Ops");
+  await userEvent.keyboard("{Escape}");
   expect(
     document
       .querySelector('[data-testid="invite-search"]')

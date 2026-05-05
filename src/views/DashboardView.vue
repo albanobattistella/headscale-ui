@@ -248,6 +248,19 @@ const englishCopy = {
   status: "Status",
   actions: "Actions",
   details: "Details",
+  viewDetails: "View details",
+  viewMachines: "View machines",
+  viewRoutes: "View routes",
+  machineDetails: "Machine details",
+  userDetails: "User details",
+  nodeId: "Node ID",
+  userId: "User ID",
+  registerMethod: "Register method",
+  personalDevices: "Personal machines",
+  activeAuthKeys: "Active auth keys",
+  policyReferences: "Policy references",
+  noPersonalDevices: "No personal machines.",
+  noPolicyReferences: "No policy references.",
   unknown: "Unknown",
   pendingRoutes: "Pending routes",
   exitRoute: "Exit route",
@@ -503,6 +516,19 @@ const productCopy: Record<Locale, ProductCopy> = {
     status: "状态",
     actions: "操作",
     details: "详情",
+    viewDetails: "查看详情",
+    viewMachines: "查看机器",
+    viewRoutes: "查看路由",
+    machineDetails: "机器详情",
+    userDetails: "用户详情",
+    nodeId: "节点 ID",
+    userId: "用户 ID",
+    registerMethod: "注册方式",
+    personalDevices: "个人机器",
+    activeAuthKeys: "有效认证密钥",
+    policyReferences: "策略引用",
+    noPersonalDevices: "没有个人机器。",
+    noPolicyReferences: "没有策略引用。",
     unknown: "未知",
     pendingRoutes: "待审路由",
     exitRoute: "出口路由",
@@ -1022,6 +1048,8 @@ const selectedRenameNode = ref<HeadscaleNode | null>(null);
 const selectedExpireNode = ref<HeadscaleNode | null>(null);
 const selectedRemoveNode = ref<HeadscaleNode | null>(null);
 const selectedRouteApproval = ref<RouteApprovalTarget | null>(null);
+const selectedDetailNode = ref<HeadscaleNode | null>(null);
+const selectedDetailUser = ref<HeadscaleUser | null>(null);
 const memberForm = reactive({
   name: "",
   displayName: "",
@@ -1168,6 +1196,18 @@ const filteredPreAuthKeys = computed(() => {
     return matchesSearch && matchesFilter;
   });
 });
+const selectedUserDevices = computed(() =>
+  selectedDetailUser.value ? userDevices(selectedDetailUser.value) : [],
+);
+const selectedUserActiveKeys = computed(() =>
+  selectedDetailUser.value ? activeAuthKeysForUser(selectedDetailUser.value) : [],
+);
+const selectedUserPolicyReferences = computed(() =>
+  selectedDetailUser.value ? userPolicyReferences(selectedDetailUser.value) : [],
+);
+const selectedUserPendingRoutesCount = computed(() =>
+  selectedUserDevices.value.reduce((total, node) => total + nodePendingRoutes(node).length, 0),
+);
 const authKeyDialogUsers = computed(() =>
   visibleUsers.value.map((user) => ({
     id: user.id,
@@ -2120,9 +2160,56 @@ function nodePendingRoutes(node: HeadscaleNode) {
   return node.availableRoutes.filter((route) => !node.approvedRoutes.includes(route));
 }
 
+function userDevices(user: HeadscaleUser) {
+  return snapshot.value.nodes.filter(
+    (node) => hasVisibleUser(node.user) && node.user.id === user.id,
+  );
+}
+
+function activeAuthKeysForUser(user: HeadscaleUser) {
+  return snapshot.value.preAuthKeys.filter(
+    (key) => key.user?.id === user.id && !key.used && !isExpired(key.expiration),
+  );
+}
+
+function userPolicyPrincipals(user: HeadscaleUser) {
+  return [user.email, user.name].filter((value): value is string => Boolean(value));
+}
+
+function userPolicyReferences(user: HeadscaleUser) {
+  const principals = userPolicyPrincipals(user);
+  const groupReferences = policyGroups.value
+    .filter((group) => parseCommaList(group.members).some((member) => principals.includes(member)))
+    .map((group) => `${copy.value.groups}: ${group.name}`);
+  const tagOwnerReferences = policyTagOwners.value
+    .filter((tagOwner) =>
+      parseCommaList(tagOwner.owners).some((owner) => principals.includes(owner)),
+    )
+    .map((tagOwner) => `${copy.value.tagOwners}: ${tagOwner.tag}`);
+
+  return [...groupReferences, ...tagOwnerReferences];
+}
+
+function shortSecret(value?: string) {
+  if (!value) {
+    return copy.value.unknown;
+  }
+  if (value.length <= 18) {
+    return value;
+  }
+  return `${value.slice(0, 12)}...${value.slice(-4)}`;
+}
+
 function jumpToMachine(node: HeadscaleNode) {
   deviceSearch.value = node.givenName || node.name;
   machineFilter.value = "all";
+  selectSection("devices");
+}
+
+function jumpToMachinesForUser(user: HeadscaleUser) {
+  deviceSearch.value = user.email || user.name || userLabel(user);
+  machineFilter.value = "all";
+  selectedDetailUser.value = null;
   selectSection("devices");
 }
 
@@ -2134,6 +2221,58 @@ function jumpToUser(user?: HeadscaleUser) {
   userSearch.value = user.email || userLabel(user);
   userFilter.value = "all";
   selectSection("members");
+}
+
+function openNodeDetails(node: HeadscaleNode) {
+  selectedDetailUser.value = null;
+  selectedDetailNode.value = node;
+}
+
+function openUserDetails(user?: HeadscaleUser) {
+  if (!hasVisibleUser(user)) {
+    return;
+  }
+
+  selectedDetailNode.value = null;
+  selectedDetailUser.value = user;
+}
+
+function handleNodeDetailsOpen(open: boolean) {
+  if (!open) {
+    selectedDetailNode.value = null;
+  }
+}
+
+function handleUserDetailsOpen(open: boolean) {
+  if (!open) {
+    selectedDetailUser.value = null;
+  }
+}
+
+function openInviteDialogForUser(user: HeadscaleUser) {
+  inviteForm.user = user.id;
+  selectedDetailUser.value = null;
+  inviteDialogOpen.value = true;
+}
+
+function openRenameDialogFromDetails(node: HeadscaleNode) {
+  selectedDetailNode.value = null;
+  openRenameDialog(node);
+}
+
+function openExpireDialogFromDetails(node: HeadscaleNode) {
+  selectedDetailNode.value = null;
+  openExpireDialog(node);
+}
+
+function openRemoveDialogFromDetails(node: HeadscaleNode) {
+  selectedDetailNode.value = null;
+  openRemoveDialog(node);
+}
+
+function jumpToRoutesFromDetails(node: HeadscaleNode) {
+  selectedDetailNode.value = null;
+  void jumpToRoutesForMachine(node);
 }
 
 async function jumpToRoutesForMachine(node: HeadscaleNode) {
@@ -2957,6 +3096,245 @@ onBeforeUnmount(stopHealthProbe);
           @submit="createInvite"
         />
 
+        <Dialog :open="Boolean(selectedDetailNode)" @update:open="handleNodeDetailsOpen">
+          <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-3xl" data-testid="device-detail-dialog">
+            <template v-if="selectedDetailNode">
+              <DialogHeader>
+                <DialogTitle class="flex min-w-0 items-center gap-2">
+                  <Network class="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <span class="truncate">{{ selectedDetailNode.name }}</span>
+                </DialogTitle>
+                <DialogDescription>{{ copy.machineDetails }}</DialogDescription>
+              </DialogHeader>
+
+              <div class="grid gap-4">
+                <div class="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" :class="nodeStatusClass(selectedDetailNode)" :data-testid="`device-detail-status-${selectedDetailNode.id}`">
+                    <Wifi v-if="selectedDetailNode.online" class="h-3 w-3" aria-hidden="true" />
+                    <WifiOff v-else class="h-3 w-3" aria-hidden="true" />
+                    {{ nodeStatusLabel(selectedDetailNode) }}
+                  </Badge>
+                  <Badge variant="outline">{{ copy.nodeId }}: {{ selectedDetailNode.id }}</Badge>
+                  <Badge v-if="selectedDetailNode.registerMethod" variant="outline">
+                    {{ selectedDetailNode.registerMethod }}
+                  </Badge>
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <section class="grid gap-2 rounded-md border bg-background p-3">
+                    <h3 class="text-sm font-semibold">{{ copy.owner }}</h3>
+                    <button
+                      v-if="hasVisibleUser(selectedDetailNode.user)"
+                      type="button"
+                      class="w-fit text-start text-sm font-medium text-primary underline underline-offset-4"
+                      :data-testid="`device-detail-owner-${selectedDetailNode.id}`"
+                      @click="openUserDetails(selectedDetailNode.user)"
+                    >
+                      {{ nodeOwner(selectedDetailNode) }}
+                    </button>
+                    <span v-else class="text-sm text-muted-foreground">-</span>
+                  </section>
+
+                  <section class="grid gap-2 rounded-md border bg-background p-3">
+                    <h3 class="text-sm font-semibold">{{ copy.details }}</h3>
+                    <p class="text-sm text-muted-foreground">{{ copy.lastSeen }}: {{ formatDate(selectedDetailNode.lastSeen) }}</p>
+                    <p class="text-sm text-muted-foreground">{{ copy.expires }}: {{ formatDate(selectedDetailNode.expiry) }}</p>
+                  </section>
+                </div>
+
+                <section class="grid gap-2">
+                  <h3 class="text-sm font-semibold">{{ copy.addresses }}</h3>
+                  <div class="flex flex-wrap gap-1">
+                    <Badge
+                      v-for="(address, addressIndex) in selectedDetailNode.ipAddresses"
+                      :key="address"
+                      variant="outline"
+                      class="border-slate-200 bg-muted/60 font-mono text-[11px] text-muted-foreground dark:border-slate-800"
+                      :data-testid="`device-detail-ip-${selectedDetailNode.id}-${addressIndex}`"
+                    >
+                      {{ address }}
+                    </Badge>
+                  </div>
+                </section>
+
+                <section v-if="selectedDetailNode.tags.length" class="grid gap-2">
+                  <h3 class="text-sm font-semibold">{{ copy.tags }}</h3>
+                  <div class="flex flex-wrap gap-1">
+                    <Badge
+                      v-for="tag in selectedDetailNode.tags"
+                      :key="tag"
+                      variant="outline"
+                      :class="deviceTagClass(tag)"
+                    >
+                      {{ tag }}
+                    </Badge>
+                  </div>
+                </section>
+
+                <section class="grid gap-2">
+                  <h3 class="text-sm font-semibold">{{ copy.routes }}</h3>
+                  <div class="flex flex-wrap gap-1">
+                    <Badge
+                      v-for="route in nodePendingRoutes(selectedDetailNode)"
+                      :key="route"
+                      variant="outline"
+                      :class="pendingRouteClass(route)"
+                    >
+                      {{ route }}
+                    </Badge>
+                    <Badge
+                      v-for="route in selectedDetailNode.approvedRoutes"
+                      :key="route"
+                      variant="outline"
+                      :class="approvedRouteClass()"
+                    >
+                      {{ route }}
+                    </Badge>
+                    <span
+                      v-if="nodePendingRoutes(selectedDetailNode).length === 0 && selectedDetailNode.approvedRoutes.length === 0"
+                      class="text-sm text-muted-foreground"
+                    >
+                      {{ copy.noRouteValues }}
+                    </span>
+                  </div>
+                </section>
+              </div>
+
+              <DialogFooter class="flex-col gap-2 sm:flex-row sm:justify-between">
+                <div class="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" data-testid="device-detail-view-routes" @click="jumpToRoutesFromDetails(selectedDetailNode)">
+                    <Router class="h-4 w-4" aria-hidden="true" />
+                    {{ copy.viewRoutes }}
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" data-testid="device-detail-rename" @click="openRenameDialogFromDetails(selectedDetailNode)">
+                    <Pencil class="h-4 w-4" aria-hidden="true" />
+                    {{ copy.rename }}
+                  </Button>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" data-testid="device-detail-expire" @click="openExpireDialogFromDetails(selectedDetailNode)">
+                    <Clock class="h-4 w-4" aria-hidden="true" />
+                    {{ copy.expire }}
+                  </Button>
+                  <Button type="button" variant="destructive" size="sm" data-testid="device-detail-remove" @click="openRemoveDialogFromDetails(selectedDetailNode)">
+                    <Trash2 class="h-4 w-4" aria-hidden="true" />
+                    {{ copy.remove }}
+                  </Button>
+                </div>
+              </DialogFooter>
+            </template>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog :open="Boolean(selectedDetailUser)" @update:open="handleUserDetailsOpen">
+          <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-3xl" data-testid="user-detail-dialog">
+            <template v-if="selectedDetailUser">
+              <DialogHeader>
+                <DialogTitle class="flex min-w-0 items-center gap-2">
+                  <CircleUserRound class="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <span class="truncate">{{ userLabel(selectedDetailUser) }}</span>
+                </DialogTitle>
+                <DialogDescription>{{ copy.userDetails }}</DialogDescription>
+              </DialogHeader>
+
+              <div class="grid gap-4">
+                <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <div class="rounded-md border bg-background p-3">
+                    <p class="text-xs text-muted-foreground">{{ copy.userId }}</p>
+                    <p class="mt-1 text-sm font-medium">{{ selectedDetailUser.id }}</p>
+                  </div>
+                  <div class="rounded-md border bg-background p-3">
+                    <p class="text-xs text-muted-foreground">{{ copy.role }}</p>
+                    <p class="mt-1 text-sm font-medium">{{ userRole(selectedDetailUser) }}</p>
+                  </div>
+                  <div class="rounded-md border bg-background p-3">
+                    <p class="text-xs text-muted-foreground">{{ copy.deviceCount }}</p>
+                    <p class="mt-1 text-sm font-medium">{{ selectedUserDevices.length }}</p>
+                  </div>
+                  <div class="rounded-md border bg-background p-3">
+                    <p class="text-xs text-muted-foreground">{{ copy.pendingRoutes }}</p>
+                    <p class="mt-1 text-sm font-medium">{{ selectedUserPendingRoutesCount }}</p>
+                  </div>
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <section class="grid gap-2 rounded-md border bg-background p-3">
+                    <h3 class="text-sm font-semibold">{{ copy.details }}</h3>
+                    <p class="break-all text-sm text-muted-foreground">{{ copy.email }}: {{ selectedDetailUser.email || copy.unknown }}</p>
+                    <p class="text-sm text-muted-foreground">{{ copy.authSource }}: {{ selectedDetailUser.provider || copy.unknown }}</p>
+                    <p class="text-sm text-muted-foreground">{{ copy.joined }}: {{ formatDate(selectedDetailUser.createdAt) }}</p>
+                  </section>
+
+                  <section class="grid gap-2 rounded-md border bg-background p-3">
+                    <h3 class="text-sm font-semibold">{{ copy.activeAuthKeys }}</h3>
+                    <div v-if="selectedUserActiveKeys.length" class="grid gap-1">
+                      <code
+                        v-for="key in selectedUserActiveKeys"
+                        :key="key.id"
+                        class="w-fit rounded bg-secondary px-1.5 py-0.5 text-xs"
+                      >
+                        {{ shortSecret(key.key) }}
+                      </code>
+                    </div>
+                    <p v-else class="text-sm text-muted-foreground">{{ copy.noAuthKeys }}</p>
+                  </section>
+                </div>
+
+                <section class="grid gap-2">
+                  <h3 class="text-sm font-semibold">{{ copy.personalDevices }}</h3>
+                  <div v-if="selectedUserDevices.length" class="grid gap-2">
+                    <button
+                      v-for="node in selectedUserDevices"
+                      :key="node.id"
+                      type="button"
+                      class="grid gap-2 rounded-md border bg-background p-3 text-start hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      :data-testid="`user-detail-device-${node.id}`"
+                      @click="openNodeDetails(node)"
+                    >
+                      <span class="flex flex-wrap items-center gap-2">
+                        <span class="font-medium">{{ node.name }}</span>
+                        <Badge variant="outline" :class="nodeStatusClass(node)">{{ nodeStatusLabel(node) }}</Badge>
+                      </span>
+                      <span class="flex flex-wrap gap-1">
+                        <Badge
+                          v-for="address in node.ipAddresses"
+                          :key="address"
+                          variant="outline"
+                          class="border-slate-200 bg-muted/60 font-mono text-[11px] text-muted-foreground dark:border-slate-800"
+                        >
+                          {{ address }}
+                        </Badge>
+                      </span>
+                    </button>
+                  </div>
+                  <p v-else class="text-sm text-muted-foreground">{{ copy.noPersonalDevices }}</p>
+                </section>
+
+                <section class="grid gap-2">
+                  <h3 class="text-sm font-semibold">{{ copy.policyReferences }}</h3>
+                  <div v-if="selectedUserPolicyReferences.length" class="flex flex-wrap gap-1">
+                    <Badge v-for="reference in selectedUserPolicyReferences" :key="reference" variant="outline">
+                      {{ reference }}
+                    </Badge>
+                  </div>
+                  <p v-else class="text-sm text-muted-foreground">{{ copy.noPolicyReferences }}</p>
+                </section>
+              </div>
+
+              <DialogFooter class="gap-2">
+                <Button type="button" variant="outline" data-testid="user-detail-view-machines" @click="jumpToMachinesForUser(selectedDetailUser)">
+                  <Network class="h-4 w-4" aria-hidden="true" />
+                  {{ copy.viewMachines }}
+                </Button>
+                <Button type="button" data-testid="user-detail-create-auth-key" @click="openInviteDialogForUser(selectedDetailUser)">
+                  <KeyRound class="h-4 w-4" aria-hidden="true" />
+                  {{ copy.createInvite }}
+                </Button>
+              </DialogFooter>
+            </template>
+          </DialogContent>
+        </Dialog>
+
         <section v-if="activeSection === 'home'" class="space-y-3 lg:space-y-4">
           <div class="grid gap-3 lg:flex lg:items-end lg:justify-between">
             <div>
@@ -3283,7 +3661,14 @@ onBeforeUnmount(stopHealthProbe);
                       <TableCell class="align-top md:min-w-64">
                         <div class="flex min-w-0 items-center gap-2">
                           <Network class="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                          <h2 class="truncate font-medium">{{ node.name }}</h2>
+                          <button
+                            type="button"
+                            class="truncate font-medium underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            :data-testid="`device-detail-link-${node.id}`"
+                            @click="openNodeDetails(node)"
+                          >
+                            {{ node.name }}
+                          </button>
                         </div>
                         <div class="mt-2 flex flex-wrap gap-1">
                           <Badge
@@ -3322,6 +3707,15 @@ onBeforeUnmount(stopHealthProbe);
                             <DropdownMenuContent align="start" class="w-64" :data-testid="`machine-actions-menu-mobile-${node.id}`">
                               <DropdownMenuLabel>{{ copy.actions }}</DropdownMenuLabel>
                               <DropdownMenuSeparator />
+                              <DropdownMenuItem :data-testid="`view-node-details-action-mobile-${node.id}`" @click="openNodeDetails(node)">
+                                <FileCheck2 class="h-4 w-4" aria-hidden="true" />
+                                {{ copy.viewDetails }}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem :data-testid="`view-node-routes-action-mobile-${node.id}`" @click="jumpToRoutesForMachine(node)">
+                                <Router class="h-4 w-4" aria-hidden="true" />
+                                {{ copy.viewRoutes }}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
                               <DropdownMenuItem :data-testid="`rename-node-action-mobile-${node.id}`" @click="openRenameDialog(node)">
                                 <Pencil class="h-4 w-4" aria-hidden="true" />
                                 {{ copy.rename }}
@@ -3340,7 +3734,14 @@ onBeforeUnmount(stopHealthProbe);
                       </TableCell>
                       <TableCell class="align-top md:min-w-40">
                         <div v-if="hasVisibleUser(node.user)">
-                          <p>{{ nodeOwner(node) }}</p>
+                          <button
+                            type="button"
+                            class="text-start underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            :data-testid="`device-owner-link-${node.id}`"
+                            @click="openUserDetails(node.user)"
+                          >
+                            {{ nodeOwner(node) }}
+                          </button>
                           <p class="text-xs text-muted-foreground">{{ node.user.email || node.user.name }}</p>
                         </div>
                         <span v-else aria-hidden="true" class="text-muted-foreground">-</span>
@@ -3408,6 +3809,15 @@ onBeforeUnmount(stopHealthProbe);
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" class="w-64" :data-testid="`machine-actions-menu-${node.id}`">
                               <DropdownMenuLabel>{{ copy.actions }}</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem :data-testid="`view-node-details-action-${node.id}`" @click="openNodeDetails(node)">
+                                <FileCheck2 class="h-4 w-4" aria-hidden="true" />
+                                {{ copy.viewDetails }}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem :data-testid="`view-node-routes-action-${node.id}`" @click="jumpToRoutesForMachine(node)">
+                                <Router class="h-4 w-4" aria-hidden="true" />
+                                {{ copy.viewRoutes }}
+                              </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem :data-testid="`rename-node-action-${node.id}`" @click="openRenameDialog(node)">
                                 <Pencil class="h-4 w-4" aria-hidden="true" />
@@ -3587,36 +3997,100 @@ onBeforeUnmount(stopHealthProbe);
                 <TableBody>
                   <TableRow v-for="user in filteredUsers" :key="user.id" :data-testid="`member-${user.name}`">
                     <TableCell class="align-top md:min-w-56">
-                      <p class="font-medium">{{ userLabel(user) }}</p>
-                      <p class="mt-1 break-all text-sm text-muted-foreground">{{ user.email || user.provider || copy.unknown }}</p>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        class="mt-2 md:hidden"
-                        :data-testid="`delete-member-mobile-${user.name}`"
-                        :aria-label="copy.deleteMember"
-                        @click="deleteMember(user)"
+                      <button
+                        type="button"
+                        class="font-medium underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        :data-testid="`member-detail-link-${user.name}`"
+                        @click="openUserDetails(user)"
                       >
-                        <Trash2 class="h-4 w-4" aria-hidden="true" />
-                      </Button>
+                        {{ userLabel(user) }}
+                      </button>
+                      <p class="mt-1 break-all text-sm text-muted-foreground">{{ user.email || user.provider || copy.unknown }}</p>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger as-child>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            class="mt-2 md:hidden"
+                            :data-testid="`member-actions-trigger-mobile-${user.name}`"
+                            :aria-label="`${copy.actions}: ${userLabel(user)}`"
+                          >
+                            <EllipsisVertical class="h-4 w-4" aria-hidden="true" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" class="w-64" :data-testid="`member-actions-menu-mobile-${user.name}`">
+                          <DropdownMenuLabel>{{ copy.actions }}</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem :data-testid="`view-member-details-mobile-${user.name}`" @click="openUserDetails(user)">
+                            <FileCheck2 class="h-4 w-4" aria-hidden="true" />
+                            {{ copy.viewDetails }}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem :data-testid="`view-member-machines-mobile-${user.name}`" @click="jumpToMachinesForUser(user)">
+                            <Network class="h-4 w-4" aria-hidden="true" />
+                            {{ copy.viewMachines }}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem :data-testid="`create-invite-for-member-mobile-${user.name}`" @click="openInviteDialogForUser(user)">
+                            <KeyRound class="h-4 w-4" aria-hidden="true" />
+                            {{ copy.createInvite }}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem variant="destructive" :data-testid="`delete-member-mobile-${user.name}`" @click="deleteMember(user)">
+                            <Trash2 class="h-4 w-4" aria-hidden="true" />
+                            {{ copy.deleteMember }}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                     <TableCell class="align-top md:min-w-32">
                       <Badge variant="outline">{{ userRole(user) }}</Badge>
                     </TableCell>
-                    <TableCell class="align-top md:min-w-28">{{ userDeviceCount(user) }}</TableCell>
+                    <TableCell class="align-top md:min-w-28">
+                      <button
+                        type="button"
+                        class="underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        :data-testid="`member-devices-link-${user.name}`"
+                        @click="openUserDetails(user)"
+                      >
+                        {{ userDeviceCount(user) }}
+                      </button>
+                    </TableCell>
                     <TableCell class="align-top text-sm text-muted-foreground md:min-w-40">{{ formatDate(user.createdAt) }}</TableCell>
                     <TableCell class="align-top md:min-w-36">{{ user.provider || copy.unknown }}</TableCell>
                     <TableCell class="hidden align-top md:table-cell md:min-w-16">
                       <div class="flex justify-end">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          :data-testid="`delete-member-${user.name}`"
-                          :aria-label="copy.deleteMember"
-                          @click="deleteMember(user)"
-                        >
-                          <Trash2 class="h-4 w-4" aria-hidden="true" />
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger as-child>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              :data-testid="`member-actions-trigger-${user.name}`"
+                              :aria-label="`${copy.actions}: ${userLabel(user)}`"
+                            >
+                              <EllipsisVertical class="h-4 w-4" aria-hidden="true" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" class="w-64" :data-testid="`member-actions-menu-${user.name}`">
+                            <DropdownMenuLabel>{{ copy.actions }}</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem :data-testid="`view-member-details-${user.name}`" @click="openUserDetails(user)">
+                              <FileCheck2 class="h-4 w-4" aria-hidden="true" />
+                              {{ copy.viewDetails }}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem :data-testid="`view-member-machines-${user.name}`" @click="jumpToMachinesForUser(user)">
+                              <Network class="h-4 w-4" aria-hidden="true" />
+                              {{ copy.viewMachines }}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem :data-testid="`create-invite-for-member-${user.name}`" @click="openInviteDialogForUser(user)">
+                              <KeyRound class="h-4 w-4" aria-hidden="true" />
+                              {{ copy.createInvite }}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem variant="destructive" :data-testid="`delete-member-${user.name}`" @click="deleteMember(user)">
+                              <Trash2 class="h-4 w-4" aria-hidden="true" />
+                              {{ copy.deleteMember }}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -3695,7 +4169,16 @@ onBeforeUnmount(stopHealthProbe);
                       <Badge variant="outline" :class="keyStatusClass(key)" :data-testid="`invite-status-${key.id}`">{{ keyStatus(key) }}</Badge>
                     </TableCell>
                     <TableCell class="min-w-36 font-medium">
-                      {{ userLabel(key.user) }}
+                      <button
+                        v-if="hasVisibleUser(key.user)"
+                        type="button"
+                        class="text-start underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        :data-testid="`invite-owner-link-${key.id}`"
+                        @click="openUserDetails(key.user)"
+                      >
+                        {{ userLabel(key.user) }}
+                      </button>
+                      <span v-else>{{ userLabel(key.user) }}</span>
                     </TableCell>
                     <TableCell class="min-w-64">
                       <code class="break-all rounded bg-secondary px-1.5 py-0.5 text-xs">{{ key.key }}</code>
