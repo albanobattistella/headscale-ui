@@ -14,12 +14,13 @@
     "check": "bun run lint && bun run test && bun run build && bun run test:e2e"
   },
   "dependencies": {
+    "@internationalized/date": "^3.12.1",
     "@vueuse/core": "^14.3.0",
     "axios": "latest",
     "class-variance-authority": "latest",
     "clsx": "latest",
     "lucide-vue-next": "latest",
-    "reka-ui": "^2.9.6",
+    "reka-ui": "^2.9.7",
     "tailwind-merge": "latest",
     "tailwindcss": "latest",
     "vue": "latest",

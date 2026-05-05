@@ -706,11 +706,34 @@ test("covers auth-key filters, expiration and deletion", async () => {
   await page.getByTestId("open-create-invite").click();
   await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
   await page.getByTestId("invite-user").selectOptions("3");
-  expect(document.querySelector<HTMLInputElement>('[data-testid="invite-expiration"]')?.type).toBe(
-    "datetime-local",
+  expect(document.querySelector<HTMLElement>('[data-testid="invite-expiration"]')?.tagName).toBe(
+    "BUTTON",
   );
-  inputDomTestId("invite-expiration", "2026-06-01T00:00");
-  await expect.element(page.getByTestId("invite-expiration")).toHaveValue("2026-06-01T00:00");
+  await page.getByTestId("invite-expiration").click();
+  await expect
+    .poll(() => document.querySelectorAll<HTMLElement>('[data-slot="calendar"] select').length)
+    .toBe(2);
+  const [monthSelect, yearSelect] = Array.from(
+    document.querySelectorAll<HTMLSelectElement>('[data-slot="calendar"] select'),
+  );
+  monthSelect.value = "6";
+  monthSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  yearSelect.value = "2026";
+  yearSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await expect
+    .poll(() => document.querySelector<HTMLElement>('[data-slot="calendar"]')?.textContent)
+    .toContain("2026");
+  const juneFirst = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-slot="calendar-cell-trigger"]'),
+  ).find(
+    (element) => element.textContent?.trim() === "1" && element.getBoundingClientRect().width > 0,
+  );
+  expect(juneFirst).toBeTruthy();
+  juneFirst?.click();
+  selectDomTestId("invite-expiration-hour", "00");
+  selectDomTestId("invite-expiration-minute", "00");
+  await expect.element(page.getByTestId("invite-expiration")).toHaveTextContent("Jun 1, 2026");
+  await expect.element(page.getByTestId("invite-expiration")).toHaveTextContent("12:00 AM");
   await page.getByTestId("invite-tags").fill("tag:mobile");
   await page.getByTestId("invite-reusable").click();
   await page.getByTestId("invite-ephemeral").click();

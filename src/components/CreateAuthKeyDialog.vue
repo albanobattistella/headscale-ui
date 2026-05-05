@@ -3,6 +3,7 @@ import { KeyRound } from "lucide-vue-next";
 import { reactive, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { useHeadscaleI18n } from "@/i18n";
 import {
   type AuthKeyDialogDefaults,
   type AuthKeyDialogLabels,
@@ -40,6 +42,8 @@ const emit = defineEmits<{
   "update:open": [open: boolean];
   submit: [payload: AuthKeyDialogPayload];
 }>();
+
+const { locale } = useHeadscaleI18n();
 
 const form = reactive({
   user: "",
@@ -118,14 +122,13 @@ watch(
           </div>
           <div>
             <Label for="invite-expiration">{{ labels.expiration }}</Label>
-            <Input
+            <DateTimePicker
               id="invite-expiration"
               v-model="form.expirationLocal"
+              :locale="locale"
               data-testid="invite-expiration"
-              type="datetime-local"
               class="mt-2"
               required
-              step="60"
             />
           </div>
         </div>
