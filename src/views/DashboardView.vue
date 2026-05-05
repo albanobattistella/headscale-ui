@@ -3821,7 +3821,7 @@ onBeforeUnmount(stopHealthProbe);
                     </div>
                   </div>
 
-                  <div class="grid gap-2">
+                  <div class="grid content-start gap-2">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                       <h2 class="font-semibold">{{ copy.existingRules }}</h2>
                       <p class="text-sm text-muted-foreground">{{ copy.policyWorkspaceSummary }}</p>
