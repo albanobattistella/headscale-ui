@@ -56,7 +56,6 @@ export function createInitialSnapshot(): HeadscaleSnapshot {
     {
       id: "2",
       name: "tagged-devices",
-      displayName: "Devices managed by tags",
       provider: "system",
       createdAt: "2026-02-04T09:00:00Z",
     },

@@ -280,7 +280,6 @@ const englishCopy = {
   owners: "Owners",
   members: "Members",
   serviceAccounts: "Service accounts",
-  tagManagedDevices: "Devices managed by tags",
   role: "Role",
   joined: "Joined",
   authSource: "Auth source",
@@ -536,7 +535,6 @@ const productCopy: Record<Locale, ProductCopy> = {
     owners: "Owner",
     members: "成员",
     serviceAccounts: "服务账号",
-    tagManagedDevices: "使用标签管理的设备",
     role: "角色",
     joined: "加入时间",
     authSource: "认证来源",
@@ -691,7 +689,6 @@ const productCopy: Record<Locale, ProductCopy> = {
     dashboardTitle: "Aperçu du tailnet",
     dashboardSubtitle: "Un point d'accueil pour appareils, membres et routes privées.",
     currentServer: "Serveur actuel",
-    tagManagedDevices: "Appareils gérés par tags",
     time: "Heure",
     hour: "Heure",
     minute: "Minute",
@@ -714,7 +711,6 @@ const productCopy: Record<Locale, ProductCopy> = {
     dashboardTitle: "Обзор tailnet",
     dashboardSubtitle: "Центр управления устройствами, людьми и приватными маршрутами.",
     currentServer: "Текущий сервер",
-    tagManagedDevices: "Устройства, управляемые тегами",
     time: "Время",
     hour: "Час",
     minute: "Минута",
@@ -737,7 +733,6 @@ const productCopy: Record<Locale, ProductCopy> = {
     dashboardTitle: "Resumen del tailnet",
     dashboardSubtitle: "Un centro para dispositivos, personas y rutas privadas.",
     currentServer: "Servidor actual",
-    tagManagedDevices: "Dispositivos gestionados por etiquetas",
     time: "Hora",
     hour: "Hora",
     minute: "Minuto",
@@ -760,7 +755,6 @@ const productCopy: Record<Locale, ProductCopy> = {
     dashboardTitle: "نظرة عامة على الشبكة",
     dashboardSubtitle: "مركز لإدارة الأجهزة والأعضاء والمسارات الخاصة.",
     currentServer: "الخادم الحالي",
-    tagManagedDevices: "الأجهزة المدارة بالوسوم",
     time: "الوقت",
     hour: "الساعة",
     minute: "الدقيقة",
@@ -1091,14 +1085,14 @@ const routesWaiting = computed(() =>
     return total + pending.length;
   }, 0),
 );
+const visibleUsers = computed(() => snapshot.value.users.filter((user) => hasVisibleUser(user)));
 const filteredNodes = computed(() => {
   const query = deviceSearch.value.trim().toLowerCase();
   return snapshot.value.nodes.filter((node) => {
     const searchable = [
       node.name,
       node.givenName,
-      node.user?.name,
-      node.user?.email,
+      ...(hasVisibleUser(node.user) ? [node.user?.name, node.user?.email, nodeOwner(node)] : []),
       node.ipAddresses.join(" "),
       node.tags.join(" "),
       node.availableRoutes.join(" "),
@@ -1125,7 +1119,7 @@ const hasMachineFilters = computed(
 );
 const filteredUsers = computed(() => {
   const query = userSearch.value.trim().toLowerCase();
-  return snapshot.value.users.filter((user) => {
+  return visibleUsers.value.filter((user) => {
     const role = userRole(user).toLowerCase();
     const searchable = [
       user.name,
@@ -1178,7 +1172,7 @@ const filteredPreAuthKeys = computed(() => {
   });
 });
 const authKeyDialogUsers = computed(() =>
-  snapshot.value.users.map((user) => ({
+  visibleUsers.value.map((user) => ({
     id: user.id,
     label: userLabel(user),
   })),
@@ -1247,7 +1241,7 @@ const policyTagNameChoices = computed(() =>
   ),
 );
 const policyMemberChoices = computed<PolicyListChoice[]>(() =>
-  snapshot.value.users
+  visibleUsers.value
     .filter((user) => user.email || user.name)
     .map((user) => ({
       id: policyChoiceId("source", user.email || user.name),
@@ -1274,7 +1268,7 @@ const policySourceChoices = computed<PolicyChoice[]>(() => {
       value: "*",
       description: copy.value.anySourceDescription,
     },
-    ...snapshot.value.users
+    ...visibleUsers.value
       .filter((user) => user.email || user.name)
       .map((user) => ({
         id: policyChoiceId("source", user.email || user.name),
@@ -2096,6 +2090,10 @@ function loadPolicyDesigner(policy: string) {
 }
 
 function nodeOwner(node: HeadscaleNode) {
+  if (!hasVisibleUser(node.user)) {
+    return "";
+  }
+
   return userLabel(node.user);
 }
 
@@ -2114,11 +2112,11 @@ function userRole(user: HeadscaleUser) {
 }
 
 function userLabel(user?: HeadscaleUser) {
-  if (isTagManagedDeviceUser(user)) {
-    return copy.value.tagManagedDevices;
-  }
-
   return user?.displayName || user?.name || user?.email || "Unknown";
+}
+
+function hasVisibleUser(user?: HeadscaleUser): user is HeadscaleUser {
+  return Boolean(user && !isTagManagedDeviceUser(user));
 }
 
 function isTagManagedDeviceUser(user?: HeadscaleUser) {
@@ -2136,7 +2134,7 @@ function jumpToMachine(node: HeadscaleNode) {
 }
 
 function jumpToUser(user?: HeadscaleUser) {
-  if (!user) {
+  if (!hasVisibleUser(user)) {
     return;
   }
 
@@ -2194,6 +2192,23 @@ function keyKindClass(key: PreAuthKey) {
 
 function keyEphemeralClass() {
   return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300";
+}
+
+function deviceTagClass(tag: string) {
+  const normalizedTag = tag.toLowerCase();
+  if (normalizedTag.includes("server")) {
+    return "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900/60 dark:bg-cyan-950/40 dark:text-cyan-300";
+  }
+  if (normalizedTag.includes("workstation") || normalizedTag.includes("desktop")) {
+    return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-900/60 dark:bg-fuchsia-950/40 dark:text-fuchsia-300";
+  }
+  if (normalizedTag.includes("mobile") || normalizedTag.includes("phone")) {
+    return "border-pink-200 bg-pink-50 text-pink-700 dark:border-pink-900/60 dark:bg-pink-950/40 dark:text-pink-300";
+  }
+  if (normalizedTag.includes("db") || normalizedTag.includes("database")) {
+    return "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-300";
+  }
+  return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300";
 }
 
 function keyTagClass(tag: string) {
@@ -2948,7 +2963,7 @@ onBeforeUnmount(stopHealthProbe);
             </Card>
             <Card class="p-3">
               <p class="text-sm text-muted-foreground">{{ copy.nav.members }}</p>
-              <p class="mt-1 text-2xl font-semibold">{{ snapshot.users.length }}</p>
+              <p class="mt-1 text-2xl font-semibold">{{ visibleUsers.length }}</p>
             </Card>
             <Card class="p-3">
               <p class="text-sm text-muted-foreground">{{ copy.openInvites }}</p>
@@ -2967,7 +2982,9 @@ onBeforeUnmount(stopHealthProbe);
                 <div class="flex items-start justify-between gap-3">
                   <div>
                     <p class="font-medium">{{ node.name }}</p>
-                    <p class="text-sm text-muted-foreground">{{ nodeOwner(node) }}</p>
+                    <p v-if="hasVisibleUser(node.user)" class="text-sm text-muted-foreground">
+                      {{ nodeOwner(node) }}
+                    </p>
                   </div>
                   <Badge :variant="node.online ? 'secondary' : 'outline'">
                     <Wifi v-if="node.online" class="h-3 w-3" aria-hidden="true" />
@@ -3239,8 +3256,16 @@ onBeforeUnmount(stopHealthProbe);
                         </div>
                         <p class="mt-1 break-all text-xs text-muted-foreground">{{ node.ipAddresses.join(", ") }}</p>
                         <div class="mt-2 flex flex-wrap gap-1">
-                          <Badge v-if="node.tags.length === 0" variant="outline">{{ copy.noTags }}</Badge>
-                          <Badge v-for="tag in node.tags" :key="tag" variant="outline">{{ tag }}</Badge>
+                          <Badge v-if="node.tags.length === 0" variant="outline" class="border-dashed text-muted-foreground">{{ copy.noTags }}</Badge>
+                          <Badge
+                            v-for="(tag, tagIndex) in node.tags"
+                            :key="tag"
+                            variant="outline"
+                            :class="deviceTagClass(tag)"
+                            :data-testid="`device-tag-${node.id}-${tagIndex}`"
+                          >
+                            {{ tag }}
+                          </Badge>
                         </div>
                         <div class="mt-2 md:hidden">
                           <DropdownMenu>
@@ -3274,8 +3299,11 @@ onBeforeUnmount(stopHealthProbe);
                         </div>
                       </TableCell>
                       <TableCell class="align-top md:min-w-40">
-                        <p>{{ nodeOwner(node) }}</p>
-                        <p class="text-xs text-muted-foreground">{{ node.user?.email || node.user?.name || copy.unknown }}</p>
+                        <div v-if="hasVisibleUser(node.user)">
+                          <p>{{ nodeOwner(node) }}</p>
+                          <p class="text-xs text-muted-foreground">{{ node.user.email || node.user.name }}</p>
+                        </div>
+                        <span v-else aria-hidden="true" class="text-muted-foreground">-</span>
                       </TableCell>
                       <TableCell class="align-top md:min-w-56">
                         <button
@@ -3295,7 +3323,7 @@ onBeforeUnmount(stopHealthProbe);
                         </div>
                       </TableCell>
                       <TableCell class="align-top md:min-w-44">
-                        <Badge :variant="node.online ? 'secondary' : 'outline'">
+                        <Badge :variant="node.online ? 'secondary' : 'outline'" :data-testid="`device-status-${node.id}`">
                           <Wifi v-if="node.online" class="h-3 w-3" aria-hidden="true" />
                           <WifiOff v-else class="h-3 w-3" aria-hidden="true" />
                           {{ nodeStatusLabel(node) }}
@@ -3473,7 +3501,7 @@ onBeforeUnmount(stopHealthProbe);
                   </NativeSelect>
                 </div>
               </div>
-              <p class="whitespace-nowrap text-xs text-muted-foreground sm:ms-auto">{{ filteredUsers.length }} / {{ snapshot.users.length }}</p>
+              <p class="whitespace-nowrap text-xs text-muted-foreground sm:ms-auto">{{ filteredUsers.length }} / {{ visibleUsers.length }}</p>
               <Button type="button" variant="outline" size="icon" data-testid="export-users" :aria-label="copy.exportData" @click="exportUsers">
                 <Download class="h-4 w-4" aria-hidden="true" />
               </Button>
@@ -3691,7 +3719,7 @@ onBeforeUnmount(stopHealthProbe);
                       </button>
                     </h2>
                     <button
-                      v-if="node.user"
+                      v-if="hasVisibleUser(node.user)"
                       type="button"
                       class="mt-1 inline-flex max-w-full text-start text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       :data-testid="`route-user-link-${node.id}`"
@@ -3700,7 +3728,6 @@ onBeforeUnmount(stopHealthProbe);
                     >
                       <span class="truncate">{{ nodeOwner(node) }}</span>
                     </button>
-                    <p v-else class="text-sm text-muted-foreground">{{ nodeOwner(node) }}</p>
                   </div>
                   <Button
                     size="sm"

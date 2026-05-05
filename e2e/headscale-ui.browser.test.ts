@@ -178,6 +178,12 @@ function expectMachinesWorkbench() {
       .querySelector('[data-testid="device-search"]')
       ?.closest('[data-testid="machine-toolbar"]'),
   ).toBeTruthy();
+  const deviceTag = document.querySelector<HTMLElement>('[data-testid="device-tag-1-0"]');
+  const deviceStatus = document.querySelector<HTMLElement>('[data-testid="device-status-1"]');
+  expect(deviceTag).toBeTruthy();
+  expect(deviceStatus).toBeTruthy();
+  expect(deviceTag?.className).toContain("bg-fuchsia-50");
+  expect(deviceTag?.className).not.toBe(deviceStatus?.className);
 }
 
 function countByTestIdPrefix(prefix: string) {
@@ -482,7 +488,7 @@ test("uses pointer cursors for clickable controls and links", async () => {
 
   await page.getByTestId("section-routes").click();
   expectPointerCursor("route-machine-link-2");
-  expectPointerCursor("route-user-link-2");
+  expect(document.querySelector('[data-testid="route-user-link-2"]')).toBeNull();
   expectPointerCursor("approve-routes-2");
 
   await openProfileMenu();
@@ -664,10 +670,8 @@ test("covers user filters, user export and member deletion", async () => {
   expect(document.querySelector('[data-testid="member-alice"]')).toBeNull();
   inputDomTestId("user-search", "");
   selectDomTestId("user-filter", "service");
-  await expect.element(page.getByTestId("member-tagged-devices")).toBeVisible();
-  await expect
-    .element(page.getByTestId("member-tagged-devices"))
-    .toHaveTextContent("Devices managed by tags");
+  expect(document.querySelector('[data-testid="member-tagged-devices"]')).toBeNull();
+  await expect.element(page.getByTestId("user-table")).toHaveTextContent("No users match");
   expect(document.querySelector('[data-testid="member-charlie"]')).toBeNull();
 
   const downloadStub = stubDownloads();
@@ -944,9 +948,10 @@ test("covers task navigation and the client-device setup branch", async () => {
   await expect.element(page.getByTestId("device-search")).toHaveValue("edge-router");
   await expect.element(page.getByTestId("device-2")).toBeVisible();
   await page.getByTestId("section-routes").click();
-  await page.getByTestId("route-user-link-2").click();
-  await expect.element(page.getByTestId("user-search")).toHaveValue("Devices managed by tags");
-  await expect.element(page.getByTestId("member-tagged-devices")).toBeVisible();
+  expect(document.querySelector('[data-testid="route-user-link-2"]')).toBeNull();
+  const routeNodeText = document.querySelector('[data-testid="route-node-2"]')?.textContent ?? "";
+  expect(routeNodeText).not.toContain("tagged-devices");
+  expect(routeNodeText).not.toMatch(/managed by tags/i);
 
   await page.getByTestId("section-devices").click();
   await page.getByTestId("add-device-toggle").click();
@@ -1072,9 +1077,8 @@ test("defaults to English and supports the United Nations official languages", a
   await expect.element(page.getByTestId("section-devices")).toHaveTextContent("机器");
   await page.getByTestId("section-members").click();
   selectDomTestId("user-filter", "service");
-  await expect
-    .element(page.getByTestId("member-tagged-devices"))
-    .toHaveTextContent("使用标签管理的设备");
+  expect(document.querySelector('[data-testid="member-tagged-devices"]')).toBeNull();
+  await expect.element(page.getByTestId("user-table")).toHaveTextContent("没有匹配筛选条件的用户");
 
   for (const code of ["fr", "ru", "es", "ar"] as const) {
     await chooseProfileMenuOption(`locale-option-${code}`);
