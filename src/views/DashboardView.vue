@@ -3742,82 +3742,82 @@ onBeforeUnmount(stopHealthProbe);
                   </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="rules" class="mt-3 grid gap-4">
+                <TabsContent value="rules" class="mt-3 grid gap-4 lg:grid-cols-[24rem_minmax(0,1fr)]">
                   <div class="grid gap-4">
                     <div class="rounded-md border bg-secondary/20 p-3" data-testid="policy-rule-builder">
+                      <div>
+                        <h2 class="font-semibold">{{ copy.policyQuickStartTitle }}</h2>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                          {{ copy.policyQuickStartDescription }}
+                        </p>
+                      </div>
+
+                      <div class="mt-3 grid gap-3">
                         <div>
-                          <h2 class="font-semibold">{{ copy.policyQuickStartTitle }}</h2>
-                          <p class="mt-1 text-sm text-muted-foreground">
-                            {{ copy.policyQuickStartDescription }}
-                          </p>
+                          <Label for="policy-simple-source">{{ copy.policyWhoCanAccess }}</Label>
+                          <Select
+                            id="policy-simple-source"
+                            v-model="policyRuleForm.source"
+                            data-testid="policy-simple-source"
+                            class="mt-2"
+                          >
+                            <option
+                              v-for="choice in policySourceChoices"
+                              :key="choice.id"
+                              :value="choice.value"
+                            >
+                              {{ choice.label }}
+                            </option>
+                          </Select>
                         </div>
+                        <div>
+                          <Label for="policy-simple-destination">{{ copy.policyWhatCanAccess }}</Label>
+                          <Select
+                            id="policy-simple-destination"
+                            v-model="policyRuleForm.destination"
+                            data-testid="policy-simple-destination"
+                            class="mt-2"
+                          >
+                            <option
+                              v-for="choice in policyDestinationChoices"
+                              :key="choice.id"
+                              :value="choice.value"
+                            >
+                              {{ choice.label }}
+                            </option>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label for="policy-simple-ports">{{ copy.policyWhichService }}</Label>
+                          <Select
+                            id="policy-simple-ports"
+                            v-model="policyRuleForm.ports"
+                            data-testid="policy-simple-ports"
+                            class="mt-2"
+                          >
+                            <option
+                              v-for="choice in policyServiceChoices"
+                              :key="choice.id"
+                              :value="choice.value"
+                            >
+                              {{ choice.label }}
+                            </option>
+                          </Select>
+                        </div>
+                      </div>
 
-                        <div class="mt-3 grid gap-3">
-                          <div>
-                            <Label for="policy-simple-source">{{ copy.policyWhoCanAccess }}</Label>
-                            <Select
-                              id="policy-simple-source"
-                              v-model="policyRuleForm.source"
-                              data-testid="policy-simple-source"
-                              class="mt-2"
-                            >
-                              <option
-                                v-for="choice in policySourceChoices"
-                                :key="choice.id"
-                                :value="choice.value"
-                              >
-                                {{ choice.label }}
-                              </option>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label for="policy-simple-destination">{{ copy.policyWhatCanAccess }}</Label>
-                            <Select
-                              id="policy-simple-destination"
-                              v-model="policyRuleForm.destination"
-                              data-testid="policy-simple-destination"
-                              class="mt-2"
-                            >
-                              <option
-                                v-for="choice in policyDestinationChoices"
-                                :key="choice.id"
-                                :value="choice.value"
-                              >
-                                {{ choice.label }}
-                              </option>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label for="policy-simple-ports">{{ copy.policyWhichService }}</Label>
-                            <Select
-                              id="policy-simple-ports"
-                              v-model="policyRuleForm.ports"
-                              data-testid="policy-simple-ports"
-                              class="mt-2"
-                            >
-                              <option
-                                v-for="choice in policyServiceChoices"
-                                :key="choice.id"
-                                :value="choice.value"
-                              >
-                                {{ choice.label }}
-                              </option>
-                            </Select>
-                          </div>
-                        </div>
-
-                        <div class="mt-3 grid gap-3 rounded-md border bg-background p-3">
-                          <p class="text-sm" data-testid="policy-rule-preview">
-                            <span class="block text-xs font-medium text-muted-foreground">
-                              {{ copy.policySimplePreview }}
-                            </span>
-                            {{ policyRulePreview }}
-                          </p>
-                          <Button type="button" data-testid="add-policy-rule" @click="addPolicyRule">
-                            <Plus class="h-4 w-4" aria-hidden="true" />
-                            {{ copy.addRule }}
-                          </Button>
-                        </div>
+                      <div class="mt-3 grid gap-3 rounded-md border bg-background p-3">
+                        <p class="text-sm" data-testid="policy-rule-preview">
+                          <span class="block text-xs font-medium text-muted-foreground">
+                            {{ copy.policySimplePreview }}
+                          </span>
+                          {{ policyRulePreview }}
+                        </p>
+                        <Button type="button" data-testid="add-policy-rule" @click="addPolicyRule">
+                          <Plus class="h-4 w-4" aria-hidden="true" />
+                          {{ copy.addRule }}
+                        </Button>
+                      </div>
                     </div>
                   </div>
 
@@ -3877,7 +3877,7 @@ onBeforeUnmount(stopHealthProbe);
                 </TabsContent>
 
                 <TabsContent value="groups" class="mt-3 grid gap-3">
-                  <div class="grid gap-3">
+                  <div class="grid gap-3 lg:grid-cols-[24rem_minmax(0,1fr)]">
                     <div class="grid gap-3 rounded-md border bg-secondary/20 p-3">
                       <h2 class="font-semibold">{{ copy.groups }}</h2>
                       <div>
@@ -3959,7 +3959,7 @@ onBeforeUnmount(stopHealthProbe);
                 </TabsContent>
 
                 <TabsContent value="tags" class="mt-3 grid gap-3">
-                  <div class="grid gap-3">
+                  <div class="grid gap-3 lg:grid-cols-[24rem_minmax(0,1fr)]">
                     <div class="grid gap-3 rounded-md border bg-secondary/20 p-3">
                       <h2 class="font-semibold">{{ copy.tagOwners }}</h2>
                       <div>
