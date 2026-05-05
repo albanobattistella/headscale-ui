@@ -184,14 +184,23 @@ function expectMachinesWorkbench() {
   expect(deviceIpBadges[0]?.className).toContain("font-mono");
   const deviceTag = document.querySelector<HTMLElement>('[data-testid="device-tag-1-0"]');
   const deviceStatus = document.querySelector<HTMLElement>('[data-testid="device-status-1"]');
+  const offlineStatus = document.querySelector<HTMLElement>('[data-testid="device-status-2"]');
+  const expiredStatus = document.querySelector<HTMLElement>('[data-testid="device-status-3"]');
   expect(deviceTag).toBeTruthy();
   expect(deviceStatus).toBeTruthy();
+  expect(offlineStatus).toBeTruthy();
+  expect(expiredStatus).toBeTruthy();
   expect(deviceTag?.className).toContain("bg-fuchsia-50");
   expect(deviceTag?.className).not.toBe(deviceStatus?.className);
   expect(deviceStatus?.textContent).toContain("Online");
-  expect(
-    document.querySelector<HTMLElement>('[data-testid="device-status-3"]')?.textContent,
-  ).toContain("Expired");
+  expect(deviceStatus?.className).toContain("emerald");
+  expect(offlineStatus?.textContent).toContain("Offline");
+  expect(offlineStatus?.className).toContain("slate");
+  expect(expiredStatus?.textContent).toContain("Expired");
+  expect(expiredStatus?.className).toContain("rose");
+  expect(deviceStatus?.className).not.toBe(offlineStatus?.className);
+  expect(deviceStatus?.className).not.toBe(expiredStatus?.className);
+  expect(offlineStatus?.className).not.toBe(expiredStatus?.className);
   expect(document.querySelector('[data-testid="device-tag-3-0"]')).toBeNull();
   expect(document.querySelector('[data-testid="device-pending-routes-1"]')).toBeNull();
   const pendingRouteBadges = document.querySelectorAll<HTMLElement>(
@@ -208,6 +217,24 @@ function expectMachinesWorkbench() {
   expect(pendingRouteBadges[0]?.className).not.toBe(approvedRouteBadge?.className);
   const deviceTableText = document.querySelector('[data-testid="machine-list"]')?.textContent ?? "";
   expect(deviceTableText).not.toMatch(/No tags|无标签|No pending routes|无待审路由/);
+}
+
+function expectRecentDeviceStatusColors() {
+  const recentOnline = document.querySelector<HTMLElement>(
+    '[data-testid="recent-device-status-1"]',
+  );
+  const recentOffline = document.querySelector<HTMLElement>(
+    '[data-testid="recent-device-status-2"]',
+  );
+  const recentExpired = document.querySelector<HTMLElement>(
+    '[data-testid="recent-device-status-3"]',
+  );
+  expect(recentOnline?.textContent).toContain("Online");
+  expect(recentOnline?.className).toContain("emerald");
+  expect(recentOffline?.textContent).toContain("Offline");
+  expect(recentOffline?.className).toContain("slate");
+  expect(recentExpired?.textContent).toContain("Expired");
+  expect(recentExpired?.className).toContain("rose");
 }
 
 function countByTestIdPrefix(prefix: string) {
@@ -384,6 +411,7 @@ test("manages multiple saved connection profiles and supports logout", async () 
   await expect.element(page.getByTestId("connect-server-url")).toHaveValue("http://127.0.0.1:8080");
   await page.getByTestId("connect-submit").click();
   await expect.element(page.getByTestId("section-home")).toBeVisible();
+  expectRecentDeviceStatusColors();
   await openProfileMenu();
   await expect.element(page.getByTestId("profile-menu")).toHaveTextContent("Office");
   expect(document.querySelector('[data-testid="current-server"]')).toBeNull();

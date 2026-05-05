@@ -2157,6 +2157,17 @@ function nodeStatusLabel(node: HeadscaleNode) {
   return status === "online" ? t("online") : t("offline");
 }
 
+function nodeStatusClass(node: HeadscaleNode) {
+  const status = nodeConnectionStatus(node);
+  if (status === "online") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300";
+  }
+  if (status === "expired") {
+    return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300";
+  }
+  return "border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300";
+}
+
 function keyStatus(key: PreAuthKey) {
   if (key.used) {
     return copy.value.used;
@@ -2992,10 +3003,14 @@ onBeforeUnmount(stopHealthProbe);
                       {{ nodeOwner(node) }}
                     </p>
                   </div>
-                  <Badge :variant="node.online ? 'secondary' : 'outline'">
+                  <Badge
+                    variant="outline"
+                    :class="nodeStatusClass(node)"
+                    :data-testid="`recent-device-status-${node.id}`"
+                  >
                     <Wifi v-if="node.online" class="h-3 w-3" aria-hidden="true" />
                     <WifiOff v-else class="h-3 w-3" aria-hidden="true" />
-                    {{ node.online ? t("online") : t("offline") }}
+                    {{ nodeStatusLabel(node) }}
                   </Badge>
                 </div>
                 <div class="mt-3 flex flex-wrap gap-1">
@@ -3366,7 +3381,11 @@ onBeforeUnmount(stopHealthProbe);
                         </div>
                       </TableCell>
                       <TableCell class="align-top md:min-w-44">
-                        <Badge :variant="node.online ? 'secondary' : 'outline'" :data-testid="`device-status-${node.id}`">
+                        <Badge
+                          variant="outline"
+                          :class="nodeStatusClass(node)"
+                          :data-testid="`device-status-${node.id}`"
+                        >
                           <Wifi v-if="node.online" class="h-3 w-3" aria-hidden="true" />
                           <WifiOff v-else class="h-3 w-3" aria-hidden="true" />
                           {{ nodeStatusLabel(node) }}
