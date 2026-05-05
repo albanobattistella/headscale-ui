@@ -178,12 +178,20 @@ function expectMachinesWorkbench() {
       .querySelector('[data-testid="device-search"]')
       ?.closest('[data-testid="machine-toolbar"]'),
   ).toBeTruthy();
+  const deviceIpBadges = document.querySelectorAll<HTMLElement>('[data-testid^="device-ip-1-"]');
+  expect(deviceIpBadges).toHaveLength(2);
+  expect(deviceIpBadges[0]?.textContent).toContain("100.64.0.1");
+  expect(deviceIpBadges[0]?.className).toContain("font-mono");
   const deviceTag = document.querySelector<HTMLElement>('[data-testid="device-tag-1-0"]');
   const deviceStatus = document.querySelector<HTMLElement>('[data-testid="device-status-1"]');
   expect(deviceTag).toBeTruthy();
   expect(deviceStatus).toBeTruthy();
   expect(deviceTag?.className).toContain("bg-fuchsia-50");
   expect(deviceTag?.className).not.toBe(deviceStatus?.className);
+  expect(document.querySelector('[data-testid="device-tag-3-0"]')).toBeNull();
+  expect(document.querySelector('[data-testid="device-pending-routes-1"]')).toBeNull();
+  const deviceTableText = document.querySelector('[data-testid="machine-list"]')?.textContent ?? "";
+  expect(deviceTableText).not.toMatch(/No tags|无标签|No pending routes|无待审路由/);
 }
 
 function countByTestIdPrefix(prefix: string) {
@@ -741,6 +749,10 @@ test("covers auth-key filters, expiration and deletion", async () => {
   expect(
     document.querySelector<HTMLElement>('[data-testid="invite-tag-1-0"]')?.className,
   ).toContain("cyan");
+  expect(document.querySelector('[data-testid="invite-tag-2-0"]')).toBeNull();
+  expect(document.querySelector('[data-testid="invite-2"]')?.textContent).not.toMatch(
+    /No tags|无标签/,
+  );
   inputDomTestId("invite-search", "alice");
   await expect.element(page.getByTestId("invite-1")).toBeVisible();
   expect(document.querySelector('[data-testid="invite-2"]')).toBeNull();

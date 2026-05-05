@@ -225,7 +225,6 @@ const englishCopy = {
   devicesTableUser: "User",
   devicesTableRoutes: "Routes",
   devicesTableActivity: "Activity",
-  noPendingRoutes: "No pending routes",
   linuxServer: "Linux server",
   linuxServerDescription: "Services running on VMs, containers and routers.",
   clientDevice: "Client device",
@@ -249,7 +248,6 @@ const englishCopy = {
   actions: "Actions",
   details: "Details",
   unknown: "Unknown",
-  noTags: "No tags",
   pendingRoutes: "Pending routes",
   exitRoute: "Exit route",
   rename: "Rename",
@@ -482,7 +480,6 @@ const productCopy: Record<Locale, ProductCopy> = {
     devicesTableUser: "用户",
     devicesTableRoutes: "路由",
     devicesTableActivity: "活动",
-    noPendingRoutes: "无待审路由",
     linuxServer: "Linux 服务器",
     linuxServerDescription: "运行在虚拟机、容器和路由器上的服务。",
     clientDevice: "客户端设备",
@@ -506,7 +503,6 @@ const productCopy: Record<Locale, ProductCopy> = {
     actions: "操作",
     details: "详情",
     unknown: "未知",
-    noTags: "无标签",
     pendingRoutes: "待审路由",
     exitRoute: "出口路由",
     rename: "重命名",
@@ -2992,7 +2988,17 @@ onBeforeUnmount(stopHealthProbe);
                     {{ node.online ? t("online") : t("offline") }}
                   </Badge>
                 </div>
-                <p class="mt-3 break-all text-xs text-muted-foreground">{{ node.ipAddresses.join(", ") }}</p>
+                <div class="mt-3 flex flex-wrap gap-1">
+                  <Badge
+                    v-for="(address, addressIndex) in node.ipAddresses"
+                    :key="address"
+                    variant="outline"
+                    class="border-slate-200 bg-muted/60 font-mono text-[11px] text-muted-foreground dark:border-slate-800"
+                    :data-testid="`device-ip-${node.id}-${addressIndex}`"
+                  >
+                    {{ address }}
+                  </Badge>
+                </div>
               </Card>
             </div>
           </div>
@@ -3254,9 +3260,18 @@ onBeforeUnmount(stopHealthProbe);
                           <Network class="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                           <h2 class="truncate font-medium">{{ node.name }}</h2>
                         </div>
-                        <p class="mt-1 break-all text-xs text-muted-foreground">{{ node.ipAddresses.join(", ") }}</p>
                         <div class="mt-2 flex flex-wrap gap-1">
-                          <Badge v-if="node.tags.length === 0" variant="outline" class="border-dashed text-muted-foreground">{{ copy.noTags }}</Badge>
+                          <Badge
+                            v-for="(address, addressIndex) in node.ipAddresses"
+                            :key="address"
+                            variant="outline"
+                            class="border-slate-200 bg-muted/60 font-mono text-[11px] text-muted-foreground dark:border-slate-800"
+                            :data-testid="`device-ip-${node.id}-${addressIndex}`"
+                          >
+                            {{ address }}
+                          </Badge>
+                        </div>
+                        <div v-if="node.tags.length" class="mt-2 flex flex-wrap gap-1">
                           <Badge
                             v-for="(tag, tagIndex) in node.tags"
                             :key="tag"
@@ -3317,8 +3332,11 @@ onBeforeUnmount(stopHealthProbe);
                             {{ nodePendingRoutes(node).length }} {{ copy.pendingRoutes }}
                           </Badge>
                         </button>
-                        <p v-else class="text-muted-foreground">{{ copy.noPendingRoutes }}</p>
-                        <div class="mt-2 flex flex-wrap gap-1">
+                        <div
+                          v-if="node.approvedRoutes.length"
+                          class="flex flex-wrap gap-1"
+                          :class="{ 'mt-2': nodePendingRoutes(node).length }"
+                        >
                           <Badge v-for="route in node.approvedRoutes" :key="route" variant="secondary">{{ route }}</Badge>
                         </div>
                       </TableCell>
@@ -3646,7 +3664,7 @@ onBeforeUnmount(stopHealthProbe);
                       {{ formatDate(key.expiration) }}
                     </TableCell>
                     <TableCell class="min-w-36">
-                      <div class="flex flex-wrap gap-1">
+                      <div v-if="key.aclTags.length" class="flex flex-wrap gap-1">
                         <Badge
                           v-for="(tag, tagIndex) in key.aclTags"
                           :key="tag"
@@ -3656,7 +3674,6 @@ onBeforeUnmount(stopHealthProbe);
                         >
                           {{ tag }}
                         </Badge>
-                        <span v-if="key.aclTags.length === 0" class="text-xs text-muted-foreground">{{ copy.noTags }}</span>
                       </div>
                     </TableCell>
                     <TableCell class="min-w-48">
