@@ -85,7 +85,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import {
   Table,
@@ -2582,29 +2582,29 @@ onBeforeUnmount(stopHealthProbe);
           </div>
           <div class="grid w-full grid-cols-2 gap-2 sm:w-40 sm:shrink-0 sm:grid-cols-1">
             <Label for="login-locale-select" class="sr-only">{{ t("language") }}</Label>
-            <Select
+            <NativeSelect
               id="login-locale-select"
               :model-value="locale"
               data-testid="locale-select"
               :aria-label="`${t('language')}: ${LOCALE_META[locale].nativeLabel}`"
               @update:model-value="changeLocale"
             >
-              <option v-for="option in SUPPORTED_LOCALES" :key="option" :value="option">
+              <NativeSelectOption v-for="option in SUPPORTED_LOCALES" :key="option" :value="option">
                 {{ LOCALE_META[option].nativeLabel }}
-              </option>
-            </Select>
+              </NativeSelectOption>
+            </NativeSelect>
             <Label for="login-theme-select" class="sr-only">{{ t("theme") }}</Label>
-            <Select
+            <NativeSelect
               id="login-theme-select"
               :model-value="colorMode"
               data-testid="theme-select"
               :aria-label="`${t('theme')}: ${themeLabel}`"
               @update:model-value="changeTheme"
             >
-              <option v-for="mode in themeModes" :key="mode" :value="mode">
+              <NativeSelectOption v-for="mode in themeModes" :key="mode" :value="mode">
                 {{ themeModeLabel(mode) }}
-              </option>
-            </Select>
+              </NativeSelectOption>
+            </NativeSelect>
           </div>
         </div>
 
@@ -2612,17 +2612,17 @@ onBeforeUnmount(stopHealthProbe);
           <div>
             <Label for="connect-profile">{{ t("profile") }}</Label>
             <div class="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
-              <Select
+              <NativeSelect
                 id="connect-profile"
                 :model-value="connectionForm.profileId"
                 data-testid="connect-profile"
                 @update:model-value="loadProfile"
               >
-                <option :value="newProfileId">{{ t("newProfile") }}</option>
-                <option v-for="profile in profiles" :key="profile.id" :value="profile.id">
+                <NativeSelectOption :value="newProfileId">{{ t("newProfile") }}</NativeSelectOption>
+                <NativeSelectOption v-for="profile in profiles" :key="profile.id" :value="profile.id">
                   {{ profile.name }}
-                </option>
-              </Select>
+                </NativeSelectOption>
+              </NativeSelect>
               <Button
                 variant="outline"
                 size="icon"
@@ -2649,10 +2649,10 @@ onBeforeUnmount(stopHealthProbe);
 
           <div>
             <Label for="connect-mode">{{ t("mode") }}</Label>
-            <Select id="connect-mode" v-model="connectionForm.mode" data-testid="connect-mode" class="mt-2">
-              <option value="mock">{{ t("mockMode") }}</option>
-              <option value="real">{{ t("realMode") }}</option>
-            </Select>
+            <NativeSelect id="connect-mode" v-model="connectionForm.mode" data-testid="connect-mode" class="mt-2">
+              <NativeSelectOption value="mock">{{ t("mockMode") }}</NativeSelectOption>
+              <NativeSelectOption value="real">{{ t("realMode") }}</NativeSelectOption>
+            </NativeSelect>
           </div>
 
           <div>
@@ -3155,14 +3155,14 @@ onBeforeUnmount(stopHealthProbe);
                   <Label for="machine-filter" class="sr-only">{{ copy.filters }}</Label>
                   <div class="relative">
                     <Filter class="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                    <Select id="machine-filter" v-model="machineFilter" data-testid="machine-filter" class="ps-8">
-                      <option value="all">{{ copy.allMachines }}</option>
-                      <option value="online">{{ copy.onlineOnly }}</option>
-                      <option value="offline">{{ copy.offlineOnly }}</option>
-                      <option value="expired">{{ copy.expiredOnly }}</option>
-                      <option value="routes">{{ copy.routeAdvertisers }}</option>
-                      <option value="tagged">{{ copy.taggedOnly }}</option>
-                    </Select>
+                    <NativeSelect id="machine-filter" v-model="machineFilter" data-testid="machine-filter" class="ps-8">
+                      <NativeSelectOption value="all">{{ copy.allMachines }}</NativeSelectOption>
+                      <NativeSelectOption value="online">{{ copy.onlineOnly }}</NativeSelectOption>
+                      <NativeSelectOption value="offline">{{ copy.offlineOnly }}</NativeSelectOption>
+                      <NativeSelectOption value="expired">{{ copy.expiredOnly }}</NativeSelectOption>
+                      <NativeSelectOption value="routes">{{ copy.routeAdvertisers }}</NativeSelectOption>
+                      <NativeSelectOption value="tagged">{{ copy.taggedOnly }}</NativeSelectOption>
+                    </NativeSelect>
                   </div>
                 </div>
                 <p class="whitespace-nowrap text-xs text-muted-foreground sm:ms-auto">{{ filteredNodes.length }} / {{ snapshot.nodes.length }}</p>
@@ -3423,12 +3423,12 @@ onBeforeUnmount(stopHealthProbe);
                 <Label for="user-filter" class="sr-only">{{ copy.filters }}</Label>
                 <div class="relative">
                   <SlidersHorizontal class="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                  <Select id="user-filter" v-model="userFilter" data-testid="user-filter" class="ps-8">
-                    <option value="all">{{ copy.allUsers }}</option>
-                    <option value="owner">{{ copy.owners }}</option>
-                    <option value="member">{{ copy.members }}</option>
-                    <option value="service">{{ copy.serviceAccounts }}</option>
-                  </Select>
+                  <NativeSelect id="user-filter" v-model="userFilter" data-testid="user-filter" class="ps-8">
+                    <NativeSelectOption value="all">{{ copy.allUsers }}</NativeSelectOption>
+                    <NativeSelectOption value="owner">{{ copy.owners }}</NativeSelectOption>
+                    <NativeSelectOption value="member">{{ copy.members }}</NativeSelectOption>
+                    <NativeSelectOption value="service">{{ copy.serviceAccounts }}</NativeSelectOption>
+                  </NativeSelect>
                 </div>
               </div>
               <p class="whitespace-nowrap text-xs text-muted-foreground sm:ms-auto">{{ filteredUsers.length }} / {{ snapshot.users.length }}</p>
@@ -3526,13 +3526,13 @@ onBeforeUnmount(stopHealthProbe);
                 <Label for="invite-filter" class="sr-only">{{ copy.filters }}</Label>
                 <div class="relative">
                   <Filter class="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                  <Select id="invite-filter" v-model="inviteFilter" data-testid="invite-filter" class="ps-8">
-                    <option value="all">{{ copy.invitesTitle }}</option>
-                    <option value="ready">{{ copy.readyKeys }}</option>
-                    <option value="used">{{ copy.used }}</option>
-                    <option value="expired">{{ copy.expiredOnly }}</option>
-                    <option value="tagged">{{ copy.taggedKeys }}</option>
-                  </Select>
+                  <NativeSelect id="invite-filter" v-model="inviteFilter" data-testid="invite-filter" class="ps-8">
+                    <NativeSelectOption value="all">{{ copy.invitesTitle }}</NativeSelectOption>
+                    <NativeSelectOption value="ready">{{ copy.readyKeys }}</NativeSelectOption>
+                    <NativeSelectOption value="used">{{ copy.used }}</NativeSelectOption>
+                    <NativeSelectOption value="expired">{{ copy.expiredOnly }}</NativeSelectOption>
+                    <NativeSelectOption value="tagged">{{ copy.taggedKeys }}</NativeSelectOption>
+                  </NativeSelect>
                 </div>
               </div>
               <p class="whitespace-nowrap text-xs text-muted-foreground sm:ms-auto">{{ filteredPreAuthKeys.length }} / {{ snapshot.preAuthKeys.length }}</p>
@@ -3857,54 +3857,54 @@ onBeforeUnmount(stopHealthProbe);
                       <div class="mt-3 grid gap-3">
                         <div>
                           <Label for="policy-simple-source">{{ copy.policyWhoCanAccess }}</Label>
-                          <Select
+                          <NativeSelect
                             id="policy-simple-source"
                             v-model="policyRuleForm.source"
                             data-testid="policy-simple-source"
                             class="mt-2"
                           >
-                            <option
+                            <NativeSelectOption
                               v-for="choice in policySourceChoices"
                               :key="choice.id"
                               :value="choice.value"
                             >
                               {{ choice.label }}
-                            </option>
-                          </Select>
+                            </NativeSelectOption>
+                          </NativeSelect>
                         </div>
                         <div>
                           <Label for="policy-simple-destination">{{ copy.policyWhatCanAccess }}</Label>
-                          <Select
+                          <NativeSelect
                             id="policy-simple-destination"
                             v-model="policyRuleForm.destination"
                             data-testid="policy-simple-destination"
                             class="mt-2"
                           >
-                            <option
+                            <NativeSelectOption
                               v-for="choice in policyDestinationChoices"
                               :key="choice.id"
                               :value="choice.value"
                             >
                               {{ choice.label }}
-                            </option>
-                          </Select>
+                            </NativeSelectOption>
+                          </NativeSelect>
                         </div>
                         <div>
                           <Label for="policy-simple-ports">{{ copy.policyWhichService }}</Label>
-                          <Select
+                          <NativeSelect
                             id="policy-simple-ports"
                             v-model="policyRuleForm.ports"
                             data-testid="policy-simple-ports"
                             class="mt-2"
                           >
-                            <option
+                            <NativeSelectOption
                               v-for="choice in policyServiceChoices"
                               :key="choice.id"
                               :value="choice.value"
                             >
                               {{ choice.label }}
-                            </option>
-                          </Select>
+                            </NativeSelectOption>
+                          </NativeSelect>
                         </div>
                       </div>
 
@@ -3984,29 +3984,29 @@ onBeforeUnmount(stopHealthProbe);
                       <h2 class="font-semibold">{{ copy.groups }}</h2>
                       <div>
                         <Label for="policy-group-name">{{ copy.groupName }}</Label>
-                        <Select id="policy-group-name" v-model="policyGroupForm.name" data-testid="policy-group-name" class="mt-2">
-                          <option v-for="groupName in policyGroupNameChoices" :key="groupName" :value="groupName">
+                        <NativeSelect id="policy-group-name" v-model="policyGroupForm.name" data-testid="policy-group-name" class="mt-2">
+                          <NativeSelectOption v-for="groupName in policyGroupNameChoices" :key="groupName" :value="groupName">
                             {{ groupName }}
-                          </option>
-                        </Select>
+                          </NativeSelectOption>
+                        </NativeSelect>
                       </div>
                       <div>
                         <Label for="policy-group-member-select">{{ copy.selectGroupMember }}</Label>
                         <div class="mt-2 grid gap-2">
-                          <Select
+                          <NativeSelect
                             id="policy-group-member-select"
                             v-model="policyGroupMemberSelection"
                             data-testid="policy-group-member-select"
                           >
-                            <option value="" disabled>{{ copy.selectGroupMember }}</option>
-                            <option
+                            <NativeSelectOption value="" disabled>{{ copy.selectGroupMember }}</NativeSelectOption>
+                            <NativeSelectOption
                               v-for="choice in policyMemberChoices"
                               :key="choice.id"
                               :value="choice.value"
                             >
                               {{ choice.label }}
-                            </option>
-                          </Select>
+                            </NativeSelectOption>
+                          </NativeSelect>
                           <Button
                             type="button"
                             variant="outline"
@@ -4066,29 +4066,29 @@ onBeforeUnmount(stopHealthProbe);
                       <h2 class="font-semibold">{{ copy.tagOwners }}</h2>
                       <div>
                         <Label for="policy-tag-name">{{ copy.tagName }}</Label>
-                        <Select id="policy-tag-name" v-model="policyTagOwnerForm.tag" data-testid="policy-tag-name" class="mt-2">
-                          <option v-for="tagName in policyTagNameChoices" :key="tagName" :value="tagName">
+                        <NativeSelect id="policy-tag-name" v-model="policyTagOwnerForm.tag" data-testid="policy-tag-name" class="mt-2">
+                          <NativeSelectOption v-for="tagName in policyTagNameChoices" :key="tagName" :value="tagName">
                             {{ tagName }}
-                          </option>
-                        </Select>
+                          </NativeSelectOption>
+                        </NativeSelect>
                       </div>
                       <div>
                         <Label for="policy-tag-owner-select">{{ copy.selectTagOwner }}</Label>
                         <div class="mt-2 grid gap-2">
-                          <Select
+                          <NativeSelect
                             id="policy-tag-owner-select"
                             v-model="policyTagOwnerSelection"
                             data-testid="policy-tag-owner-select"
                           >
-                            <option value="" disabled>{{ copy.selectTagOwner }}</option>
-                            <option
+                            <NativeSelectOption value="" disabled>{{ copy.selectTagOwner }}</NativeSelectOption>
+                            <NativeSelectOption
                               v-for="choice in policyOwnerChoices"
                               :key="choice.id"
                               :value="choice.value"
                             >
                               {{ choice.label }}
-                            </option>
-                          </Select>
+                            </NativeSelectOption>
+                          </NativeSelect>
                           <Button
                             type="button"
                             variant="outline"

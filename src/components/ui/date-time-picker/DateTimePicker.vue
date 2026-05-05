@@ -6,8 +6,8 @@ import type { HTMLAttributes } from "vue";
 import { computed, ref, useAttrs, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { TimePicker } from "@/components/ui/time-picker";
 import { cn } from "@/lib/utils";
 
 defineOptions({
@@ -42,11 +42,7 @@ const attrs = useAttrs();
 const calendarOpen = ref(false);
 const selectedDate = ref<DateValue>();
 const calendarPlaceholder = ref<DateValue>();
-const selectedHour = ref("00");
-const selectedMinute = ref("00");
-
-const hourOptions = Array.from({ length: 24 }, (_, index) => pad(index));
-const minuteOptions = Array.from({ length: 60 }, (_, index) => pad(index));
+const selectedTime = ref("00:00");
 const resolvedTestId = computed(() => props.testId ?? String(attrs["data-testid"] ?? ""));
 
 const displayValue = computed(() => {
@@ -55,7 +51,8 @@ const displayValue = computed(() => {
   }
 
   const date = selectedDate.value.toDate(timeZone);
-  date.setHours(Number(selectedHour.value), Number(selectedMinute.value), 0, 0);
+  const { hour, minute } = parseTime(selectedTime.value);
+  date.setHours(Number(hour), Number(minute), 0, 0);
 
   return new Intl.DateTimeFormat(props.locale, {
     dateStyle: "medium",
@@ -67,8 +64,16 @@ function pad(value: number) {
   return String(value).padStart(2, "0");
 }
 
-function toLocalDateTimeValue(date: DateValue, hour: string, minute: string) {
-  return `${date.year}-${pad(date.month)}-${pad(date.day)}T${hour}:${minute}`;
+function parseTime(value: string) {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  return {
+    hour: match?.[1] ?? "00",
+    minute: match?.[2] ?? "00",
+  };
+}
+
+function toLocalDateTimeValue(date: DateValue, time: string) {
+  return `${date.year}-${pad(date.month)}-${pad(date.day)}T${time}`;
 }
 
 function parseLocalDateTime(value: string) {
@@ -89,8 +94,7 @@ function parseLocalDateTime(value: string) {
 
   return {
     date: fromDate(parsedDate, timeZone),
-    hour: pad(parsedDate.getHours()),
-    minute: pad(parsedDate.getMinutes()),
+    time: `${pad(parsedDate.getHours())}:${pad(parsedDate.getMinutes())}`,
   };
 }
 
@@ -99,28 +103,22 @@ function syncFromModel(value: string) {
   if (!parsed) {
     selectedDate.value = undefined;
     calendarPlaceholder.value = undefined;
-    selectedHour.value = "00";
-    selectedMinute.value = "00";
+    selectedTime.value = "00:00";
     return;
   }
 
   selectedDate.value = parsed.date;
   calendarPlaceholder.value = parsed.date;
-  selectedHour.value = parsed.hour;
-  selectedMinute.value = parsed.minute;
+  selectedTime.value = parsed.time;
 }
 
-function emitValue(
-  date: DateValue | undefined = selectedDate.value,
-  hour = selectedHour.value,
-  minute = selectedMinute.value,
-) {
+function emitValue(date: DateValue | undefined = selectedDate.value, time = selectedTime.value) {
   if (!date) {
     emit("update:modelValue", "");
     return;
   }
 
-  emit("update:modelValue", toLocalDateTimeValue(date, hour, minute));
+  emit("update:modelValue", toLocalDateTimeValue(date, time));
 }
 
 function selectDate(value: DateValue | undefined) {
@@ -130,18 +128,12 @@ function selectDate(value: DateValue | undefined) {
 
   selectedDate.value = value;
   calendarPlaceholder.value = value;
-  calendarOpen.value = false;
   emitValue(value);
 }
 
-function selectHour(value: string) {
-  selectedHour.value = value;
-  emitValue(selectedDate.value, value, selectedMinute.value);
-}
-
-function selectMinute(value: string) {
-  selectedMinute.value = value;
-  emitValue(selectedDate.value, selectedHour.value, value);
+function selectTime(value: string) {
+  selectedTime.value = value;
+  emitValue(selectedDate.value, value);
 }
 
 watch(
@@ -152,7 +144,7 @@ watch(
 </script>
 
 <template>
-  <div :class="cn('grid gap-2 sm:flex sm:items-center', props.class)" data-slot="date-time-picker">
+  <div :class="cn('grid gap-2', props.class)" data-slot="date-time-picker">
     <Popover v-model:open="calendarOpen">
       <PopoverTrigger as-child>
         <Button
@@ -161,44 +153,30 @@ watch(
           variant="outline"
           :data-testid="resolvedTestId || undefined"
           :aria-required="required"
-          class="w-full justify-start text-start font-normal sm:min-w-0 sm:flex-1"
+          class="w-full justify-start text-start font-normal"
         >
           <CalendarClock class="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span class="min-w-0 truncate">{{ displayValue }}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent class="w-auto p-0" align="start">
-        <Calendar
-          :model-value="selectedDate"
-          v-model:placeholder="calendarPlaceholder"
-          :locale="locale"
-          layout="month-and-year"
-          @update:model-value="selectDate"
-        />
+      <PopoverContent class="max-h-[min(34rem,calc(100vh-2rem))] w-auto overflow-auto p-0" align="start">
+        <div class="grid">
+          <div class="border-b p-3">
+            <TimePicker
+              :model-value="selectedTime"
+              :test-id-prefix="resolvedTestId || undefined"
+              @update:model-value="selectTime"
+            />
+          </div>
+          <Calendar
+            :model-value="selectedDate"
+            v-model:placeholder="calendarPlaceholder"
+            :locale="locale"
+            layout="month-and-year"
+            @update:model-value="selectDate"
+          />
+        </div>
       </PopoverContent>
     </Popover>
-
-    <div class="grid grid-cols-2 gap-2 sm:w-40 sm:shrink-0">
-      <NativeSelect
-        :model-value="selectedHour"
-        :data-testid="resolvedTestId ? `${resolvedTestId}-hour` : undefined"
-        aria-label="Hour"
-        @update:model-value="selectHour"
-      >
-        <NativeSelectOption v-for="hour in hourOptions" :key="hour" :value="hour">
-          {{ hour }}
-        </NativeSelectOption>
-      </NativeSelect>
-      <NativeSelect
-        :model-value="selectedMinute"
-        :data-testid="resolvedTestId ? `${resolvedTestId}-minute` : undefined"
-        aria-label="Minute"
-        @update:model-value="selectMinute"
-      >
-        <NativeSelectOption v-for="minute in minuteOptions" :key="minute" :value="minute">
-          {{ minute }}
-        </NativeSelectOption>
-      </NativeSelect>
-    </div>
   </div>
 </template>

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { useHeadscaleI18n } from "@/i18n";
 import {
   type AuthKeyDialogDefaults,
@@ -115,10 +115,10 @@ watch(
         <div class="grid gap-3">
           <div>
             <Label for="invite-user">{{ labels.owner }}</Label>
-            <Select id="invite-user" v-model="form.user" data-testid="invite-user" class="mt-2" :disabled="users.length === 0">
-              <option v-if="users.length === 0" value="">{{ labels.noUsers }}</option>
-              <option v-for="user in users" :key="user.id" :value="user.id">{{ user.label }}</option>
-            </Select>
+            <NativeSelect id="invite-user" v-model="form.user" data-testid="invite-user" class="mt-2" :disabled="users.length === 0">
+              <NativeSelectOption v-if="users.length === 0" value="">{{ labels.noUsers }}</NativeSelectOption>
+              <NativeSelectOption v-for="user in users" :key="user.id" :value="user.id">{{ user.label }}</NativeSelectOption>
+            </NativeSelect>
           </div>
           <div>
             <Label for="invite-expiration">{{ labels.expiration }}</Label>
