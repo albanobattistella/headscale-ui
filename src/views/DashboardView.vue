@@ -339,12 +339,12 @@ const englishCopy = {
   accessTitle: "Access controls",
   accessSubtitle: "Design ACLs, groups and tag ownership without editing raw JSON.",
   policyDesigner: "Policy designer",
-  ruleBuilder: "Drag-and-drop rule builder",
+  ruleBuilder: "Access rule builder",
   source: "From",
   destination: "To",
   ports: "Service",
-  policyObjectPicker: "Drag or tap objects into the rule",
-  policyDropHint: "Drop here or tap an object below",
+  policyObjectPicker: "Choose objects from the menus",
+  policyDropHint: "Select from the menu",
   selectedRule: "Selected rule",
   sourceChoices: "People and groups",
   destinationChoices: "Devices and tags",
@@ -371,14 +371,18 @@ const englishCopy = {
   groups: "Groups",
   groupName: "Group name",
   groupMembers: "Members",
-  groupMemberPicker: "Drag or tap users into this group",
+  groupMemberPicker: "Choose users from the menu and add them to this group.",
   selectedMembers: "Selected members",
+  selectGroupMember: "Select member",
+  addSelectedMember: "Add member",
   addGroup: "Add group",
   tagOwners: "Tag owners",
   tagName: "Tag",
   ownersList: "Owners",
-  tagOwnerPicker: "Drag or tap owners for this tag",
+  tagOwnerPicker: "Choose users or groups from the menu and grant this tag.",
   selectedOwners: "Selected owners",
+  selectTagOwner: "Select owner",
+  addSelectedOwner: "Add owner",
   addTagOwner: "Add tag owner",
   removeItem: "Remove",
   safetyReview: "Safety review",
@@ -414,9 +418,9 @@ const englishCopy = {
   policyWhatCanAccess: "What they can access",
   policyWhichService: "Which service",
   policySimplePreview: "Plain-language preview",
-  policyAdvancedPicker: "Object picker",
+  policyAdvancedPicker: "Menu choices",
   policyAdvancedPickerDescription:
-    "Drag or tap choices when you want to build the same rule visually.",
+    "Use the dropdown menus above to build rules without editing JSON.",
   existingRules: "Current access rules",
   noPolicyRules: "No access rules yet.",
   highRisk: "High risk",
@@ -595,12 +599,12 @@ const productCopy: Record<Locale, ProductCopy> = {
     accessTitle: "访问控制",
     accessSubtitle: "用友好的 UI 设计 ACL、用户组和标签归属，不需要编辑原始 JSON。",
     policyDesigner: "策略设计器",
-    ruleBuilder: "拖拽式规则设计",
+    ruleBuilder: "访问规则设计",
     source: "来源",
     destination: "目标",
     ports: "服务",
-    policyObjectPicker: "把对象拖到规则槽位，也可以点选",
-    policyDropHint: "拖到这里，或点选下方对象",
+    policyObjectPicker: "从菜单中选择对象",
+    policyDropHint: "从菜单中选择",
     selectedRule: "当前规则",
     sourceChoices: "成员和用户组",
     destinationChoices: "设备和标签",
@@ -627,14 +631,18 @@ const productCopy: Record<Locale, ProductCopy> = {
     groups: "用户组",
     groupName: "用户组名称",
     groupMembers: "成员",
-    groupMemberPicker: "把用户拖进这个用户组，也可以点选",
+    groupMemberPicker: "从菜单中选择用户，并添加到这个用户组。",
     selectedMembers: "已选择成员",
+    selectGroupMember: "选择成员",
+    addSelectedMember: "添加成员",
     addGroup: "添加用户组",
     tagOwners: "标签归属",
     tagName: "标签",
     ownersList: "归属者",
-    tagOwnerPicker: "把归属者拖给这个标签，也可以点选",
+    tagOwnerPicker: "从菜单中选择用户或用户组，并授予这个标签。",
     selectedOwners: "已选择归属者",
+    selectTagOwner: "选择归属者",
+    addSelectedOwner: "添加归属者",
     addTagOwner: "添加标签归属",
     removeItem: "移除",
     safetyReview: "安全检查",
@@ -669,8 +677,8 @@ const productCopy: Record<Locale, ProductCopy> = {
     policyWhatCanAccess: "访问哪些设备",
     policyWhichService: "允许哪些服务",
     policySimplePreview: "人话预览",
-    policyAdvancedPicker: "对象选择器",
-    policyAdvancedPickerDescription: "需要拖拉拽选时，可以用下面的对象池构建同一条规则。",
+    policyAdvancedPicker: "菜单选择",
+    policyAdvancedPickerDescription: "使用上方下拉菜单创建规则，不需要编辑 JSON。",
     existingRules: "当前访问规则",
     noPolicyRules: "还没有访问规则。",
     highRisk: "高风险",
@@ -918,7 +926,8 @@ const copiedKey = ref("");
 const lastCreatedInvite = ref("");
 const policyDraft = ref("");
 const activePolicyTab = ref<PolicyWorkspaceTab>("rules");
-const draggedPolicyChoice = ref<PolicyChoice | null>(null);
+const policyGroupMemberSelection = ref("");
+const policyTagOwnerSelection = ref("");
 const deviceSearch = ref("");
 const machineFilter = ref<MachineFilter>("all");
 const authKeyExpiryDays = ref(7);
@@ -1916,76 +1925,28 @@ function applyPolicyTemplate(template: PolicyTemplate) {
   policyRuleForm.ports = template.ports;
 }
 
-function selectPolicyChoice(choice: PolicyChoice) {
-  policyRuleForm[choice.slot] = choice.value;
-}
-
 function addUniqueCommaValue(current: string, value: string) {
   return Array.from(new Set([...parseCommaList(current), value])).join(", ");
 }
 
-function selectPolicyGroupMember(choice: PolicyListChoice) {
-  policyGroupForm.members = addUniqueCommaValue(policyGroupForm.members, choice.value);
-}
-
-function selectPolicyTagOwner(choice: PolicyListChoice) {
-  policyTagOwnerForm.owners = addUniqueCommaValue(policyTagOwnerForm.owners, choice.value);
-}
-
-function startPolicyChoiceDrag(choice: PolicyChoice, event: DragEvent) {
-  draggedPolicyChoice.value = choice;
-  event.dataTransfer?.setData(
-    "application/x-headscale-policy-choice",
-    JSON.stringify({ slot: choice.slot, value: choice.value }),
-  );
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = "copy";
-  }
-}
-
-function dropPolicyChoice(slot: PolicyBuilderSlot, event: DragEvent) {
-  event.preventDefault();
-  const serialized = event.dataTransfer?.getData("application/x-headscale-policy-choice");
-  const choice = serialized
-    ? (JSON.parse(serialized) as Pick<PolicyChoice, "slot" | "value">)
-    : draggedPolicyChoice.value;
-  if (choice?.slot === slot) {
-    policyRuleForm[slot] = choice.value;
-  }
-  draggedPolicyChoice.value = null;
-}
-
-function startPolicyListChoiceDrag(
-  kind: "group-members" | "tag-owners",
-  choice: PolicyListChoice,
-  event: DragEvent,
-) {
-  event.dataTransfer?.setData(
-    "application/x-headscale-policy-list-choice",
-    JSON.stringify({ kind, value: choice.value }),
-  );
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = "copy";
-  }
-}
-
-function dropPolicyListChoice(kind: "group-members" | "tag-owners", event: DragEvent) {
-  event.preventDefault();
-  const serialized = event.dataTransfer?.getData("application/x-headscale-policy-list-choice");
-  if (!serialized) {
+function addSelectedPolicyGroupMember() {
+  const value = policyGroupMemberSelection.value || policyMemberChoices.value[0]?.value || "";
+  if (!value) {
     return;
   }
 
-  const choice = JSON.parse(serialized) as { kind?: string; value?: string };
-  if (choice.kind !== kind || !choice.value) {
+  policyGroupForm.members = addUniqueCommaValue(policyGroupForm.members, value);
+  policyGroupMemberSelection.value = "";
+}
+
+function addSelectedPolicyTagOwner() {
+  const value = policyTagOwnerSelection.value || policyOwnerChoices.value[0]?.value || "";
+  if (!value) {
     return;
   }
 
-  if (kind === "group-members") {
-    policyGroupForm.members = addUniqueCommaValue(policyGroupForm.members, choice.value);
-  } else {
-    policyTagOwnerForm.owners = addUniqueCommaValue(policyTagOwnerForm.owners, choice.value);
-  }
+  policyTagOwnerForm.owners = addUniqueCommaValue(policyTagOwnerForm.owners, value);
+  policyTagOwnerSelection.value = "";
 }
 
 function destinationParts(value: unknown) {
@@ -3852,7 +3813,7 @@ onBeforeUnmount(stopHealthProbe);
                 <TabsContent value="rules" class="mt-3 grid gap-4">
                   <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
                     <div class="grid gap-4">
-                      <div class="rounded-md border bg-secondary/20 p-3">
+                      <div class="rounded-md border bg-secondary/20 p-3" data-testid="policy-rule-builder">
                         <div>
                           <h2 class="font-semibold">{{ copy.policyQuickStartTitle }}</h2>
                           <p class="mt-1 text-sm text-muted-foreground">
@@ -3928,97 +3889,6 @@ onBeforeUnmount(stopHealthProbe);
                         </div>
                       </div>
 
-                      <div class="grid gap-3" data-testid="policy-rule-builder">
-                        <div>
-                          <h2 class="font-semibold">{{ copy.policyAdvancedPicker }}</h2>
-                          <p class="mt-1 text-sm text-muted-foreground">
-                            {{ copy.policyAdvancedPickerDescription }}
-                          </p>
-                        </div>
-
-                        <div class="grid gap-3 lg:grid-cols-3">
-                          <div class="grid content-start gap-2">
-                            <h3 class="text-sm font-medium">{{ copy.sourceChoices }}</h3>
-                            <button
-                              v-for="choice in policySourceChoices"
-                              :key="choice.id"
-                              type="button"
-                              draggable="true"
-                              class="rounded-md border bg-background px-3 py-2 text-left text-sm transition hover:border-primary hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                              :data-testid="`policy-choice-${choice.id}`"
-                              @click="selectPolicyChoice(choice)"
-                              @dragstart="startPolicyChoiceDrag(choice, $event)"
-                            >
-                              <span class="block font-medium">{{ choice.label }}</span>
-                              <span class="block text-xs text-muted-foreground">{{ choice.description }}</span>
-                            </button>
-                          </div>
-
-                          <div class="grid content-start gap-2">
-                            <h3 class="text-sm font-medium">{{ copy.destinationChoices }}</h3>
-                            <button
-                              v-for="choice in policyDestinationChoices"
-                              :key="choice.id"
-                              type="button"
-                              draggable="true"
-                              class="rounded-md border bg-background px-3 py-2 text-left text-sm transition hover:border-primary hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                              :data-testid="`policy-choice-${choice.id}`"
-                              @click="selectPolicyChoice(choice)"
-                              @dragstart="startPolicyChoiceDrag(choice, $event)"
-                            >
-                              <span class="block font-medium">{{ choice.label }}</span>
-                              <span class="block text-xs text-muted-foreground">{{ choice.description }}</span>
-                            </button>
-                          </div>
-
-                          <div class="grid content-start gap-2">
-                            <h3 class="text-sm font-medium">{{ copy.serviceChoices }}</h3>
-                            <button
-                              v-for="choice in policyServiceChoices"
-                              :key="choice.id"
-                              type="button"
-                              draggable="true"
-                              class="rounded-md border bg-background px-3 py-2 text-left text-sm transition hover:border-primary hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                              :data-testid="`policy-choice-${choice.id}`"
-                              @click="selectPolicyChoice(choice)"
-                              @dragstart="startPolicyChoiceDrag(choice, $event)"
-                            >
-                              <span class="block font-medium">{{ choice.label }}</span>
-                              <span class="block text-xs text-muted-foreground">{{ choice.description }}</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        <div class="grid gap-3 md:grid-cols-3">
-                          <div
-                            class="rounded-md border border-dashed bg-secondary/30 px-3 py-2"
-                            data-testid="policy-drop-source"
-                            @dragover.prevent
-                            @drop="dropPolicyChoice('source', $event)"
-                          >
-                            <p class="text-xs font-medium text-muted-foreground">{{ copy.policyWhoCanAccess }}</p>
-                            <p class="font-medium">{{ policyChoiceLabel("source", policyRuleForm.source) }}</p>
-                          </div>
-                          <div
-                            class="rounded-md border border-dashed bg-secondary/30 px-3 py-2"
-                            data-testid="policy-drop-destination"
-                            @dragover.prevent
-                            @drop="dropPolicyChoice('destination', $event)"
-                          >
-                            <p class="text-xs font-medium text-muted-foreground">{{ copy.policyWhatCanAccess }}</p>
-                            <p class="font-medium">{{ policyChoiceLabel("destination", policyRuleForm.destination) }}</p>
-                          </div>
-                          <div
-                            class="rounded-md border border-dashed bg-secondary/30 px-3 py-2"
-                            data-testid="policy-drop-ports"
-                            @dragover.prevent
-                            @drop="dropPolicyChoice('ports', $event)"
-                          >
-                            <p class="text-xs font-medium text-muted-foreground">{{ copy.policyWhichService }}</p>
-                            <p class="font-medium">{{ policyChoiceLabel("ports", policyRuleForm.ports) }}</p>
-                          </div>
-                        </div>
-                      </div>
                     </div>
 
                     <div class="grid content-start gap-3 rounded-md border bg-background p-3">
@@ -4115,14 +3985,39 @@ onBeforeUnmount(stopHealthProbe);
                           </option>
                         </Select>
                       </div>
-                      <div
-                        class="rounded-md border border-dashed bg-background px-3 py-2"
-                        data-testid="policy-group-members"
-                        @dragover.prevent
-                        @drop="dropPolicyListChoice('group-members', $event)"
-                      >
+                      <div>
+                        <Label for="policy-group-member-select">{{ copy.selectGroupMember }}</Label>
+                        <div class="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                          <Select
+                            id="policy-group-member-select"
+                            v-model="policyGroupMemberSelection"
+                            data-testid="policy-group-member-select"
+                          >
+                            <option value="" disabled>{{ copy.selectGroupMember }}</option>
+                            <option
+                              v-for="choice in policyMemberChoices"
+                              :key="choice.id"
+                              :value="choice.value"
+                            >
+                              {{ choice.label }}
+                            </option>
+                          </Select>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            data-testid="add-policy-group-member"
+                            @click="addSelectedPolicyGroupMember"
+                          >
+                            <Plus class="h-4 w-4" aria-hidden="true" />
+                            {{ copy.addSelectedMember }}
+                          </Button>
+                        </div>
+                      </div>
+                      <div class="rounded-md border bg-background px-3 py-2" data-testid="policy-group-members">
                         <p class="text-xs font-medium text-muted-foreground">{{ copy.selectedMembers }}</p>
-                        <p class="mt-1 min-h-6 break-all text-sm font-medium">{{ policyGroupForm.members || copy.policyDropHint }}</p>
+                        <p class="mt-1 min-h-6 break-all text-sm font-medium">
+                          {{ policyGroupForm.members || copy.selectGroupMember }}
+                        </p>
                       </div>
                       <Button type="button" data-testid="add-policy-group" @click="addPolicyGroup">
                         <Plus class="h-4 w-4" aria-hidden="true" />
@@ -4131,23 +4026,7 @@ onBeforeUnmount(stopHealthProbe);
                     </div>
 
                     <div class="grid content-start gap-3">
-                      <div class="grid gap-2">
-                        <p class="text-sm text-muted-foreground">{{ copy.groupMemberPicker }}</p>
-                        <button
-                          v-for="choice in policyMemberChoices"
-                          :key="choice.id"
-                          type="button"
-                          draggable="true"
-                          class="rounded-md border bg-background px-3 py-2 text-left text-sm transition hover:border-primary hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                          :data-testid="`policy-member-${choice.id}`"
-                          @click="selectPolicyGroupMember(choice)"
-                          @dragstart="startPolicyListChoiceDrag('group-members', choice, $event)"
-                        >
-                          <span class="block font-medium">{{ choice.label }}</span>
-                          <span class="block text-xs text-muted-foreground">{{ choice.description }}</span>
-                        </button>
-                      </div>
-
+                      <p class="text-sm text-muted-foreground">{{ copy.groupMemberPicker }}</p>
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -4188,14 +4067,39 @@ onBeforeUnmount(stopHealthProbe);
                           </option>
                         </Select>
                       </div>
-                      <div
-                        class="rounded-md border border-dashed bg-background px-3 py-2"
-                        data-testid="policy-tag-owners"
-                        @dragover.prevent
-                        @drop="dropPolicyListChoice('tag-owners', $event)"
-                      >
+                      <div>
+                        <Label for="policy-tag-owner-select">{{ copy.selectTagOwner }}</Label>
+                        <div class="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                          <Select
+                            id="policy-tag-owner-select"
+                            v-model="policyTagOwnerSelection"
+                            data-testid="policy-tag-owner-select"
+                          >
+                            <option value="" disabled>{{ copy.selectTagOwner }}</option>
+                            <option
+                              v-for="choice in policyOwnerChoices"
+                              :key="choice.id"
+                              :value="choice.value"
+                            >
+                              {{ choice.label }}
+                            </option>
+                          </Select>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            data-testid="add-policy-tag-owner-selection"
+                            @click="addSelectedPolicyTagOwner"
+                          >
+                            <Plus class="h-4 w-4" aria-hidden="true" />
+                            {{ copy.addSelectedOwner }}
+                          </Button>
+                        </div>
+                      </div>
+                      <div class="rounded-md border bg-background px-3 py-2" data-testid="policy-tag-owners">
                         <p class="text-xs font-medium text-muted-foreground">{{ copy.selectedOwners }}</p>
-                        <p class="mt-1 min-h-6 break-all text-sm font-medium">{{ policyTagOwnerForm.owners || copy.policyDropHint }}</p>
+                        <p class="mt-1 min-h-6 break-all text-sm font-medium">
+                          {{ policyTagOwnerForm.owners || copy.selectTagOwner }}
+                        </p>
                       </div>
                       <Button type="button" data-testid="add-policy-tag-owner" @click="addPolicyTagOwner">
                         <Plus class="h-4 w-4" aria-hidden="true" />
@@ -4204,23 +4108,7 @@ onBeforeUnmount(stopHealthProbe);
                     </div>
 
                     <div class="grid content-start gap-3">
-                      <div class="grid gap-2">
-                        <p class="text-sm text-muted-foreground">{{ copy.tagOwnerPicker }}</p>
-                        <button
-                          v-for="choice in policyOwnerChoices"
-                          :key="choice.id"
-                          type="button"
-                          draggable="true"
-                          class="rounded-md border bg-background px-3 py-2 text-left text-sm transition hover:border-primary hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                          :data-testid="`policy-owner-${choice.id}`"
-                          @click="selectPolicyTagOwner(choice)"
-                          @dragstart="startPolicyListChoiceDrag('tag-owners', choice, $event)"
-                        >
-                          <span class="block font-medium">{{ choice.label }}</span>
-                          <span class="block text-xs text-muted-foreground">{{ choice.description }}</span>
-                        </button>
-                      </div>
-
+                      <p class="text-sm text-muted-foreground">{{ copy.tagOwnerPicker }}</p>
                       <Table>
                         <TableHeader>
                           <TableRow>

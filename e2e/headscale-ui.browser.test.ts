@@ -168,38 +168,6 @@ function expectNoRawPolicyEditor() {
   expect(editor?.querySelector(".cm-editor, .monaco-editor")).toBeNull();
 }
 
-function dragPolicyChoiceTo(choiceTestId: string, dropTestId: string) {
-  const source = document.querySelector<HTMLElement>(`[data-testid="${choiceTestId}"]`);
-  const target = document.querySelector<HTMLElement>(`[data-testid="${dropTestId}"]`);
-  expect(source).toBeTruthy();
-  expect(target).toBeTruthy();
-
-  const dataTransfer = new DataTransfer();
-  source?.dispatchEvent(
-    new DragEvent("dragstart", { bubbles: true, cancelable: true, dataTransfer }),
-  );
-  target?.dispatchEvent(
-    new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer }),
-  );
-  target?.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer }));
-}
-
-function dragPolicyListChoiceTo(choiceTestId: string, dropTestId: string) {
-  const source = document.querySelector<HTMLElement>(`[data-testid="${choiceTestId}"]`);
-  const target = document.querySelector<HTMLElement>(`[data-testid="${dropTestId}"]`);
-  expect(source).toBeTruthy();
-  expect(target).toBeTruthy();
-
-  const dataTransfer = new DataTransfer();
-  source?.dispatchEvent(
-    new DragEvent("dragstart", { bubbles: true, cancelable: true, dataTransfer }),
-  );
-  target?.dispatchEvent(
-    new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer }),
-  );
-  target?.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer }));
-}
-
 function clickDomTestId(testId: string) {
   const element = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
   expect(element).toBeTruthy();
@@ -777,7 +745,7 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   await expect.element(page.getByTestId("policy-simple-source")).toBeVisible();
   await expect.element(page.getByTestId("policy-template-ops-ssh")).toBeVisible();
   await expect.element(page.getByTestId("policy-summary-warnings-count")).toBeVisible();
-  await expect.element(page.getByTestId("policy-drop-source")).toBeVisible();
+  await expect.element(page.getByTestId("policy-rule-builder")).toBeVisible();
 
   const clickOnlyRules = countByTestIdPrefix("policy-rule-");
   await page.getByTestId("policy-simple-source").selectOptions("alice@example.com");
@@ -793,7 +761,8 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   await expect.element(page.getByTestId("policy-group-name")).toBeVisible();
   const initialGroups = countByTestIdPrefix("policy-group-");
   await page.getByTestId("policy-group-name").selectOptions("group:dev");
-  dragPolicyListChoiceTo("policy-member-source-alice-example-com", "policy-group-members");
+  await page.getByTestId("policy-group-member-select").selectOptions("alice@example.com");
+  await page.getByTestId("add-policy-group-member").click();
   await page.getByTestId("add-policy-group").click();
   await expect.poll(() => countByTestIdPrefix("policy-group-")).toBe(initialGroups + 1);
 
@@ -801,15 +770,16 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   await expect.element(page.getByTestId("policy-tag-name")).toBeVisible();
   const initialTagOwners = countByTestIdPrefix("policy-tag-owner-");
   await page.getByTestId("policy-tag-name").selectOptions("tag:db");
-  dragPolicyListChoiceTo("policy-owner-source-group-ops", "policy-tag-owners");
+  await page.getByTestId("policy-tag-owner-select").selectOptions("group:ops");
+  await page.getByTestId("add-policy-tag-owner-selection").click();
   await page.getByTestId("add-policy-tag-owner").click();
   await expect.poll(() => countByTestIdPrefix("policy-tag-owner-")).toBe(initialTagOwners + 1);
 
   await page.getByTestId("policy-tab-rules").click();
-  await expect.element(page.getByTestId("policy-drop-source")).toBeVisible();
-  dragPolicyChoiceTo("policy-choice-source-group-dev", "policy-drop-source");
-  dragPolicyChoiceTo("policy-choice-destination-tag-db", "policy-drop-destination");
-  dragPolicyChoiceTo("policy-choice-ports-443", "policy-drop-ports");
+  await expect.element(page.getByTestId("policy-rule-builder")).toBeVisible();
+  await page.getByTestId("policy-simple-source").selectOptions("group:dev");
+  await page.getByTestId("policy-simple-destination").selectOptions("tag:db");
+  await page.getByTestId("policy-simple-ports").selectOptions("443");
   await expect.element(page.getByTestId("policy-rule-preview")).toHaveTextContent("group:dev");
   await expect.element(page.getByTestId("policy-rule-preview")).toHaveTextContent("tag:db");
   await expect.element(page.getByTestId("policy-rule-preview")).toHaveTextContent("HTTPS");
