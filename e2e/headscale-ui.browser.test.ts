@@ -78,6 +78,36 @@ function expectResponsiveTabMenu() {
   }
 }
 
+function testIdRect(testId: string) {
+  const element = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+  expect(element).toBeTruthy();
+  return (element as HTMLElement).getBoundingClientRect();
+}
+
+function expectAuthKeyExpirationLayout(mode: "inline" | "stacked") {
+  const picker = document.querySelector<HTMLElement>('[data-slot="date-time-picker"]');
+  expect(picker).toBeTruthy();
+  expectNoHorizontalOverflow();
+
+  const dateRect = testIdRect("invite-expiration");
+  const hourRect = testIdRect("invite-expiration-hour");
+  const minuteRect = testIdRect("invite-expiration-minute");
+
+  if (mode === "inline") {
+    expect(getComputedStyle(picker as HTMLElement).display).toBe("flex");
+    expect(Math.abs(dateRect.top - hourRect.top)).toBeLessThan(2);
+    expect(Math.abs(hourRect.top - minuteRect.top)).toBeLessThan(2);
+    expect(dateRect.right).toBeLessThanOrEqual(hourRect.left);
+    expect(hourRect.right).toBeLessThanOrEqual(minuteRect.left);
+    return;
+  }
+
+  expect(getComputedStyle(picker as HTMLElement).display).toBe("grid");
+  expect(dateRect.bottom).toBeLessThanOrEqual(hourRect.top);
+  expect(Math.abs(hourRect.top - minuteRect.top)).toBeLessThan(2);
+  expect(hourRect.right).toBeLessThanOrEqual(minuteRect.left);
+}
+
 function expectAppHeader() {
   const header = document.querySelector<HTMLElement>('[data-testid="app-header"]');
   const primaryRow = document.querySelector<HTMLElement>('[data-testid="header-primary-row"]');
@@ -709,6 +739,27 @@ test("covers auth-key filters, expiration and deletion", async () => {
   expect(document.querySelector<HTMLElement>('[data-testid="invite-expiration"]')?.tagName).toBe(
     "BUTTON",
   );
+  expectAuthKeyExpirationLayout("inline");
+  await page.viewport(500, 768);
+  await expect
+    .poll(
+      () =>
+        getComputedStyle(
+          document.querySelector<HTMLElement>('[data-slot="date-time-picker"]') as HTMLElement,
+        ).display,
+    )
+    .toBe("grid");
+  expectAuthKeyExpirationLayout("stacked");
+  await page.viewport(1366, 768);
+  await expect
+    .poll(
+      () =>
+        getComputedStyle(
+          document.querySelector<HTMLElement>('[data-slot="date-time-picker"]') as HTMLElement,
+        ).display,
+    )
+    .toBe("flex");
+  expectAuthKeyExpirationLayout("inline");
   await page.getByTestId("invite-expiration").click();
   await expect
     .poll(() => document.querySelectorAll<HTMLElement>('[data-slot="calendar"] select').length)

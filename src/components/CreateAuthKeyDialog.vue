@@ -112,7 +112,7 @@ watch(
         </DialogDescription>
       </DialogHeader>
       <form class="grid gap-3" data-testid="invite-form" @submit.prevent="submitForm">
-        <div class="grid gap-3 sm:grid-cols-2">
+        <div class="grid gap-3">
           <div>
             <Label for="invite-user">{{ labels.owner }}</Label>
             <Select id="invite-user" v-model="form.user" data-testid="invite-user" class="mt-2" :disabled="users.length === 0">
@@ -136,7 +136,7 @@ watch(
           <Label for="invite-tags">{{ labels.aclTags }}</Label>
           <Input id="invite-tags" v-model="form.aclTags" data-testid="invite-tags" class="mt-2" placeholder="tag:server" />
         </div>
-        <div class="grid gap-2 sm:grid-cols-2">
+        <div class="grid gap-2">
           <div class="flex min-h-9 items-center gap-2">
             <Checkbox id="invite-reusable" v-model="form.reusable" data-testid="invite-reusable" />
             <Label for="invite-reusable" class="font-normal">{{ labels.reusable }}</Label>

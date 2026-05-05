@@ -152,7 +152,7 @@ watch(
 </script>
 
 <template>
-  <div :class="cn('grid gap-2', props.class)" data-slot="date-time-picker">
+  <div :class="cn('grid gap-2 sm:flex sm:items-center', props.class)" data-slot="date-time-picker">
     <Popover v-model:open="calendarOpen">
       <PopoverTrigger as-child>
         <Button
@@ -161,7 +161,7 @@ watch(
           variant="outline"
           :data-testid="resolvedTestId || undefined"
           :aria-required="required"
-          class="w-full justify-start text-start font-normal"
+          class="w-full justify-start text-start font-normal sm:min-w-0 sm:flex-1"
         >
           <CalendarClock class="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span class="min-w-0 truncate">{{ displayValue }}</span>
@@ -178,7 +178,7 @@ watch(
       </PopoverContent>
     </Popover>
 
-    <div class="grid grid-cols-2 gap-2">
+    <div class="grid grid-cols-2 gap-2 sm:w-40 sm:shrink-0">
       <NativeSelect
         :model-value="selectedHour"
         :data-testid="resolvedTestId ? `${resolvedTestId}-hour` : undefined"
