@@ -96,6 +96,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { isTimestampExpired as isExpired, nodeConnectionStatus } from "@/domain/node-status";
 import { LOCALE_META, type Locale, SUPPORTED_LOCALES, useHeadscaleI18n } from "@/i18n";
 
 const { t, locale, setLocale } = useHeadscaleI18n();
@@ -1886,10 +1887,6 @@ function logoutFromMenu() {
   logout();
 }
 
-function isExpired(value?: string) {
-  return Boolean(value && Date.parse(value) < Date.now());
-}
-
 function formatDate(value?: string) {
   if (!value) {
     return "never";
@@ -2153,10 +2150,11 @@ function isExitRoute(route: string) {
 }
 
 function nodeStatusLabel(node: HeadscaleNode) {
-  if (isExpired(node.expiry)) {
+  const status = nodeConnectionStatus(node);
+  if (status === "expired") {
     return copy.value.expiredOnly;
   }
-  return node.online ? t("online") : t("offline");
+  return status === "online" ? t("online") : t("offline");
 }
 
 function keyStatus(key: PreAuthKey) {

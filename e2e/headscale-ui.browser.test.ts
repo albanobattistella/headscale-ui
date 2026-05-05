@@ -188,6 +188,10 @@ function expectMachinesWorkbench() {
   expect(deviceStatus).toBeTruthy();
   expect(deviceTag?.className).toContain("bg-fuchsia-50");
   expect(deviceTag?.className).not.toBe(deviceStatus?.className);
+  expect(deviceStatus?.textContent).toContain("Online");
+  expect(
+    document.querySelector<HTMLElement>('[data-testid="device-status-3"]')?.textContent,
+  ).toContain("Expired");
   expect(document.querySelector('[data-testid="device-tag-3-0"]')).toBeNull();
   expect(document.querySelector('[data-testid="device-pending-routes-1"]')).toBeNull();
   const deviceTableText = document.querySelector('[data-testid="machine-list"]')?.textContent ?? "";
