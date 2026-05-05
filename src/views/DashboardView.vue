@@ -2940,6 +2940,7 @@ onBeforeUnmount(stopHealthProbe);
               <Button
                 type="button"
                 variant="ghost"
+                :data-testid="`load-profile-${profile.name}`"
                 class="h-auto w-full justify-start px-0 py-0 text-start hover:bg-transparent"
                 @click="loadProfile(profile.id)"
               >
@@ -3605,7 +3606,7 @@ onBeforeUnmount(stopHealthProbe);
               <div class="relative z-10 max-w-md">
                 <h2 class="text-lg font-semibold">{{ copy.addFirstDevice }}</h2>
                 <p class="mt-2 text-sm text-muted-foreground">{{ copy.addFirstDeviceDescription }}</p>
-                <Button class="mt-4" @click="prepareDeviceInvite('client')">
+                <Button class="mt-4" data-testid="add-first-device" @click="prepareDeviceInvite('client')">
                   <Plus class="h-4 w-4" aria-hidden="true" />
                   {{ copy.addDevice }}
                 </Button>

@@ -392,6 +392,8 @@ test("manages multiple saved connection profiles and supports logout", async () 
   await expect.element(page.getByTestId("connect-form")).toBeVisible();
   await page.getByTestId("connect-profile-name").fill("Office");
   await page.getByTestId("connect-api-key").fill("office-api-key");
+  await page.getByTestId("connect-remember").click();
+  await page.getByTestId("connect-remember").click();
   await page.getByTestId("save-profile").click();
   expect(localStorage.getItem("headscale-ui-profiles")).toContain("Office");
   const officeProfile = storedProfiles().find((profile) => profile.name === "Office");
@@ -399,6 +401,8 @@ test("manages multiple saved connection profiles and supports logout", async () 
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
   );
   await expect.element(page.getByTestId("profile-row-Office")).toBeVisible();
+  await page.getByTestId("load-profile-Office").click();
+  await expect.element(page.getByTestId("connect-profile-name")).toHaveValue("Office");
 
   await page.getByTestId("connect-profile").selectOptions("__new__");
   await page.getByTestId("connect-profile-name").fill("Lab");
@@ -406,6 +410,8 @@ test("manages multiple saved connection profiles and supports logout", async () 
   await page.getByTestId("save-profile").click();
   expect(localStorage.getItem("headscale-ui-profiles")).toContain("Office");
   expect(localStorage.getItem("headscale-ui-profiles")).toContain("Lab");
+  const labProfile = storedProfiles().find((profile) => profile.name === "Lab");
+  expect(labProfile).toBeTruthy();
 
   await page.getByTestId("use-profile-Office").click();
   await expect.element(page.getByTestId("connect-server-url")).toHaveValue("http://127.0.0.1:8080");
@@ -447,6 +453,9 @@ test("manages multiple saved connection profiles and supports logout", async () 
   await page.getByTestId("delete-profile-Office").click();
   expect(localStorage.getItem("headscale-ui-profiles")).not.toContain("Office");
   expect(localStorage.getItem("headscale-ui-profiles")).toContain("Lab");
+  await page.getByTestId("connect-profile").selectOptions(labProfile?.id ?? "");
+  await page.getByTestId("delete-profile").click();
+  expect(localStorage.getItem("headscale-ui-profiles")).not.toContain("Lab");
 });
 
 test("does not flash the login form while restoring a profile route", async () => {
@@ -576,9 +585,26 @@ test("supports consumer-friendly tailnet management flows", async () => {
 
   await page.getByTestId("section-devices").click();
   expectMachinesWorkbench();
+  await page.getByTestId("device-owner-link-1").click();
+  await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Alice Ops");
+  await page.getByTestId("user-detail-view-machines").click();
+  await expect.element(page.getByTestId("device-search")).toHaveValue("alice@example.com");
+  await page.getByTestId("clear-machine-filters").click();
   await page.getByTestId("device-detail-link-1").click();
   await expect.element(page.getByTestId("device-detail-dialog")).toBeVisible();
   await expect.element(page.getByTestId("device-detail-status-1")).toHaveTextContent("Online");
+  await page.getByTestId("device-detail-rename").click();
+  await expect.element(page.getByTestId("rename-node-dialog")).toBeVisible();
+  await page.getByTestId("rename-node-cancel").click();
+  await page.getByTestId("device-detail-link-1").click();
+  await page.getByTestId("device-detail-expire").click();
+  await expect.element(page.getByTestId("expire-node-dialog")).toBeVisible();
+  await page.getByTestId("expire-node-cancel").click();
+  await page.getByTestId("device-detail-link-1").click();
+  await page.getByTestId("device-detail-remove").click();
+  await expect.element(page.getByTestId("remove-node-dialog")).toBeVisible();
+  await page.getByTestId("remove-node-cancel").click();
+  await page.getByTestId("device-detail-link-1").click();
   await page.getByTestId("device-detail-owner-1").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toBeVisible();
   await expect.element(page.getByTestId("user-detail-device-1")).toHaveTextContent("alice-laptop");
@@ -598,6 +624,16 @@ test("supports consumer-friendly tailnet management flows", async () => {
   await page.getByTestId("section-devices").click();
   await page.getByTestId("machine-filter").selectOptions("all");
   expect(document.querySelector('[data-testid="machine-actions-1"]')).toBeNull();
+  await page.getByTestId("machine-actions-trigger-1").click();
+  await expect.element(page.getByTestId("machine-actions-menu-1")).toBeVisible();
+  await page.getByTestId("view-node-details-action-1").click();
+  await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("alice-laptop");
+  await userEvent.keyboard("{Escape}");
+  await page.getByTestId("machine-actions-trigger-2").click();
+  await expect.element(page.getByTestId("machine-actions-menu-2")).toBeVisible();
+  await page.getByTestId("view-node-routes-action-2").click();
+  await expect.element(page.getByTestId("route-node-2")).toBeVisible();
+  await page.getByTestId("section-devices").click();
   await page.getByTestId("machine-actions-trigger-1").click();
   await expect.element(page.getByTestId("machine-actions-menu-1")).toBeVisible();
   expect(document.querySelector('[data-testid="rename-node-1"]')).toBeNull();
@@ -620,6 +656,12 @@ test("supports consumer-friendly tailnet management flows", async () => {
   expect(
     window.__headscaleUiOperationCalls?.some((call) => call.id === "node.setApprovedRoutes"),
   ).toBe(false);
+  await page.getByTestId("approve-route-cancel").click();
+  expect(
+    window.__headscaleUiOperationCalls?.some((call) => call.id === "node.setApprovedRoutes"),
+  ).toBe(false);
+  await page.getByTestId("approve-route-2-0").click();
+  await expect.element(page.getByTestId("approve-route-dialog")).toBeVisible();
   await page.getByTestId("approve-route-confirm").click();
   await expect
     .poll(() =>
@@ -693,6 +735,13 @@ test("covers dashboard refresh, machine filters, exports and machine lifecycle a
   expect(
     window.__headscaleUiOperationCalls?.filter((call) => call.id === "node.expire").length,
   ).toBe(expireCallsBefore);
+  await page.getByTestId("expire-node-cancel").click();
+  expect(
+    window.__headscaleUiOperationCalls?.filter((call) => call.id === "node.expire").length,
+  ).toBe(expireCallsBefore);
+  await page.getByTestId("machine-actions-trigger-3").click();
+  await page.getByTestId("expire-node-action-3").click();
+  await expect.element(page.getByTestId("expire-node-dialog")).toBeVisible();
   await page.getByTestId("expire-node-confirm").click();
   await expect
     .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "node.expire"))
@@ -718,6 +767,25 @@ test("covers dashboard refresh, machine filters, exports and machine lifecycle a
     .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "node.delete"))
     .toBe(true);
   expect(document.querySelector('[data-testid="device-3"]')).toBeNull();
+});
+
+test("covers the empty machine state and add-first-device flow", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+
+  await page.getByTestId("section-devices").click();
+  for (const nodeId of ["1", "2", "3"]) {
+    await page.getByTestId(`machine-actions-trigger-${nodeId}`).click();
+    await page.getByTestId(`remove-node-action-${nodeId}`).click();
+    await expect.element(page.getByTestId("remove-node-dialog")).toBeVisible();
+    await page.getByTestId("remove-node-confirm").click();
+    await expect.poll(() => document.querySelector(`[data-testid="device-${nodeId}"]`)).toBeNull();
+  }
+
+  await expect.element(page.getByTestId("machines-empty")).toBeVisible();
+  await page.getByTestId("add-first-device").click();
+  await expect.element(page.getByTestId("device-setup-flow")).toBeVisible();
+  await expect.element(page.getByTestId("setup-tags")).toHaveValue("");
 });
 
 test("covers user filters, user export and member deletion", async () => {
@@ -750,6 +818,15 @@ test("covers user filters, user export and member deletion", async () => {
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Charlie");
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("oidc");
   await page.getByTestId("user-detail-create-auth-key").click();
+  await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
+  await expect.element(page.getByTestId("invite-user")).toHaveValue("3");
+  await page.getByTestId("cancel-create-invite").click();
+  await page.getByTestId("member-actions-trigger-charlie").click();
+  await page.getByTestId("view-member-details-charlie").click();
+  await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Charlie");
+  await userEvent.keyboard("{Escape}");
+  await page.getByTestId("member-actions-trigger-charlie").click();
+  await page.getByTestId("create-invite-for-member-charlie").click();
   await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
   await expect.element(page.getByTestId("invite-user")).toHaveValue("3");
   await page.getByTestId("cancel-create-invite").click();
@@ -971,6 +1048,8 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   await expect.poll(() => countByTestIdPrefix("policy-rule-")).toBe(initialRules + 1);
 
   expectNoRawPolicyEditor();
+  await page.getByTestId("policy-tab-review").click();
+  await expect.element(page.getByTestId("policy-safety-review")).toBeVisible();
   await page.getByTestId("save-policy").click();
   await expect
     .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "policy.set"))
@@ -992,6 +1071,8 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   expect(savedWithUiChanges.ssh).toBeTruthy();
 
   window.__headscaleUiOperationCalls = [];
+  await page.getByTestId("policy-tab-rules").click();
+  await expect.element(page.getByTestId("policy-rule-builder")).toBeVisible();
   clickLastByTestIdPrefix("remove-policy-rule-");
   await expect.poll(() => countByTestIdPrefix("policy-rule-")).toBe(initialRules);
   await page.getByTestId("policy-tab-groups").click();
@@ -1060,12 +1141,21 @@ test("covers task navigation and the client-device setup branch", async () => {
   await expect.element(page.getByTestId("setup-tags")).toHaveValue("");
   await expect.element(page.getByTestId("setup-ephemeral")).toBeChecked();
   await expect.element(page.getByTestId("setup-reusable")).not.toBeChecked();
+  clickDomTestId("setup-ephemeral");
+  await expect.element(page.getByTestId("setup-ephemeral")).not.toBeChecked();
+  clickDomTestId("setup-reusable");
+  await expect.element(page.getByTestId("setup-reusable")).toBeChecked();
+  clickDomTestId("setup-exit-node");
   clickDomTestId("setup-tags-enabled");
   await expect.element(page.getByTestId("setup-tags")).toHaveValue("tag:server");
+  await page.getByTestId("setup-tags").fill("tag:client");
+  await expect.element(page.getByTestId("setup-tags")).toHaveValue("tag:client");
   await page.getByTestId("setup-expiration-increment").click();
   await expect.element(page.getByTestId("setup-expiration")).toHaveValue("8");
   await page.getByTestId("setup-expiration-decrement").click();
   await expect.element(page.getByTestId("setup-expiration")).toHaveValue("7");
+  await page.getByTestId("setup-expiration").fill("12");
+  await expect.element(page.getByTestId("setup-expiration")).toHaveValue("12");
   await page.getByTestId("setup-manage-tags").click();
   await expect.element(page.getByTestId("policy-editor")).toBeVisible();
 });
@@ -1121,6 +1211,21 @@ test("keeps every core function usable on mobile", async () => {
   await page.getByTestId("member-name").fill("mobile");
   await page.getByTestId("create-member").click();
   await expect.element(page.getByTestId("member-mobile")).toBeVisible();
+  await page.getByTestId("member-actions-trigger-mobile-mobile").click();
+  await page.getByTestId("view-member-details-mobile-mobile").click();
+  await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("mobile");
+  await userEvent.keyboard("{Escape}");
+  await page.getByTestId("member-actions-trigger-mobile-mobile").click();
+  await page.getByTestId("view-member-machines-mobile-mobile").click();
+  await expect.element(page.getByTestId("device-search")).toHaveValue("mobile");
+  await selectSectionTab("members");
+  await page.getByTestId("member-actions-trigger-mobile-mobile").click();
+  await page.getByTestId("create-invite-for-member-mobile-mobile").click();
+  await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
+  await page.getByTestId("cancel-create-invite").click();
+  await page.getByTestId("member-actions-trigger-mobile-mobile").click();
+  await page.getByTestId("delete-member-mobile-mobile").click();
+  expect(document.querySelector('[data-testid="member-mobile"]')).toBeNull();
   expectNoHorizontalOverflow();
 
   await selectSectionTab("invites");
@@ -1132,8 +1237,30 @@ test("keeps every core function usable on mobile", async () => {
   expectNoHorizontalOverflow();
 
   await selectSectionTab("devices");
+  if (document.querySelector('[data-testid="clear-machine-filters"]')) {
+    clickDomTestId("clear-machine-filters");
+  }
+  await expect.element(page.getByTestId("device-1")).toBeVisible();
   expectMachinesWorkbench();
   await page.getByTestId("device-search").fill("alice");
+  await page.getByTestId("machine-actions-trigger-mobile-1").click();
+  await page.getByTestId("view-node-details-action-mobile-1").click();
+  await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("alice-laptop");
+  await userEvent.keyboard("{Escape}");
+  await page.getByTestId("device-search").fill("edge");
+  await page.getByTestId("machine-actions-trigger-mobile-2").click();
+  await page.getByTestId("view-node-routes-action-mobile-2").click();
+  await expect.element(page.getByTestId("route-node-2")).toBeVisible();
+  await selectSectionTab("devices");
+  await page.getByTestId("device-search").fill("alice");
+  await page.getByTestId("machine-actions-trigger-mobile-1").click();
+  await page.getByTestId("expire-node-action-mobile-1").click();
+  await expect.element(page.getByTestId("expire-node-dialog")).toBeVisible();
+  await page.getByTestId("expire-node-cancel").click();
+  await page.getByTestId("machine-actions-trigger-mobile-1").click();
+  await page.getByTestId("remove-node-action-mobile-1").click();
+  await expect.element(page.getByTestId("remove-node-dialog")).toBeVisible();
+  await page.getByTestId("remove-node-cancel").click();
   await page.getByTestId("machine-actions-trigger-mobile-1").click();
   await expect.element(page.getByTestId("machine-actions-menu-mobile-1")).toBeVisible();
   await page.getByTestId("rename-node-action-mobile-1").click();
@@ -1160,7 +1287,8 @@ test("keeps every core function usable on mobile", async () => {
   await selectSectionTab("access");
   await expect.element(page.getByTestId("policy-editor")).toBeVisible();
   await expect.element(page.getByTestId("policy-rule-builder")).toBeVisible();
-  await page.getByTestId("save-policy").click();
+  window.__headscaleUiOperationCalls = [];
+  await page.getByTestId("save-policy-sticky").click();
   await expect
     .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "policy.set"))
     .toBe(true);
