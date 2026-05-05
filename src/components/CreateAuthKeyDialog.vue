@@ -126,6 +126,9 @@ watch(
               id="invite-expiration"
               v-model="form.expirationLocal"
               :locale="locale"
+              :time-label="labels.time"
+              :hour-label="labels.hour"
+              :minute-label="labels.minute"
               data-testid="invite-expiration"
               class="mt-2"
               required

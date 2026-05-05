@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from "vue";
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,7 @@ const props = withDefaults(
   defineProps<{
     modelValue?: string;
     disabled?: boolean;
+    locale?: string;
     hourLabel?: string;
     minuteLabel?: string;
     testIdPrefix?: string;
@@ -20,6 +21,7 @@ const props = withDefaults(
   {
     modelValue: "00:00",
     disabled: false,
+    locale: "en",
     hourLabel: "Hour",
     minuteLabel: "Minute",
     testIdPrefix: undefined,
@@ -30,14 +32,27 @@ const emit = defineEmits<{
   "update:modelValue": [value: string];
 }>();
 
-const hourOptions = Array.from({ length: 24 }, (_, index) => pad(index));
-const minuteOptions = Array.from({ length: 60 }, (_, index) => pad(index));
-
 const selectedHour = ref("00");
 const selectedMinute = ref("00");
+const numberFormatter = computed(
+  () =>
+    new Intl.NumberFormat(props.locale, {
+      minimumIntegerDigits: 2,
+      useGrouping: false,
+    }),
+);
+const hourOptions = computed(() => createTimeOptions(24));
+const minuteOptions = computed(() => createTimeOptions(60));
 
 function pad(value: number) {
   return String(value).padStart(2, "0");
+}
+
+function createTimeOptions(length: number) {
+  return Array.from({ length }, (_, index) => ({
+    label: numberFormatter.value.format(index),
+    value: pad(index),
+  }));
 }
 
 function parseTime(value: string | undefined) {
@@ -83,8 +98,8 @@ watch(
       :aria-label="hourLabel"
       @update:model-value="updateTime($event, selectedMinute)"
     >
-      <NativeSelectOption v-for="hour in hourOptions" :key="hour" :value="hour">
-        {{ hour }}
+      <NativeSelectOption v-for="hour in hourOptions" :key="hour.value" :value="hour.value">
+        {{ hour.label }}
       </NativeSelectOption>
     </NativeSelect>
     <NativeSelect
@@ -94,8 +109,8 @@ watch(
       :aria-label="minuteLabel"
       @update:model-value="updateTime(selectedHour, $event)"
     >
-      <NativeSelectOption v-for="minute in minuteOptions" :key="minute" :value="minute">
-        {{ minute }}
+      <NativeSelectOption v-for="minute in minuteOptions" :key="minute.value" :value="minute.value">
+        {{ minute.label }}
       </NativeSelectOption>
     </NativeSelect>
   </div>

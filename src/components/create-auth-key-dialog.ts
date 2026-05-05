@@ -24,6 +24,9 @@ export interface AuthKeyDialogLabels {
   cancel: string;
   submit: string;
   noUsers: string;
+  time: string;
+  hour: string;
+  minute: string;
 }
 
 export function isoToDateTimeLocal(value: string) {

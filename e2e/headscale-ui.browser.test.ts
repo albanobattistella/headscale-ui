@@ -97,9 +97,25 @@ function expectAuthKeyDateTimePickerClosed() {
 
 function expectAuthKeyTimePickerPopover() {
   const timePicker = document.querySelector<HTMLElement>('[data-slot="time-picker"]');
+  const calendar = document.querySelector<HTMLElement>('[data-slot="calendar"]');
+  const popover = document.querySelector<HTMLElement>('[data-slot="popover-content"]');
   expect(timePicker).toBeTruthy();
+  expect(calendar).toBeTruthy();
+  expect(popover).toBeTruthy();
   expectNoHorizontalOverflow();
 
+  const orderedSlots = Array.from(
+    (popover as HTMLElement).querySelectorAll<HTMLElement>(
+      '[data-slot="calendar"], [data-slot="time-picker"]',
+    ),
+  ).map((element) => element.dataset.slot);
+  expect(orderedSlots).toEqual(["calendar", "time-picker"]);
+  const popoverRect = (popover as HTMLElement).getBoundingClientRect();
+  const timeRect = (timePicker as HTMLElement).getBoundingClientRect();
+  expect(timeRect.bottom).toBeLessThanOrEqual(popoverRect.bottom + 1);
+  expect(
+    document.querySelector<HTMLElement>('[data-testid="invite-expiration-time-label"]'),
+  ).toBeTruthy();
   const hourRect = testIdRect("invite-expiration-hour");
   const minuteRect = testIdRect("invite-expiration-minute");
   expect(Math.abs(hourRect.top - minuteRect.top)).toBeLessThan(2);
@@ -1059,6 +1075,23 @@ test("defaults to English and supports the United Nations official languages", a
 
   await expect.element(page.getByTestId("section-devices")).toHaveTextContent("الأجهزة");
   expect(document.documentElement.dir).toBe("rtl");
+
+  await page.getByTestId("section-invites").click();
+  await page.getByTestId("open-create-invite").click();
+  await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
+  await page.getByTestId("invite-expiration").click();
+  await expect.element(page.getByTestId("invite-expiration-time-label")).toHaveTextContent("الوقت");
+
+  const arabicHour = new Intl.NumberFormat("ar-EG", {
+    minimumIntegerDigits: 2,
+    useGrouping: false,
+  }).format(7);
+  const hourSelect = document.querySelector<HTMLSelectElement>(
+    '[data-testid="invite-expiration-hour"]',
+  );
+  expect(hourSelect?.getAttribute("aria-label")).toBe("الساعة");
+  expect(hourSelect?.selectedOptions[0]?.textContent?.trim()).toBe(arabicHour);
+  expectNoHorizontalOverflow();
 });
 
 test("mirrors the access policy workspace in Arabic", async () => {
