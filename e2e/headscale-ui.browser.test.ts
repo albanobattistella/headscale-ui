@@ -734,8 +734,21 @@ test("covers user filters, user export and member deletion", async () => {
   ).toBeTruthy();
   inputDomTestId("user-search", "charlie");
   await expect.element(page.getByTestId("member-charlie")).toBeVisible();
+  await expect.element(page.getByTestId("member-auth-source-charlie")).toHaveTextContent("oidc");
+  const memberDeviceTags = document.querySelector<HTMLElement>(
+    '[data-testid="member-device-tags-charlie"]',
+  );
+  expect(memberDeviceTags).toBeTruthy();
+  expect(getComputedStyle(memberDeviceTags as HTMLElement).flexDirection).toBe("column");
+  await expect
+    .element(page.getByTestId("member-device-tag-charlie-3"))
+    .toHaveTextContent("old-phone");
+  await page.getByTestId("member-device-tag-charlie-3").click();
+  await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("old-phone");
+  await userEvent.keyboard("{Escape}");
   await page.getByTestId("member-detail-link-charlie").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Charlie");
+  await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("oidc");
   await page.getByTestId("user-detail-create-auth-key").click();
   await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
   await expect.element(page.getByTestId("invite-user")).toHaveValue("3");

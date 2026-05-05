@@ -300,6 +300,7 @@ const englishCopy = {
   email: "Email",
   createMember: "Create user",
   deviceCount: "devices",
+  memberDevices: "Devices",
   deleteMember: "Delete user",
   noUsersMatch: "No users match these filters.",
   invitesTitle: "Auth keys",
@@ -566,6 +567,7 @@ const productCopy: Record<Locale, ProductCopy> = {
     email: "邮箱",
     createMember: "创建用户",
     deviceCount: "台设备",
+    memberDevices: "设备",
     deleteMember: "删除用户",
     noUsersMatch: "没有匹配筛选条件的用户。",
     invitesTitle: "认证密钥",
@@ -717,6 +719,7 @@ const productCopy: Record<Locale, ProductCopy> = {
     minute: "Minute",
     devicesTitle: "Machines",
     membersTitle: "Utilisateurs",
+    memberDevices: "Appareils",
     invitesTitle: "Clés auth",
     routesTitle: "Routes",
     accessTitle: "Contrôles d'accès",
@@ -739,6 +742,7 @@ const productCopy: Record<Locale, ProductCopy> = {
     minute: "Минута",
     devicesTitle: "Машины",
     membersTitle: "Пользователи",
+    memberDevices: "Устройства",
     invitesTitle: "Ключи авторизации",
     routesTitle: "Маршруты",
     accessTitle: "Контроль доступа",
@@ -761,6 +765,7 @@ const productCopy: Record<Locale, ProductCopy> = {
     minute: "Minuto",
     devicesTitle: "Máquinas",
     membersTitle: "Usuarios",
+    memberDevices: "Dispositivos",
     invitesTitle: "Claves de autenticación",
     routesTitle: "Rutas",
     accessTitle: "Controles de acceso",
@@ -783,6 +788,7 @@ const productCopy: Record<Locale, ProductCopy> = {
     minute: "الدقيقة",
     devicesTitle: "الأجهزة",
     membersTitle: "المستخدمون",
+    memberDevices: "الأجهزة",
     invitesTitle: "مفاتيح الدخول",
     routesTitle: "المسارات",
     accessTitle: "التحكم بالوصول",
@@ -1152,6 +1158,8 @@ const filteredUsers = computed(() => {
       userLabel(user),
       user.email,
       user.provider,
+      user.providerId,
+      userAuthSource(user),
       role,
     ]
       .filter(Boolean)
@@ -2135,13 +2143,17 @@ function userDeviceCount(user: HeadscaleUser) {
 }
 
 function userRole(user: HeadscaleUser) {
-  if (user.provider === "system" || user.name.includes("tagged")) {
+  if (userAuthSource(user).toLowerCase() === "system" || user.name.includes("tagged")) {
     return "Service account";
   }
   if (user.id === "1") {
     return "Owner";
   }
   return "Member";
+}
+
+function userAuthSource(user: HeadscaleUser) {
+  return user.provider || user.providerId || "-";
 }
 
 function userLabel(user?: HeadscaleUser) {
@@ -2425,7 +2437,7 @@ function exportUsers() {
       name: userLabel(user),
       email: user.email,
       role: userRole(user),
-      provider: user.provider,
+      provider: userAuthSource(user),
       machines: userDeviceCount(user),
       joined: user.createdAt,
     })),
@@ -3261,7 +3273,7 @@ onBeforeUnmount(stopHealthProbe);
                   <section class="grid gap-2 rounded-md border bg-background p-3">
                     <h3 class="text-sm font-semibold">{{ copy.details }}</h3>
                     <p class="break-all text-sm text-muted-foreground">{{ copy.email }}: {{ selectedDetailUser.email || copy.unknown }}</p>
-                    <p class="text-sm text-muted-foreground">{{ copy.authSource }}: {{ selectedDetailUser.provider || copy.unknown }}</p>
+                    <p class="text-sm text-muted-foreground">{{ copy.authSource }}: {{ userAuthSource(selectedDetailUser) }}</p>
                     <p class="text-sm text-muted-foreground">{{ copy.joined }}: {{ formatDate(selectedDetailUser.createdAt) }}</p>
                   </section>
 
@@ -3988,7 +4000,7 @@ onBeforeUnmount(stopHealthProbe);
                   <TableRow>
                     <TableHead>{{ copy.membersTitle }}</TableHead>
                     <TableHead>{{ copy.role }}</TableHead>
-                    <TableHead>{{ copy.deviceCount }}</TableHead>
+                    <TableHead>{{ copy.memberDevices }}</TableHead>
                     <TableHead>{{ copy.joined }}</TableHead>
                     <TableHead>{{ copy.authSource }}</TableHead>
                     <TableHead class="hidden text-end md:table-cell">{{ copy.actions }}</TableHead>
@@ -4005,7 +4017,7 @@ onBeforeUnmount(stopHealthProbe);
                       >
                         {{ userLabel(user) }}
                       </button>
-                      <p class="mt-1 break-all text-sm text-muted-foreground">{{ user.email || user.provider || copy.unknown }}</p>
+                      <p class="mt-1 break-all text-sm text-muted-foreground">{{ user.email || userAuthSource(user) }}</p>
                       <DropdownMenu>
                         <DropdownMenuTrigger as-child>
                           <Button
@@ -4045,17 +4057,28 @@ onBeforeUnmount(stopHealthProbe);
                       <Badge variant="outline">{{ userRole(user) }}</Badge>
                     </TableCell>
                     <TableCell class="align-top md:min-w-28">
-                      <button
-                        type="button"
-                        class="underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        :data-testid="`member-devices-link-${user.name}`"
-                        @click="openUserDetails(user)"
+                      <div
+                        v-if="userDevices(user).length"
+                        class="flex flex-col items-start gap-1"
+                        :data-testid="`member-device-tags-${user.name}`"
                       >
-                        {{ userDeviceCount(user) }}
-                      </button>
+                        <button
+                          v-for="node in userDevices(user)"
+                          :key="node.id"
+                          type="button"
+                          class="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          :data-testid="`member-device-tag-${user.name}-${node.id}`"
+                          @click="openNodeDetails(node)"
+                        >
+                          <Badge variant="outline" :class="nodeStatusClass(node)" class="cursor-pointer">
+                            {{ node.name }}
+                          </Badge>
+                        </button>
+                      </div>
+                      <span v-else aria-hidden="true" class="text-muted-foreground">-</span>
                     </TableCell>
                     <TableCell class="align-top text-sm text-muted-foreground md:min-w-40">{{ formatDate(user.createdAt) }}</TableCell>
-                    <TableCell class="align-top md:min-w-36">{{ user.provider || copy.unknown }}</TableCell>
+                    <TableCell class="align-top md:min-w-36" :data-testid="`member-auth-source-${user.name}`">{{ userAuthSource(user) }}</TableCell>
                     <TableCell class="hidden align-top md:table-cell md:min-w-16">
                       <div class="flex justify-end">
                         <DropdownMenu>

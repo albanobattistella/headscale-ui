@@ -64,7 +64,7 @@ export function createInitialSnapshot(): HeadscaleSnapshot {
       name: "charlie",
       displayName: "Charlie",
       email: "charlie@example.com",
-      provider: "oidc",
+      providerId: "oidc",
       createdAt: "2026-02-04T09:30:00Z",
     },
   ];
