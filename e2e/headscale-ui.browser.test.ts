@@ -665,6 +665,9 @@ test("covers user filters, user export and member deletion", async () => {
   inputDomTestId("user-search", "");
   selectDomTestId("user-filter", "service");
   await expect.element(page.getByTestId("member-tagged-devices")).toBeVisible();
+  await expect
+    .element(page.getByTestId("member-tagged-devices"))
+    .toHaveTextContent("Devices managed by tags");
   expect(document.querySelector('[data-testid="member-charlie"]')).toBeNull();
 
   const downloadStub = stubDownloads();
@@ -942,7 +945,7 @@ test("covers task navigation and the client-device setup branch", async () => {
   await expect.element(page.getByTestId("device-2")).toBeVisible();
   await page.getByTestId("section-routes").click();
   await page.getByTestId("route-user-link-2").click();
-  await expect.element(page.getByTestId("user-search")).toHaveValue("Tagged Devices");
+  await expect.element(page.getByTestId("user-search")).toHaveValue("Devices managed by tags");
   await expect.element(page.getByTestId("member-tagged-devices")).toBeVisible();
 
   await page.getByTestId("section-devices").click();
@@ -1067,6 +1070,11 @@ test("defaults to English and supports the United Nations official languages", a
 
   await chooseProfileMenuOption("locale-option-zh");
   await expect.element(page.getByTestId("section-devices")).toHaveTextContent("机器");
+  await page.getByTestId("section-members").click();
+  selectDomTestId("user-filter", "service");
+  await expect
+    .element(page.getByTestId("member-tagged-devices"))
+    .toHaveTextContent("使用标签管理的设备");
 
   for (const code of ["fr", "ru", "es", "ar"] as const) {
     await chooseProfileMenuOption(`locale-option-${code}`);

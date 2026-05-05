@@ -280,6 +280,7 @@ const englishCopy = {
   owners: "Owners",
   members: "Members",
   serviceAccounts: "Service accounts",
+  tagManagedDevices: "Devices managed by tags",
   role: "Role",
   joined: "Joined",
   authSource: "Auth source",
@@ -535,6 +536,7 @@ const productCopy: Record<Locale, ProductCopy> = {
     owners: "Owner",
     members: "成员",
     serviceAccounts: "服务账号",
+    tagManagedDevices: "使用标签管理的设备",
     role: "角色",
     joined: "加入时间",
     authSource: "认证来源",
@@ -689,6 +691,7 @@ const productCopy: Record<Locale, ProductCopy> = {
     dashboardTitle: "Aperçu du tailnet",
     dashboardSubtitle: "Un point d'accueil pour appareils, membres et routes privées.",
     currentServer: "Serveur actuel",
+    tagManagedDevices: "Appareils gérés par tags",
     time: "Heure",
     hour: "Heure",
     minute: "Minute",
@@ -711,6 +714,7 @@ const productCopy: Record<Locale, ProductCopy> = {
     dashboardTitle: "Обзор tailnet",
     dashboardSubtitle: "Центр управления устройствами, людьми и приватными маршрутами.",
     currentServer: "Текущий сервер",
+    tagManagedDevices: "Устройства, управляемые тегами",
     time: "Время",
     hour: "Час",
     minute: "Минута",
@@ -733,6 +737,7 @@ const productCopy: Record<Locale, ProductCopy> = {
     dashboardTitle: "Resumen del tailnet",
     dashboardSubtitle: "Un centro para dispositivos, personas y rutas privadas.",
     currentServer: "Servidor actual",
+    tagManagedDevices: "Dispositivos gestionados por etiquetas",
     time: "Hora",
     hour: "Hora",
     minute: "Minuto",
@@ -755,6 +760,7 @@ const productCopy: Record<Locale, ProductCopy> = {
     dashboardTitle: "نظرة عامة على الشبكة",
     dashboardSubtitle: "مركز لإدارة الأجهزة والأعضاء والمسارات الخاصة.",
     currentServer: "الخادم الحالي",
+    tagManagedDevices: "الأجهزة المدارة بالوسوم",
     time: "الوقت",
     hour: "الساعة",
     minute: "الدقيقة",
@@ -1121,7 +1127,14 @@ const filteredUsers = computed(() => {
   const query = userSearch.value.trim().toLowerCase();
   return snapshot.value.users.filter((user) => {
     const role = userRole(user).toLowerCase();
-    const searchable = [user.name, user.displayName, user.email, user.provider, role]
+    const searchable = [
+      user.name,
+      user.displayName,
+      userLabel(user),
+      user.email,
+      user.provider,
+      role,
+    ]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
@@ -2083,7 +2096,7 @@ function loadPolicyDesigner(policy: string) {
 }
 
 function nodeOwner(node: HeadscaleNode) {
-  return node.user?.displayName || node.user?.name || node.user?.email || "Unassigned";
+  return userLabel(node.user);
 }
 
 function userDeviceCount(user: HeadscaleUser) {
@@ -2101,7 +2114,15 @@ function userRole(user: HeadscaleUser) {
 }
 
 function userLabel(user?: HeadscaleUser) {
+  if (isTagManagedDeviceUser(user)) {
+    return copy.value.tagManagedDevices;
+  }
+
   return user?.displayName || user?.name || user?.email || "Unknown";
+}
+
+function isTagManagedDeviceUser(user?: HeadscaleUser) {
+  return user?.name === "tagged-devices";
 }
 
 function nodePendingRoutes(node: HeadscaleNode) {
@@ -2119,7 +2140,7 @@ function jumpToUser(user?: HeadscaleUser) {
     return;
   }
 
-  userSearch.value = user.email || user.displayName || user.name;
+  userSearch.value = user.email || userLabel(user);
   userFilter.value = "all";
   selectSection("members");
 }
@@ -2230,7 +2251,7 @@ function exportUsers() {
   downloadCsv(
     "headscale-users.csv",
     filteredUsers.value.map((user) => ({
-      name: user.displayName || user.name,
+      name: userLabel(user),
       email: user.email,
       role: userRole(user),
       provider: user.provider,
@@ -3476,7 +3497,7 @@ onBeforeUnmount(stopHealthProbe);
                 <TableBody>
                   <TableRow v-for="user in filteredUsers" :key="user.id" :data-testid="`member-${user.name}`">
                     <TableCell class="align-top md:min-w-56">
-                      <p class="font-medium">{{ user.displayName || user.name }}</p>
+                      <p class="font-medium">{{ userLabel(user) }}</p>
                       <p class="mt-1 break-all text-sm text-muted-foreground">{{ user.email || user.provider || copy.unknown }}</p>
                       <Button
                         variant="ghost"
