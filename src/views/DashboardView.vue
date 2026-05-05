@@ -149,14 +149,6 @@ type PolicyListChoice = {
   value: string;
   description: string;
 };
-type PolicyTemplate = {
-  id: string;
-  title: string;
-  description: string;
-  source: string;
-  destination: string;
-  ports: string;
-};
 const themeModes: ThemeMode[] = ["light", "dark", "auto"];
 const productSections: ProductSection[] = [
   "home",
@@ -404,16 +396,6 @@ const englishCopy = {
   policyOverviewWarnings: "Warnings",
   policyQuickStartTitle: "Create an access rule",
   policyQuickStartDescription: "Choose who can access which devices and services. No JSON needed.",
-  policyTemplateTitle: "Start from a common rule",
-  policyTemplateSubtitle: "Templates fill the fields below. You can review before adding the rule.",
-  policyTemplateGroupToTag: "Group to server HTTPS",
-  policyTemplateGroupToTagDescription: "Developers can reach tagged servers on HTTPS.",
-  policyTemplateOpsSsh: "Ops SSH to servers",
-  policyTemplateOpsSshDescription: "Operations can SSH into tagged servers.",
-  policyTemplateDns: "DNS to tagged devices",
-  policyTemplateDnsDescription: "Everyone can reach the DNS service on tagged devices.",
-  policyTemplateOpenAccess: "Everyone to everything",
-  policyTemplateOpenAccessDescription: "High risk. Use only for a trusted lab network.",
   policyWhoCanAccess: "Who can access",
   policyWhatCanAccess: "What they can access",
   policyWhichService: "Which service",
@@ -663,16 +645,6 @@ const productCopy: Record<Locale, ProductCopy> = {
     policyOverviewWarnings: "风险",
     policyQuickStartTitle: "创建一条访问规则",
     policyQuickStartDescription: "选择谁可以访问哪些设备和服务，不需要写 JSON。",
-    policyTemplateTitle: "从常用规则开始",
-    policyTemplateSubtitle: "模板只会填入下方字段，添加前仍然可以检查。",
-    policyTemplateGroupToTag: "用户组访问服务器 HTTPS",
-    policyTemplateGroupToTagDescription: "开发组可以通过 HTTPS 访问带标签服务器。",
-    policyTemplateOpsSsh: "运维 SSH 到服务器",
-    policyTemplateOpsSshDescription: "运维组可以 SSH 进入带标签服务器。",
-    policyTemplateDns: "访问带标签设备的 DNS",
-    policyTemplateDnsDescription: "所有人可以访问带标签设备的 DNS 服务。",
-    policyTemplateOpenAccess: "所有人访问所有设备",
-    policyTemplateOpenAccessDescription: "高风险，只适合可信实验网络。",
     policyWhoCanAccess: "谁可以访问",
     policyWhatCanAccess: "访问哪些设备",
     policyWhichService: "允许哪些服务",
@@ -1319,40 +1291,6 @@ const policyWorkspaceSummary = computed(() =>
     ? `${policyRules.value.length} 条规则，${policyGroups.value.length} 个用户组，${policyTagOwners.value.length} 个标签授权，${policyRiskCount.value} 个风险。`
     : `${policyRules.value.length} rules, ${policyGroups.value.length} groups, ${policyTagOwners.value.length} tag grants and ${policyRiskCount.value} warnings.`,
 );
-const policyTemplates = computed<PolicyTemplate[]>(() => [
-  {
-    id: "group-to-tag",
-    title: copy.value.policyTemplateGroupToTag,
-    description: copy.value.policyTemplateGroupToTagDescription,
-    source: "group:dev",
-    destination: "tag:server",
-    ports: "443",
-  },
-  {
-    id: "ops-ssh",
-    title: copy.value.policyTemplateOpsSsh,
-    description: copy.value.policyTemplateOpsSshDescription,
-    source: "group:ops",
-    destination: "tag:server",
-    ports: "22",
-  },
-  {
-    id: "dns",
-    title: copy.value.policyTemplateDns,
-    description: copy.value.policyTemplateDnsDescription,
-    source: "*",
-    destination: "tag:server",
-    ports: "53",
-  },
-  {
-    id: "open-access",
-    title: copy.value.policyTemplateOpenAccess,
-    description: copy.value.policyTemplateOpenAccessDescription,
-    source: "*",
-    destination: "*",
-    ports: "*",
-  },
-]);
 const themeLabel = computed(() => themeModeLabel(colorMode.value));
 const currentProfileLabel = computed(() => connectionForm.profileName || t("profile"));
 const serverSignalStrength = computed<ServerSignalStrength>(() => {
@@ -1917,12 +1855,6 @@ function policyRuleSentence(source: string, destination: string, ports: string) 
 
 function isPolicyRuleHighRisk(rule: Pick<PolicyRule, "source" | "destination" | "ports">) {
   return rule.source.trim() === "*" && rule.destination.trim() === "*" && rule.ports.trim() === "*";
-}
-
-function applyPolicyTemplate(template: PolicyTemplate) {
-  policyRuleForm.source = template.source;
-  policyRuleForm.destination = template.destination;
-  policyRuleForm.ports = template.ports;
 }
 
 function addUniqueCommaValue(current: string, value: string) {
@@ -3811,9 +3743,8 @@ onBeforeUnmount(stopHealthProbe);
                 </TabsList>
 
                 <TabsContent value="rules" class="mt-3 grid gap-4">
-                  <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-                    <div class="grid gap-4">
-                      <div class="rounded-md border bg-secondary/20 p-3" data-testid="policy-rule-builder">
+                  <div class="grid gap-4">
+                    <div class="rounded-md border bg-secondary/20 p-3" data-testid="policy-rule-builder">
                         <div>
                           <h2 class="font-semibold">{{ copy.policyQuickStartTitle }}</h2>
                           <p class="mt-1 text-sm text-muted-foreground">
@@ -3821,7 +3752,7 @@ onBeforeUnmount(stopHealthProbe);
                           </p>
                         </div>
 
-                        <div class="mt-3 grid gap-3 md:grid-cols-3">
+                        <div class="mt-3 grid gap-3">
                           <div>
                             <Label for="policy-simple-source">{{ copy.policyWhoCanAccess }}</Label>
                             <Select
@@ -3887,34 +3818,6 @@ onBeforeUnmount(stopHealthProbe);
                             {{ copy.addRule }}
                           </Button>
                         </div>
-                      </div>
-
-                    </div>
-
-                    <div class="grid content-start gap-3 rounded-md border bg-background p-3">
-                      <div>
-                        <h2 class="font-semibold">{{ copy.policyTemplateTitle }}</h2>
-                        <p class="mt-1 text-sm text-muted-foreground">{{ copy.policyTemplateSubtitle }}</p>
-                      </div>
-                      <button
-                        v-for="template in policyTemplates"
-                        :key="template.id"
-                        type="button"
-                        class="rounded-md border px-3 py-2 text-left text-sm transition hover:border-primary hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                        :data-testid="`policy-template-${template.id}`"
-                        @click="applyPolicyTemplate(template)"
-                      >
-                        <span class="flex items-center gap-2 font-medium">
-                          {{ template.title }}
-                          <Badge
-                            v-if="isPolicyRuleHighRisk(template)"
-                            variant="destructive"
-                          >
-                            {{ copy.highRisk }}
-                          </Badge>
-                        </span>
-                        <span class="mt-1 block text-xs text-muted-foreground">{{ template.description }}</span>
-                      </button>
                     </div>
                   </div>
 
@@ -3974,8 +3877,8 @@ onBeforeUnmount(stopHealthProbe);
                 </TabsContent>
 
                 <TabsContent value="groups" class="mt-3 grid gap-3">
-                  <div class="grid gap-3 lg:grid-cols-[22rem_minmax(0,1fr)]">
-                    <div class="grid content-start gap-3 rounded-md border bg-secondary/20 p-3">
+                  <div class="grid gap-3">
+                    <div class="grid gap-3 rounded-md border bg-secondary/20 p-3">
                       <h2 class="font-semibold">{{ copy.groups }}</h2>
                       <div>
                         <Label for="policy-group-name">{{ copy.groupName }}</Label>
@@ -3987,7 +3890,7 @@ onBeforeUnmount(stopHealthProbe);
                       </div>
                       <div>
                         <Label for="policy-group-member-select">{{ copy.selectGroupMember }}</Label>
-                        <div class="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                        <div class="mt-2 grid gap-2">
                           <Select
                             id="policy-group-member-select"
                             v-model="policyGroupMemberSelection"
@@ -4056,8 +3959,8 @@ onBeforeUnmount(stopHealthProbe);
                 </TabsContent>
 
                 <TabsContent value="tags" class="mt-3 grid gap-3">
-                  <div class="grid gap-3 lg:grid-cols-[22rem_minmax(0,1fr)]">
-                    <div class="grid content-start gap-3 rounded-md border bg-secondary/20 p-3">
+                  <div class="grid gap-3">
+                    <div class="grid gap-3 rounded-md border bg-secondary/20 p-3">
                       <h2 class="font-semibold">{{ copy.tagOwners }}</h2>
                       <div>
                         <Label for="policy-tag-name">{{ copy.tagName }}</Label>
@@ -4069,7 +3972,7 @@ onBeforeUnmount(stopHealthProbe);
                       </div>
                       <div>
                         <Label for="policy-tag-owner-select">{{ copy.selectTagOwner }}</Label>
-                        <div class="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                        <div class="mt-2 grid gap-2">
                           <Select
                             id="policy-tag-owner-select"
                             v-model="policyTagOwnerSelection"

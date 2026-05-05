@@ -743,7 +743,6 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   await page.getByTestId("section-access").click();
   await expect.element(page.getByTestId("policy-editor")).toBeVisible();
   await expect.element(page.getByTestId("policy-simple-source")).toBeVisible();
-  await expect.element(page.getByTestId("policy-template-ops-ssh")).toBeVisible();
   await expect.element(page.getByTestId("policy-summary-warnings-count")).toBeVisible();
   await expect.element(page.getByTestId("policy-rule-builder")).toBeVisible();
 
