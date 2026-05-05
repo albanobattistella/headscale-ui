@@ -1072,7 +1072,10 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   await expect.element(page.getByTestId("policy-editor")).toBeVisible();
   await expect.element(page.getByTestId("open-policy-rule-dialog")).toBeVisible();
   await expect.element(page.getByTestId("policy-summary-warnings-count")).toBeVisible();
-  await expect.element(page.getByTestId("policy-rule-builder")).toBeVisible();
+  await expect.element(page.getByTestId("policy-rules-toolbar")).toBeVisible();
+  await expect.element(page.getByTestId("policy-rules-table")).toBeVisible();
+  inputDomTestId("policy-rule-search", "server");
+  inputDomTestId("policy-rule-search", "");
 
   const clickOnlyRules = countTableRowsByTestIdPrefix("policy-rule-");
   await page.getByTestId("open-policy-rule-dialog").click();
@@ -1087,6 +1090,10 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   await expect.poll(() => countTableRowsByTestIdPrefix("policy-rule-")).toBe(clickOnlyRules + 1);
 
   await page.getByTestId("policy-tab-groups").click();
+  await expect.element(page.getByTestId("policy-groups-toolbar")).toBeVisible();
+  await expect.element(page.getByTestId("policy-groups-table")).toBeVisible();
+  inputDomTestId("policy-group-search", "ops");
+  inputDomTestId("policy-group-search", "");
   const initialGroups = countTableRowsByTestIdPrefix("policy-group-");
   await page.getByTestId("open-policy-group-dialog").click();
   await expect.element(page.getByTestId("policy-group-dialog")).toBeVisible();
@@ -1098,6 +1105,10 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   await expect.poll(() => countTableRowsByTestIdPrefix("policy-group-")).toBe(initialGroups + 1);
 
   await page.getByTestId("policy-tab-tags").click();
+  await expect.element(page.getByTestId("policy-tag-owners-toolbar")).toBeVisible();
+  await expect.element(page.getByTestId("policy-tag-owners-table")).toBeVisible();
+  inputDomTestId("policy-tag-owner-search", "server");
+  inputDomTestId("policy-tag-owner-search", "");
   const initialTagOwners = countTableRowsByTestIdPrefix("policy-tag-owner-");
   await page.getByTestId("open-policy-tag-owner-dialog").click();
   await expect.element(page.getByTestId("policy-tag-owner-dialog")).toBeVisible();
@@ -1111,7 +1122,7 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
     .toBe(initialTagOwners + 1);
 
   await page.getByTestId("policy-tab-rules").click();
-  await expect.element(page.getByTestId("policy-rule-builder")).toBeVisible();
+  await expect.element(page.getByTestId("policy-rules-toolbar")).toBeVisible();
   await page.getByTestId("open-policy-rule-dialog").click();
   await expect.element(page.getByTestId("policy-rule-dialog")).toBeVisible();
   await page.getByTestId("policy-simple-source").selectOptions("group:dev");
@@ -1150,7 +1161,7 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
 
   window.__headscaleUiOperationCalls = [];
   await page.getByTestId("policy-tab-rules").click();
-  await expect.element(page.getByTestId("policy-rule-builder")).toBeVisible();
+  await expect.element(page.getByTestId("policy-rules-toolbar")).toBeVisible();
   clickLastByTestIdPrefix("remove-policy-rule-");
   await expect.poll(() => countTableRowsByTestIdPrefix("policy-rule-")).toBe(initialRules);
   await page.getByTestId("policy-tab-groups").click();
@@ -1364,7 +1375,8 @@ test("keeps every core function usable on mobile", async () => {
 
   await selectSectionTab("access");
   await expect.element(page.getByTestId("policy-editor")).toBeVisible();
-  await expect.element(page.getByTestId("policy-rule-builder")).toBeVisible();
+  await expect.element(page.getByTestId("policy-rules-toolbar")).toBeVisible();
+  await expect.element(page.getByTestId("policy-rules-table")).toBeVisible();
   window.__headscaleUiOperationCalls = [];
   await page.getByTestId("save-policy-sticky").click();
   await expect
@@ -1422,20 +1434,22 @@ test("mirrors the access policy workspace in Arabic", async () => {
 
   await chooseProfileMenuOption("locale-option-ar");
   await selectSectionTab("access");
-  await expect.element(page.getByTestId("policy-rule-builder")).toBeVisible();
+  await expect.element(page.getByTestId("policy-rules-toolbar")).toBeVisible();
+  await expect.element(page.getByTestId("policy-rules-table")).toBeVisible();
 
   expect(document.documentElement.lang).toBe("ar");
   expect(document.documentElement.dir).toBe("rtl");
 
-  const builder = document.querySelector<HTMLElement>('[data-testid="policy-rule-builder"]');
-  const table = document.querySelector<HTMLElement>("table");
-  expect(builder).toBeTruthy();
-  expect(table).toBeTruthy();
+  const toolbar = document.querySelector<HTMLElement>('[data-testid="policy-rules-toolbar"]');
+  const tableShell = document.querySelector<HTMLElement>('[data-testid="policy-rules-table"]');
+  expect(toolbar).toBeTruthy();
+  expect(tableShell).toBeTruthy();
 
-  const builderRect = builder?.getBoundingClientRect();
-  const tableRect = table?.getBoundingClientRect();
-  expect(builderRect?.left).toBeGreaterThan(tableRect?.left ?? 0);
-  expect(builderRect?.right).toBeGreaterThan(tableRect?.right ?? 0);
+  const toolbarRect = toolbar?.getBoundingClientRect();
+  const tableRect = tableShell?.getBoundingClientRect();
+  expect(toolbarRect?.bottom ?? 0).toBeLessThanOrEqual((tableRect?.top ?? 0) + 1);
+  expect(Math.abs((toolbarRect?.left ?? 0) - (tableRect?.left ?? 0))).toBeLessThan(2);
+  expect(Math.abs((toolbarRect?.right ?? 0) - (tableRect?.right ?? 0))).toBeLessThan(2);
 
   const headings = Array.from(document.querySelectorAll<HTMLElement>("th"));
   expect(getComputedStyle(headings[0] as HTMLElement).textAlign).toMatch(/^(right|start)$/);
@@ -1443,7 +1457,7 @@ test("mirrors the access policy workspace in Arabic", async () => {
   expectNoHorizontalOverflow();
 
   await page.viewport(390, 844);
-  await expect.element(page.getByTestId("policy-rule-builder")).toBeVisible();
+  await expect.element(page.getByTestId("policy-rules-toolbar")).toBeVisible();
   expectNoHorizontalOverflow();
 });
 
