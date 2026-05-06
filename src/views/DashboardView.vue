@@ -4974,43 +4974,61 @@ onBeforeUnmount(stopHealthProbe);
           </AlertDialogContent>
         </AlertDialog>
 
-        <section v-if="activeSection === 'home'" class="space-y-3 lg:space-y-4">
-          <div class="grid gap-3 lg:flex lg:items-end lg:justify-between">
-            <div>
-              <h1 class="text-2xl font-semibold">{{ copy.dashboardTitle }}</h1>
-              <p class="mt-1 text-sm text-muted-foreground">{{ copy.dashboardSubtitle }}</p>
+        <section v-if="activeSection === 'home'" class="space-y-2 sm:space-y-3 lg:space-y-4">
+          <div class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 lg:flex lg:items-end lg:justify-between">
+            <div class="min-w-0">
+              <h1 class="text-xl font-semibold sm:text-2xl">{{ copy.dashboardTitle }}</h1>
+              <p class="mt-0.5 text-xs leading-5 text-muted-foreground sm:mt-1 sm:text-sm">{{ copy.dashboardSubtitle }}</p>
             </div>
-            <Button variant="outline" data-testid="refresh-data" class="w-full sm:w-fit" @click="refreshSnapshot">
+            <Button
+              variant="outline"
+              size="icon-sm"
+              data-testid="refresh-data"
+              :aria-label="copy.refreshData"
+              :title="copy.refreshData"
+              class="sm:h-9 sm:w-fit sm:px-3"
+              @click="refreshSnapshot"
+            >
               <Activity class="h-4 w-4" aria-hidden="true" />
-              {{ copy.refreshData }}
+              <span class="sr-only sm:not-sr-only">{{ copy.refreshData }}</span>
             </Button>
           </div>
 
-          <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            <Card class="p-3">
-              <p class="text-sm text-muted-foreground">{{ copy.onlineDevices }}</p>
-              <p class="mt-1 text-2xl font-semibold">{{ onlineNodes.length }}</p>
+          <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5" data-testid="overview-stats">
+            <Card class="p-2.5 sm:p-3" data-testid="overview-stat-online">
+              <div class="flex min-w-0 items-center justify-between gap-2 sm:block">
+                <p class="min-w-0 text-xs leading-4 text-muted-foreground sm:text-sm">{{ copy.onlineDevices }}</p>
+                <p class="shrink-0 text-xl font-semibold leading-none tabular-nums sm:mt-1 sm:text-2xl">{{ onlineNodes.length }}</p>
+              </div>
             </Card>
-            <Card class="p-3">
-              <p class="text-sm text-muted-foreground">{{ copy.totalDevices }}</p>
-              <p class="mt-1 text-2xl font-semibold">{{ snapshot.nodes.length }}</p>
+            <Card class="p-2.5 sm:p-3" data-testid="overview-stat-total">
+              <div class="flex min-w-0 items-center justify-between gap-2 sm:block">
+                <p class="min-w-0 text-xs leading-4 text-muted-foreground sm:text-sm">{{ copy.totalDevices }}</p>
+                <p class="shrink-0 text-xl font-semibold leading-none tabular-nums sm:mt-1 sm:text-2xl">{{ snapshot.nodes.length }}</p>
+              </div>
             </Card>
-            <Card class="p-3">
-              <p class="text-sm text-muted-foreground">{{ copy.nav.members }}</p>
-              <p class="mt-1 text-2xl font-semibold">{{ visibleUsers.length }}</p>
+            <Card class="p-2.5 sm:p-3" data-testid="overview-stat-users">
+              <div class="flex min-w-0 items-center justify-between gap-2 sm:block">
+                <p class="min-w-0 text-xs leading-4 text-muted-foreground sm:text-sm">{{ copy.nav.members }}</p>
+                <p class="shrink-0 text-xl font-semibold leading-none tabular-nums sm:mt-1 sm:text-2xl">{{ visibleUsers.length }}</p>
+              </div>
             </Card>
-            <Card class="p-3">
-              <p class="text-sm text-muted-foreground">{{ copy.openInvites }}</p>
-              <p class="mt-1 text-2xl font-semibold">{{ openInvites.length }}</p>
+            <Card class="p-2.5 sm:p-3" data-testid="overview-stat-invites">
+              <div class="flex min-w-0 items-center justify-between gap-2 sm:block">
+                <p class="min-w-0 text-xs leading-4 text-muted-foreground sm:text-sm">{{ copy.openInvites }}</p>
+                <p class="shrink-0 text-xl font-semibold leading-none tabular-nums sm:mt-1 sm:text-2xl">{{ openInvites.length }}</p>
+              </div>
             </Card>
-            <Card class="p-3">
-              <p class="text-sm text-muted-foreground">{{ copy.advertisedRoutes }}</p>
-              <p class="mt-1 text-2xl font-semibold">{{ routesWaiting }}</p>
+            <Card class="col-span-2 p-2.5 sm:col-span-1 sm:p-3" data-testid="overview-stat-routes">
+              <div class="flex min-w-0 items-center justify-between gap-2 sm:block">
+                <p class="min-w-0 text-xs leading-4 text-muted-foreground sm:text-sm">{{ copy.advertisedRoutes }}</p>
+                <p class="shrink-0 text-xl font-semibold leading-none tabular-nums sm:mt-1 sm:text-2xl">{{ routesWaiting }}</p>
+              </div>
             </Card>
           </div>
 
           <div>
-            <h2 class="mb-3 font-semibold">{{ copy.recentDevices }}</h2>
+            <h2 class="mb-2 text-sm font-semibold sm:mb-3 sm:text-base" data-testid="recent-devices-heading">{{ copy.recentDevices }}</h2>
             <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
               <Card v-for="node in snapshot.nodes.slice(0, 4)" :key="node.id" class="p-3">
                 <div class="flex items-start justify-between gap-3">

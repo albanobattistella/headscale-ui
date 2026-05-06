@@ -131,6 +131,32 @@ function expectTestIdAboveTestId(testId: string, boundaryTestId: string) {
   expect(rect.bottom).toBeLessThanOrEqual(boundaryRect.top);
 }
 
+function expectOverviewStatsCompactGrid() {
+  const stats = document.querySelector<HTMLElement>('[data-testid="overview-stats"]');
+  expect(stats).toBeTruthy();
+  const cards = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-testid^="overview-stat-"]'),
+  );
+  expect(cards).toHaveLength(5);
+
+  const statsRect = (stats as HTMLElement).getBoundingClientRect();
+  const firstRect = cards[0]?.getBoundingClientRect();
+  const secondRect = cards[1]?.getBoundingClientRect();
+  expect(firstRect).toBeTruthy();
+  expect(secondRect).toBeTruthy();
+  expect(Math.abs((firstRect as DOMRect).top - (secondRect as DOMRect).top)).toBeLessThan(2);
+  expect((secondRect as DOMRect).left).toBeGreaterThan((firstRect as DOMRect).left);
+  expect(statsRect.height).toBeLessThanOrEqual(170);
+
+  const recentHeading = document.querySelector<HTMLElement>(
+    '[data-testid="recent-devices-heading"]',
+  );
+  expect(recentHeading).toBeTruthy();
+  expect((recentHeading as HTMLElement).getBoundingClientRect().top).toBeLessThan(
+    window.innerHeight,
+  );
+}
+
 async function captureResponsiveScreenshot(name: string) {
   await page.screenshot({
     path: `__screenshots__/responsive-review/${name}.png`,
@@ -1085,6 +1111,17 @@ test("keeps core dialogs usable on a short mobile viewport", async () => {
   await closeLayerWithEscape("policy-tag-owner-dialog");
 
   expectNoHorizontalOverflow();
+});
+
+test("keeps mobile overview statistics dense", async () => {
+  await page.viewport(360, 568);
+  await renderLogin();
+  await connectWithDefaults();
+
+  await expect.element(page.getByTestId("section-home")).toBeVisible();
+  expectOverviewStatsCompactGrid();
+  expectNoHorizontalOverflow();
+  await captureResponsiveScreenshot("home-overview-360x568");
 });
 
 test("uses pointer cursors for buttons, links, menus and tabs", async () => {
