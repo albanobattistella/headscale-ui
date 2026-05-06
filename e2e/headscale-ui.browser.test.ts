@@ -79,6 +79,44 @@ function expectDialogFitsViewport(testId: string) {
   expect(rect.width).toBeLessThanOrEqual(window.innerWidth);
 }
 
+function expectDialogUsableInViewport(testId: string) {
+  const dialog = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+  expect(dialog).toBeTruthy();
+  expectDialogFitsViewport(testId);
+  const overflowX = getComputedStyle(dialog as HTMLElement).overflowX;
+  if ((dialog as HTMLElement).scrollWidth > (dialog as HTMLElement).clientWidth + 1) {
+    expect(overflowX).toMatch(/^(clip|hidden)$/);
+  }
+
+  const overflowY = getComputedStyle(dialog as HTMLElement).overflowY;
+  if ((dialog as HTMLElement).scrollHeight > (dialog as HTMLElement).clientHeight + 1) {
+    expect(overflowY).toMatch(/^(auto|scroll)$/);
+  }
+
+  const close = (dialog as HTMLElement).querySelector<HTMLElement>('[data-slot="dialog-close"]');
+  if (close) {
+    const closeRect = close.getBoundingClientRect();
+    expect(closeRect.top).toBeGreaterThanOrEqual(0);
+    expect(closeRect.right).toBeLessThanOrEqual(window.innerWidth);
+  }
+}
+
+function expectLayerFitsViewport(selector: string) {
+  const layer = document.querySelector<HTMLElement>(selector);
+  expect(layer).toBeTruthy();
+  const rect = (layer as HTMLElement).getBoundingClientRect();
+  expect(rect.top).toBeGreaterThanOrEqual(0);
+  expect(rect.left).toBeGreaterThanOrEqual(0);
+  expect(rect.height).toBeLessThanOrEqual(window.innerHeight);
+  expect(rect.width).toBeLessThanOrEqual(window.innerWidth);
+}
+
+async function captureResponsiveScreenshot(name: string) {
+  await page.screenshot({
+    path: `__screenshots__/responsive-review/${name}.png`,
+  });
+}
+
 function expectConnectionFormGridLayout() {
   const profileName = document.querySelector<HTMLElement>('[data-testid="connect-profile-name"]');
   const mode = document.querySelector<HTMLElement>('[data-testid="connect-mode"]');
@@ -915,7 +953,63 @@ test("keeps the add profile dialog inside a short mobile viewport", async () => 
 
   await page.getByTestId("profile-option-new").click();
   await expect.element(page.getByTestId("connection-dialog")).toBeVisible();
-  expectDialogFitsViewport("connection-dialog");
+  expectDialogUsableInViewport("connection-dialog");
+  expectNoHorizontalOverflow();
+});
+
+test("keeps core dialogs usable on a short mobile viewport", async () => {
+  await page.viewport(360, 568);
+  await renderLogin();
+
+  await page.getByTestId("profile-option-new").click();
+  await expect.element(page.getByTestId("connection-dialog")).toBeVisible();
+  expectDialogUsableInViewport("connection-dialog");
+  await captureResponsiveScreenshot("add-server-360x568");
+  await closeLayerWithEscape("connection-dialog");
+
+  await connectWithDefaults();
+
+  await selectSectionTab("members");
+  await openCreateMemberDialog();
+  expectDialogUsableInViewport("member-create-dialog");
+  await closeLayerWithEscape("member-create-dialog");
+
+  await selectSectionTab("invites");
+  await page.getByTestId("open-create-invite").click();
+  await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
+  expectDialogUsableInViewport("invite-create-dialog");
+  await page.getByTestId("invite-expiration").click();
+  expectLayerFitsViewport('[data-slot="popover-content"]');
+  await captureResponsiveScreenshot("auth-key-date-picker-360x568");
+  await userEvent.keyboard("{Escape}");
+  await closeLayerWithEscape("invite-create-dialog");
+
+  await selectSectionTab("devices");
+  await page.getByTestId("add-device-toggle").click();
+  await expect.element(page.getByTestId("add-device-dialog")).toBeVisible();
+  expectDialogUsableInViewport("add-device-dialog");
+  await captureResponsiveScreenshot("add-device-360x568");
+  await closeLayerWithEscape("add-device-dialog");
+
+  await selectSectionTab("access");
+  await page.getByTestId("open-policy-rule-dialog").click();
+  await expect.element(page.getByTestId("policy-rule-dialog")).toBeVisible();
+  expectDialogUsableInViewport("policy-rule-dialog");
+  await captureResponsiveScreenshot("policy-rule-360x568");
+  await closeLayerWithEscape("policy-rule-dialog");
+
+  await page.getByTestId("policy-tab-groups").click();
+  await page.getByTestId("open-policy-group-dialog").click();
+  await expect.element(page.getByTestId("policy-group-dialog")).toBeVisible();
+  expectDialogUsableInViewport("policy-group-dialog");
+  await closeLayerWithEscape("policy-group-dialog");
+
+  await page.getByTestId("policy-tab-tags").click();
+  await page.getByTestId("open-policy-tag-owner-dialog").click();
+  await expect.element(page.getByTestId("policy-tag-owner-dialog")).toBeVisible();
+  expectDialogUsableInViewport("policy-tag-owner-dialog");
+  await closeLayerWithEscape("policy-tag-owner-dialog");
+
   expectNoHorizontalOverflow();
 });
 

@@ -4002,7 +4002,7 @@ onBeforeUnmount(stopHealthProbe);
 
       <Dialog :open="connectionDialogOpen" @update:open="handleConnectionDialogOpen">
         <DialogScrollContent
-          class="my-4 max-h-[calc(100svh-2rem)] max-w-[calc(100%-2rem)] overflow-y-auto sm:my-8 sm:max-h-[calc(100svh-4rem)] sm:max-w-2xl"
+          class="sm:max-w-2xl"
           data-testid="connection-dialog"
         >
           <DialogHeader class="pe-6">
