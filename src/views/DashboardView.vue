@@ -73,7 +73,6 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogScrollContent,
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
@@ -4001,111 +4000,115 @@ onBeforeUnmount(stopHealthProbe);
       </div>
 
       <Dialog :open="connectionDialogOpen" @update:open="handleConnectionDialogOpen">
-        <DialogScrollContent
-          class="sm:max-w-2xl"
+        <DialogContent
+          class="grid max-h-[calc(100svh-0.5rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-h-[calc(100svh-4rem)] sm:max-w-2xl"
           data-testid="connection-dialog"
         >
-          <DialogHeader class="pe-6">
+          <DialogHeader class="px-4 pb-2 pe-10 pt-3 text-start sm:px-6 sm:pb-3 sm:pt-6">
             <DialogTitle class="truncate">
               {{ selectedProfile ? `${t("editProfile")} ${selectedProfile.name}` : t("addServerProfile") }}
             </DialogTitle>
-            <DialogDescription class="truncate">{{ t("connectSubtitle") }}</DialogDescription>
+            <DialogDescription class="text-sm leading-5">{{ t("connectSubtitle") }}</DialogDescription>
           </DialogHeader>
 
-          <form class="grid min-w-0 gap-4 md:grid-cols-2" data-testid="connect-form" @submit.prevent="addProfile">
-            <div class="min-w-0">
-              <Label for="connect-profile-name">{{ t("profileName") }}</Label>
-              <Input
-                id="connect-profile-name"
-                v-model="connectionForm.profileName"
-                data-testid="connect-profile-name"
-                class="mt-2"
-              />
-            </div>
-
-            <div class="min-w-0 [&_[data-slot=native-select-wrapper]]:w-full">
-              <Label for="connect-mode">{{ t("mode") }}</Label>
-              <NativeSelect id="connect-mode" v-model="connectionForm.mode" data-testid="connect-mode" class="mt-2">
-                <NativeSelectOption value="mock">{{ t("mockMode") }}</NativeSelectOption>
-                <NativeSelectOption value="real">{{ t("realMode") }}</NativeSelectOption>
-              </NativeSelect>
-            </div>
-
-            <div class="min-w-0 md:col-span-2">
-              <Label for="connect-server-url">{{ t("serverUrl") }}</Label>
-              <Input
-                id="connect-server-url"
-                v-model="connectionForm.baseUrl"
-                data-testid="connect-server-url"
-                class="mt-2"
-              />
-            </div>
-
-            <div class="min-w-0 md:col-span-2">
-              <Label for="connect-api-key">{{ t("apiKey") }}</Label>
-              <Input
-                id="connect-api-key"
-                v-model="connectionForm.apiKey"
-                data-testid="connect-api-key"
-                type="password"
-                class="mt-2"
-                :placeholder="t('apiKeyPlaceholder')"
-              />
-            </div>
-
-            <details class="group min-w-0 rounded-md border bg-muted/35 p-3 text-sm md:col-span-2" data-testid="api-key-guide">
-              <summary class="flex cursor-pointer list-none items-start gap-2 [&::-webkit-details-marker]:hidden">
-                <KeyRound class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <div class="min-w-0">
-                  <h3 class="font-medium">{{ t("apiKeyGuideTitle") }}</h3>
-                  <p class="mt-1 text-muted-foreground">{{ t("apiKeyGuideDescription") }}</p>
-                </div>
-              </summary>
-              <div class="mt-3 rounded-md border bg-background p-3">
-                <p class="text-xs font-medium text-muted-foreground">{{ t("apiKeyGuideCommandLabel") }}</p>
-                <code class="mt-2 block break-all font-mono text-xs text-foreground">{{ apiKeyCommand }}</code>
+          <form class="flex min-h-0 flex-col" data-testid="connect-form" @submit.prevent="addProfile">
+            <div class="grid min-h-0 min-w-0 gap-2 overflow-y-auto px-4 pb-2 sm:gap-4 sm:px-6 sm:pb-3 md:grid-cols-2">
+              <div class="min-w-0">
+                <Label for="connect-profile-name">{{ t("profileName") }}</Label>
+                <Input
+                  id="connect-profile-name"
+                  v-model="connectionForm.profileName"
+                  data-testid="connect-profile-name"
+                  class="mt-1.5"
+                />
               </div>
-              <ol class="mt-3 grid gap-1 ps-5 text-xs text-muted-foreground">
-                <li>{{ t("apiKeyGuideStepServer") }}</li>
-                <li>{{ t("apiKeyGuideStepCreate") }}</li>
-                <li>{{ t("apiKeyGuideStepCopy") }}</li>
-                <li>{{ t("apiKeyGuideStepPaste") }}</li>
-              </ol>
-              <p class="mt-3 text-xs text-muted-foreground">{{ t("apiKeyGuideHint") }}</p>
-              <a
-                :href="headscaleRemoteCliDocsUrl"
-                target="_blank"
-                rel="noreferrer"
-                class="mt-3 inline-flex cursor-pointer text-xs font-medium text-primary underline-offset-4 hover:underline"
-                data-testid="api-key-docs-link"
-              >
-                {{ t("headscaleDocs") }}
-              </a>
-            </details>
 
-            <div class="flex min-h-11 items-center gap-2 rounded-md border px-3 py-2 text-sm md:col-span-2">
-              <Checkbox id="connect-remember" v-model="connectionForm.remember" data-testid="connect-remember" />
-              <Label for="connect-remember">{{ t("rememberConnection") }}</Label>
+              <div class="min-w-0 [&_[data-slot=native-select-wrapper]]:w-full">
+                <Label for="connect-mode">{{ t("mode") }}</Label>
+                <NativeSelect id="connect-mode" v-model="connectionForm.mode" data-testid="connect-mode" class="mt-1.5">
+                  <NativeSelectOption value="mock">{{ t("mockMode") }}</NativeSelectOption>
+                  <NativeSelectOption value="real">{{ t("realMode") }}</NativeSelectOption>
+                </NativeSelect>
+              </div>
+
+              <div class="min-w-0 md:col-span-2">
+                <Label for="connect-server-url">{{ t("serverUrl") }}</Label>
+                <Input
+                  id="connect-server-url"
+                  v-model="connectionForm.baseUrl"
+                  data-testid="connect-server-url"
+                  class="mt-1.5"
+                />
+              </div>
+
+              <div class="min-w-0 md:col-span-2">
+                <Label for="connect-api-key">{{ t("apiKey") }}</Label>
+                <Input
+                  id="connect-api-key"
+                  v-model="connectionForm.apiKey"
+                  data-testid="connect-api-key"
+                  type="password"
+                  class="mt-1.5"
+                  :placeholder="t('apiKeyPlaceholder')"
+                />
+              </div>
+
+              <div class="flex min-h-11 items-center gap-2 rounded-md border px-3 py-2 text-sm md:col-span-2">
+                <Checkbox id="connect-remember" v-model="connectionForm.remember" data-testid="connect-remember" />
+                <Label for="connect-remember">{{ t("rememberConnection") }}</Label>
+              </div>
+
+              <details class="group min-w-0 rounded-md border bg-muted/35 p-3 text-sm md:col-span-2" data-testid="api-key-guide">
+                <summary class="flex cursor-pointer list-none items-start gap-2 [&::-webkit-details-marker]:hidden">
+                  <KeyRound class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <div class="min-w-0">
+                    <h3 class="font-medium">{{ t("apiKeyGuideTitle") }}</h3>
+                    <p class="mt-1 text-muted-foreground">{{ t("apiKeyGuideDescription") }}</p>
+                  </div>
+                </summary>
+                <div class="mt-3 rounded-md border bg-background p-3">
+                  <p class="text-xs font-medium text-muted-foreground">{{ t("apiKeyGuideCommandLabel") }}</p>
+                  <code class="mt-2 block break-all font-mono text-xs text-foreground">{{ apiKeyCommand }}</code>
+                </div>
+                <ol class="mt-3 grid gap-1 ps-5 text-xs text-muted-foreground">
+                  <li>{{ t("apiKeyGuideStepServer") }}</li>
+                  <li>{{ t("apiKeyGuideStepCreate") }}</li>
+                  <li>{{ t("apiKeyGuideStepCopy") }}</li>
+                  <li>{{ t("apiKeyGuideStepPaste") }}</li>
+                </ol>
+                <p class="mt-3 text-xs text-muted-foreground">{{ t("apiKeyGuideHint") }}</p>
+                <a
+                  :href="headscaleRemoteCliDocsUrl"
+                  target="_blank"
+                  rel="noreferrer"
+                  class="mt-3 inline-flex cursor-pointer text-xs font-medium text-primary underline-offset-4 hover:underline"
+                  data-testid="api-key-docs-link"
+                >
+                  {{ t("headscaleDocs") }}
+                </a>
+              </details>
             </div>
 
-            <DialogFooter class="md:col-span-2">
-              <Button type="submit" data-testid="connect-submit" :disabled="isConnecting">
-                <LoaderCircle v-if="isConnecting" class="h-4 w-4 animate-spin" aria-hidden="true" />
-                <Plus v-else class="h-4 w-4" aria-hidden="true" />
-                {{ isConnecting ? t("addingProfile") : t("addProfile") }}
-              </Button>
-            </DialogFooter>
+            <div class="grid shrink-0 gap-2 border-t bg-background p-3 sm:gap-3 sm:px-6 sm:py-4 md:grid-cols-2" data-testid="connect-footer">
+              <p
+                v-if="lastError"
+                data-testid="connect-error"
+                role="alert"
+                class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive md:col-span-2"
+              >
+                {{ lastError }}
+              </p>
 
-            <p
-              v-if="lastError"
-              data-testid="connect-error"
-              role="alert"
-              class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive md:col-span-2"
-            >
-              {{ lastError }}
-            </p>
+              <DialogFooter class="md:col-span-2">
+                <Button type="submit" data-testid="connect-submit" :disabled="isConnecting">
+                  <LoaderCircle v-if="isConnecting" class="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <Plus v-else class="h-4 w-4" aria-hidden="true" />
+                  {{ isConnecting ? t("addingProfile") : t("addProfile") }}
+                </Button>
+              </DialogFooter>
+            </div>
           </form>
-        </DialogScrollContent>
+        </DialogContent>
       </Dialog>
 
       <AlertDialog v-model:open="profileValidationDialogOpen">

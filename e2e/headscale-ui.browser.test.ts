@@ -111,6 +111,26 @@ function expectLayerFitsViewport(selector: string) {
   expect(rect.width).toBeLessThanOrEqual(window.innerWidth);
 }
 
+function expectTestIdFitsViewport(testId: string) {
+  const element = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+  expect(element).toBeTruthy();
+  const rect = (element as HTMLElement).getBoundingClientRect();
+  expect(rect.top).toBeGreaterThanOrEqual(0);
+  expect(rect.left).toBeGreaterThanOrEqual(0);
+  expect(rect.bottom).toBeLessThanOrEqual(window.innerHeight);
+  expect(rect.right).toBeLessThanOrEqual(window.innerWidth);
+}
+
+function expectTestIdAboveTestId(testId: string, boundaryTestId: string) {
+  const element = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+  const boundary = document.querySelector<HTMLElement>(`[data-testid="${boundaryTestId}"]`);
+  expect(element).toBeTruthy();
+  expect(boundary).toBeTruthy();
+  const rect = (element as HTMLElement).getBoundingClientRect();
+  const boundaryRect = (boundary as HTMLElement).getBoundingClientRect();
+  expect(rect.bottom).toBeLessThanOrEqual(boundaryRect.top);
+}
+
 async function captureResponsiveScreenshot(name: string) {
   await page.screenshot({
     path: `__screenshots__/responsive-review/${name}.png`,
@@ -954,6 +974,9 @@ test("keeps the add profile dialog inside a short mobile viewport", async () => 
   await page.getByTestId("profile-option-new").click();
   await expect.element(page.getByTestId("connection-dialog")).toBeVisible();
   expectDialogUsableInViewport("connection-dialog");
+  expectTestIdFitsViewport("connect-api-key");
+  expectTestIdAboveTestId("connect-api-key", "connect-footer");
+  expectTestIdFitsViewport("connect-submit");
   expectNoHorizontalOverflow();
 });
 
@@ -964,6 +987,9 @@ test("keeps core dialogs usable on a short mobile viewport", async () => {
   await page.getByTestId("profile-option-new").click();
   await expect.element(page.getByTestId("connection-dialog")).toBeVisible();
   expectDialogUsableInViewport("connection-dialog");
+  expectTestIdFitsViewport("connect-api-key");
+  expectTestIdAboveTestId("connect-api-key", "connect-footer");
+  expectTestIdFitsViewport("connect-submit");
   await captureResponsiveScreenshot("add-server-360x568");
   await closeLayerWithEscape("connection-dialog");
 
