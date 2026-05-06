@@ -648,6 +648,19 @@ async function closeLayerWithEscape(testId: string) {
   await expect.poll(() => document.querySelector(`[data-testid="${testId}"]`)).toBeNull();
 }
 
+async function clickDialogOverlay() {
+  const overlay = document.querySelector<HTMLElement>('[data-slot="dialog-overlay"]');
+  expect(overlay).toBeTruthy();
+  for (const event of [
+    new PointerEvent("pointerdown", { bubbles: true, composed: true, pointerId: 1 }),
+    new PointerEvent("pointerup", { bubbles: true, composed: true, pointerId: 1 }),
+    new MouseEvent("click", { bubbles: true, composed: true }),
+  ]) {
+    overlay?.dispatchEvent(event);
+  }
+  await new Promise((resolve) => window.setTimeout(resolve, 0));
+}
+
 async function chooseProfileMenuOption(testId: string) {
   await openProfileMenu();
   if (testId.startsWith("locale-option-")) {
@@ -939,9 +952,13 @@ test("supports language and theme selectors before login", async () => {
     '[data-testid="connection-dialog"] [data-slot="dialog-header"]',
   );
   expect(connectionHeader?.querySelector("svg")).toBeNull();
+  expect(
+    document.querySelector('[data-testid="connection-dialog"] [data-slot="dialog-close"]'),
+  ).toBeNull();
   expectDialogHasNoInternalScrollbar("connection-dialog");
   expect(document.querySelector('[data-testid="save-profile"]')).toBeNull();
   await expect.element(page.getByTestId("connect-submit")).toHaveTextContent("Add");
+  await expect.element(page.getByTestId("connect-close")).toHaveTextContent("Close");
   await expect
     .element(page.getByTestId("api-key-guide"))
     .toHaveTextContent("headscale apikeys create --expiration 90d");
@@ -965,6 +982,37 @@ test("supports language and theme selectors before login", async () => {
   await page.getByTestId("theme-select").click();
   await page.getByTestId("theme-option-auto").click();
   expect(localStorage.getItem("headscale-ui-theme")).toBe("auto");
+});
+
+test("requires explicit confirmation before closing a dirty add profile dialog", async () => {
+  await renderLogin();
+
+  await page.getByTestId("profile-option-new").click();
+  await expect.element(page.getByTestId("connection-dialog")).toBeVisible();
+  expect(
+    document.querySelector('[data-testid="connection-dialog"] [data-slot="dialog-close"]'),
+  ).toBeNull();
+
+  await clickDialogOverlay();
+  await expect.element(page.getByTestId("connection-dialog")).toBeVisible();
+
+  await page.getByTestId("connect-close").click();
+  await expect.poll(() => document.querySelector('[data-testid="connection-dialog"]')).toBeNull();
+
+  await page.getByTestId("profile-option-new").click();
+  await page.getByTestId("connect-profile-name").fill("Dirty profile");
+  await clickDialogOverlay();
+  await expect.element(page.getByTestId("connection-dialog")).toBeVisible();
+  expect(document.querySelector('[data-testid="discard-profile-changes-dialog"]')).toBeNull();
+
+  await page.getByTestId("connect-close").click();
+  await expect.element(page.getByTestId("discard-profile-changes-dialog")).toBeVisible();
+  await page.getByTestId("keep-editing-profile").click();
+  await expect.element(page.getByTestId("connection-dialog")).toBeVisible();
+
+  await page.getByTestId("connect-close").click();
+  await page.getByTestId("discard-profile-changes").click();
+  await expect.poll(() => document.querySelector('[data-testid="connection-dialog"]')).toBeNull();
 });
 
 test("keeps the add profile dialog inside a short mobile viewport", async () => {
@@ -2120,7 +2168,14 @@ test("adapts every main page and shared controls for Arabic RTL", async () => {
 
   await page.getByTestId("profile-option-new").click();
   await expect.element(page.getByTestId("connection-dialog")).toBeVisible();
-  expectDialogMirrorsInlineEnd("connection-dialog");
+  const connectionHeader = document.querySelector<HTMLElement>(
+    '[data-testid="connection-dialog"] [data-slot="dialog-header"]',
+  );
+  expect(connectionHeader).toBeTruthy();
+  expectTextAlignsToStart(connectionHeader as HTMLElement);
+  expect(
+    document.querySelector('[data-testid="connection-dialog"] [data-slot="dialog-close"]'),
+  ).toBeNull();
   await closeLayerWithEscape("connection-dialog");
 
   await connectWithDefaults();

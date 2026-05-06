@@ -25,6 +25,12 @@ export const messageKeys = {
   addProfile: "Add",
   addingProfile: "Adding",
   checkingCredentials: "Checking credentials",
+  close: "Close",
+  discardProfileChangesTitle: "Close without adding this server?",
+  discardProfileChangesDescription:
+    "The profile details have changed. Closing now will discard the unsaved edits.",
+  keepEditingProfile: "Keep editing",
+  discardProfileChanges: "Discard changes",
   continueAddProfileTitle: "Add this server anyway?",
   continueAddProfileDescription:
     "The UI could not verify the server URL or API key. You can keep editing the details, or add the profile and fix it later.",
@@ -134,6 +140,11 @@ const commonMessagesBase = {
     addProfile: "添加",
     addingProfile: "添加中",
     checkingCredentials: "正在校验凭证",
+    close: "关闭",
+    discardProfileChangesTitle: "不添加并关闭？",
+    discardProfileChangesDescription: "Profile 信息已经修改。现在关闭会丢弃未保存的编辑。",
+    keepEditingProfile: "继续编辑",
+    discardProfileChanges: "丢弃修改",
     continueAddProfileTitle: "仍然添加这个服务器？",
     continueAddProfileDescription:
       "UI 无法校验服务器 URL 或 API Key。你可以继续修改信息，也可以先添加这个 Profile，稍后再修正。",
@@ -231,6 +242,12 @@ const commonMessagesBase = {
     addProfile: "Ajouter",
     addingProfile: "Ajout",
     checkingCredentials: "Vérification des identifiants",
+    close: "Fermer",
+    discardProfileChangesTitle: "Fermer sans ajouter ce serveur ?",
+    discardProfileChangesDescription:
+      "Les détails du profil ont changé. Fermer maintenant supprimera les modifications non enregistrées.",
+    keepEditingProfile: "Continuer à modifier",
+    discardProfileChanges: "Ignorer les modifications",
     continueAddProfileTitle: "Ajouter ce serveur quand même ?",
     continueAddProfileDescription:
       "L'UI n'a pas pu vérifier l'URL du serveur ou la clé API. Vous pouvez corriger les détails ou ajouter le profil et le modifier plus tard.",
@@ -337,6 +354,12 @@ const commonMessagesBase = {
     addProfile: "Добавить",
     addingProfile: "Добавление",
     checkingCredentials: "Проверка учётных данных",
+    close: "Закрыть",
+    discardProfileChangesTitle: "Закрыть без добавления сервера?",
+    discardProfileChangesDescription:
+      "Данные профиля изменены. Закрытие сейчас отбросит несохранённые правки.",
+    keepEditingProfile: "Продолжить редактирование",
+    discardProfileChanges: "Отбросить изменения",
     continueAddProfileTitle: "Всё равно добавить этот сервер?",
     continueAddProfileDescription:
       "UI не смог проверить URL сервера или API-ключ. Можно исправить данные или добавить профиль и поправить его позже.",
@@ -440,6 +463,12 @@ const commonMessagesBase = {
     addProfile: "Añadir",
     addingProfile: "Añadiendo",
     checkingCredentials: "Verificando credenciales",
+    close: "Cerrar",
+    discardProfileChangesTitle: "¿Cerrar sin añadir este servidor?",
+    discardProfileChangesDescription:
+      "Los datos del perfil cambiaron. Si cierras ahora, se descartarán los cambios sin guardar.",
+    keepEditingProfile: "Seguir editando",
+    discardProfileChanges: "Descartar cambios",
     continueAddProfileTitle: "¿Añadir este servidor de todos modos?",
     continueAddProfileDescription:
       "La UI no pudo verificar la URL del servidor o la clave API. Puedes revisar los datos o añadir el perfil y corregirlo después.",
@@ -543,6 +572,12 @@ const commonMessagesBase = {
     addProfile: "إضافة",
     addingProfile: "جار الإضافة",
     checkingCredentials: "جار التحقق من بيانات الاعتماد",
+    close: "إغلاق",
+    discardProfileChangesTitle: "إغلاق دون إضافة هذا الخادم؟",
+    discardProfileChangesDescription:
+      "تم تغيير تفاصيل الملف. سيؤدي الإغلاق الآن إلى تجاهل التعديلات غير المحفوظة.",
+    keepEditingProfile: "متابعة التحرير",
+    discardProfileChanges: "تجاهل التغييرات",
     continueAddProfileTitle: "إضافة هذا الخادم على أي حال؟",
     continueAddProfileDescription:
       "تعذر على الواجهة التحقق من عنوان الخادم أو مفتاح API. يمكنك مراجعة التفاصيل أو إضافة الملف وتعديله لاحقا.",

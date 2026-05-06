@@ -1205,6 +1205,8 @@ const isAuthorized = ref(false);
 const isConnecting = ref(false);
 const isRestoringSession = ref(true);
 const connectionDialogOpen = ref(false);
+const connectionCloseConfirmOpen = ref(false);
+const connectionFormBaseline = ref("");
 const authenticatingProfileId = ref<string | null>(null);
 const profileValidationDialogOpen = ref(false);
 const profileValidationError = ref("");
@@ -2152,6 +2154,25 @@ function formConnectionSettings(): ConnectionSettings {
   };
 }
 
+function serializeConnectionForm(form: ConnectionForm) {
+  return JSON.stringify({
+    apiKey: form.apiKey,
+    baseUrl: form.baseUrl,
+    mode: form.mode,
+    profileId: form.profileId,
+    profileName: form.profileName,
+    remember: form.remember,
+  });
+}
+
+function syncConnectionFormBaseline() {
+  connectionFormBaseline.value = serializeConnectionForm(connectionForm);
+}
+
+function isConnectionFormDirty() {
+  return serializeConnectionForm(connectionForm) !== connectionFormBaseline.value;
+}
+
 function loadProfile(profileId: string) {
   connectionForm.profileId = profileId;
 
@@ -2171,6 +2192,7 @@ function loadProfile(profileId: string) {
 function openConnectionDialog(profileId: string) {
   lastError.value = "";
   loadProfile(profileId);
+  syncConnectionFormBaseline();
   connectionDialogOpen.value = true;
 }
 
@@ -2183,13 +2205,59 @@ function editProfile(profile: ConnectionProfile) {
   openConnectionDialog(profile.id);
 }
 
-function handleConnectionDialogOpen(open: boolean) {
-  connectionDialogOpen.value = open;
-  if (!open) {
-    lastError.value = "";
-    profileValidationDialogOpen.value = false;
-    profileValidationError.value = "";
+function closeConnectionDialog() {
+  connectionDialogOpen.value = false;
+  connectionCloseConfirmOpen.value = false;
+  lastError.value = "";
+  profileValidationDialogOpen.value = false;
+  profileValidationError.value = "";
+}
+
+function requestConnectionDialogClose() {
+  if (isConnectionFormDirty()) {
+    connectionCloseConfirmOpen.value = true;
+    return;
   }
+
+  closeConnectionDialog();
+}
+
+function confirmConnectionDialogClose() {
+  syncConnectionFormBaseline();
+  closeConnectionDialog();
+}
+
+function handleConnectionDialogOpen(open: boolean) {
+  if (open) {
+    connectionDialogOpen.value = true;
+    return;
+  }
+
+  requestConnectionDialogClose();
+}
+
+function handleConnectionCloseConfirmOpen(open: boolean) {
+  connectionCloseConfirmOpen.value = open;
+}
+
+function originalOutsideEventTarget(event: Event) {
+  const originalEvent = (event as CustomEvent<{ originalEvent?: Event }>).detail?.originalEvent;
+  const target = originalEvent?.target ?? event.target;
+  return target instanceof HTMLElement ? target : null;
+}
+
+function preventConnectionDialogOutsideClose(event: Event) {
+  const target = originalOutsideEventTarget(event);
+  if (target?.closest('[data-slot="alert-dialog-content"]')) {
+    return;
+  }
+
+  event.preventDefault();
+}
+
+function handleConnectionDialogEscape(event: Event) {
+  event.preventDefault();
+  requestConnectionDialogClose();
 }
 
 function persistConnection(): string {
@@ -2314,7 +2382,8 @@ async function addProfile() {
   try {
     await fetchSnapshot(createClient(nextSettings));
     persistConnection();
-    connectionDialogOpen.value = false;
+    syncConnectionFormBaseline();
+    closeConnectionDialog();
   } catch (error) {
     profileValidationError.value = error instanceof Error ? error.message : String(error);
     profileValidationDialogOpen.value = true;
@@ -2330,10 +2399,11 @@ function reviewProfileConnection() {
 
 function continueAddingProfile() {
   persistConnection();
+  syncConnectionFormBaseline();
   profileValidationDialogOpen.value = false;
   profileValidationError.value = "";
   lastError.value = "";
-  connectionDialogOpen.value = false;
+  closeConnectionDialog();
 }
 
 function logout() {
@@ -4003,6 +4073,10 @@ onBeforeUnmount(stopHealthProbe);
         <DialogContent
           class="grid max-h-[calc(100svh-0.5rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-h-[calc(100svh-4rem)] sm:max-w-2xl"
           data-testid="connection-dialog"
+          :show-close-button="false"
+          @escape-key-down="handleConnectionDialogEscape"
+          @interact-outside="preventConnectionDialogOutsideClose"
+          @pointer-down-outside="preventConnectionDialogOutsideClose"
         >
           <DialogHeader class="px-4 pb-2 pe-10 pt-3 text-start sm:px-6 sm:pb-3 sm:pt-6">
             <DialogTitle class="truncate">
@@ -4089,7 +4163,7 @@ onBeforeUnmount(stopHealthProbe);
               </details>
             </div>
 
-            <div class="grid shrink-0 gap-2 border-t bg-background p-3 sm:gap-3 sm:px-6 sm:py-4 md:grid-cols-2" data-testid="connect-footer">
+            <div class="grid shrink-0 gap-2 border-t bg-background p-2.5 sm:gap-3 sm:px-6 sm:py-4 md:grid-cols-2" data-testid="connect-footer">
               <p
                 v-if="lastError"
                 data-testid="connect-error"
@@ -4099,8 +4173,11 @@ onBeforeUnmount(stopHealthProbe);
                 {{ lastError }}
               </p>
 
-              <DialogFooter class="md:col-span-2">
-                <Button type="submit" data-testid="connect-submit" :disabled="isConnecting">
+              <DialogFooter class="flex-row gap-2 sm:justify-end md:col-span-2">
+                <Button type="button" variant="outline" class="flex-1 sm:flex-none" data-testid="connect-close" @click="requestConnectionDialogClose">
+                  {{ t("close") }}
+                </Button>
+                <Button type="submit" class="flex-1 sm:flex-none" data-testid="connect-submit" :disabled="isConnecting">
                   <LoaderCircle v-if="isConnecting" class="h-4 w-4 animate-spin" aria-hidden="true" />
                   <Plus v-else class="h-4 w-4" aria-hidden="true" />
                   {{ isConnecting ? t("addingProfile") : t("addProfile") }}
@@ -4110,6 +4187,25 @@ onBeforeUnmount(stopHealthProbe);
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog :open="connectionCloseConfirmOpen" @update:open="handleConnectionCloseConfirmOpen">
+        <AlertDialogContent data-testid="discard-profile-changes-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{{ t("discardProfileChangesTitle") }}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {{ t("discardProfileChangesDescription") }}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="keep-editing-profile">
+              {{ t("keepEditingProfile") }}
+            </AlertDialogCancel>
+            <AlertDialogAction data-testid="discard-profile-changes" @click="confirmConnectionDialogClose">
+              {{ t("discardProfileChanges") }}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog v-model:open="profileValidationDialogOpen">
         <AlertDialogContent data-testid="profile-validation-dialog">
