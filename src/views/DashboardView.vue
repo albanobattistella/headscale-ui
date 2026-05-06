@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   Activity,
-  ArrowLeft,
   Check,
   CircleUserRound,
   Clock,
@@ -12,9 +11,10 @@ import {
   Filter,
   KeyRound,
   Languages,
+  LoaderCircle,
   LogOut,
-  Monitor,
-  Moon,
+  MonitorCog,
+  MoonStar,
   Network,
   Pencil,
   Plus,
@@ -23,7 +23,7 @@ import {
   Server,
   ShieldCheck,
   SlidersHorizontal,
-  Sun,
+  SunMedium,
   Trash2,
   Users,
   Wifi,
@@ -38,6 +38,7 @@ import { RestHeadscaleClient } from "@/api/headscale-client";
 import type { ConnectionSettings } from "@/api/http";
 import { MockHeadscaleClient } from "@/api/mock-headscale-client";
 import type {
+  ApiKey,
   HeadscaleClient,
   HeadscaleNode,
   HeadscaleSnapshot,
@@ -53,6 +54,7 @@ import type {
 import HeadscaleLogo from "@/components/HeadscaleLogo.vue";
 import {
   AlertDialog,
+  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -64,12 +66,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogScrollContent,
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
@@ -98,25 +102,39 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isTimestampExpired as isExpired, nodeConnectionStatus } from "@/domain/node-status";
 import { LOCALE_META, type Locale, SUPPORTED_LOCALES, useHeadscaleI18n } from "@/i18n";
+import { toTraditionalChineseValue } from "@/i18n/traditional";
+import {
+  type ConnectionProfile,
+  createBrowserProfileStorageProvider,
+  type ProfileStorageScope,
+} from "@/lib/profile-storage";
 
-const { t, locale, setLocale } = useHeadscaleI18n();
-const legacyConnectionStorageKey = "headscale-ui-connection";
-const profilesStorageKey = "headscale-ui-profiles";
-const activeProfileStorageKey = "headscale-ui-active-profile";
+const { t, locale, meta, setLocale } = useHeadscaleI18n();
 const themeStorageKey = "headscale-ui-theme";
 const newProfileId = "__new__";
 const localMockBaseUrl = "http://127.0.0.1:8080";
+const profileStorage = createBrowserProfileStorageProvider();
 type ThemeMode = "light" | "dark" | "auto";
 type ProductSection = "home" | "devices" | "members" | "invites" | "routes" | "access";
 type MachineFilter = "all" | "online" | "offline" | "expired" | "routes" | "tagged";
 type UserFilter = "all" | "owner" | "member" | "service";
 type InviteFilter = "all" | "ready" | "used" | "expired" | "tagged";
-type AddDeviceTask = "server" | "client";
+type AddDeviceTask = "server" | "client" | "pending";
+type AddDeviceStep = "type" | "preferences" | "authKey" | "generate" | "pending" | "result";
 type ProfileSubmenu = "language" | "theme";
+type ServerSettingsTab = "apiKeys" | "maintenance";
 type ServerSignalStrength = "strong" | "good" | "weak" | "poor" | "offline";
 type RouteApprovalTarget = {
   node: HeadscaleNode;
   route: string;
+};
+type ApiKeyActionTarget = {
+  kind: "expire" | "delete";
+  key: ApiKey;
+};
+type InviteActionTarget = {
+  kind: "expire" | "delete";
+  key: PreAuthKey;
 };
 type PolicyBuilderSlot = "source" | "destination" | "ports";
 type PolicyWorkspaceTab = "rules" | "groups" | "tags" | "review";
@@ -137,6 +155,11 @@ type PolicyTagOwner = {
   tag: string;
   owners: string;
 };
+type PolicyRemovalTarget = {
+  kind: "rule" | "group" | "tagOwner";
+  id: string;
+  label: string;
+};
 type PolicyChoice = {
   id: string;
   slot: PolicyBuilderSlot;
@@ -151,6 +174,9 @@ type PolicyListChoice = {
   description: string;
 };
 const themeModes: ThemeMode[] = ["light", "dark", "auto"];
+const apiKeyCommand = "headscale apikeys create --expiration 90d";
+const headscaleRemoteCliDocsUrl = "https://docs.headscale.org/ref/remote-cli/";
+const profileLoginMinimumMs = 300;
 const productSections: ProductSection[] = [
   "home",
   "devices",
@@ -164,12 +190,6 @@ type ConnectionForm = ConnectionSettings & {
   profileId: string;
   profileName: string;
   remember: boolean;
-};
-
-type ConnectionProfile = ConnectionSettings & {
-  id: string;
-  name: string;
-  updatedAt: string;
 };
 
 const englishCopy = {
@@ -203,8 +223,33 @@ const englishCopy = {
   addDevice: "Add device",
   addLinuxServerTitle: "Add Linux server",
   addClientDeviceTitle: "Add client device",
-  backToMachines: "Back to all machines",
+  pendingRegistrationTitle: "Register pending device",
+  wizardStepPreferencesDescription: "Set tags and lifecycle behavior for the device.",
+  wizardStepAuthKeyDescription: "Choose how the authentication key behaves.",
+  wizardStepGenerateDescription: "Create the key and copy the install command.",
+  wizardStepPendingDescription: "Register or review a device that is waiting.",
+  wizardStepResultDescription: "Review the result and continue.",
+  wizardResult: "Result",
+  nextStep: "Next",
+  previousStep: "Back",
+  finish: "Done",
   deviceSetupLead: "Select preferences for your device to generate an install command.",
+  pendingRegistrationDescription:
+    "Use the registration key or auth ID shown by a device waiting for approval.",
+  pendingNode: "Pending node key",
+  pendingNodeDescription: "Paste the node registration key from the Tailscale client.",
+  registrationRequest: "Browser auth request",
+  registrationRequestDescription:
+    "For newer Headscale auth flows, paste the auth ID and approve or reject the request.",
+  registerPendingNode: "Register pending node",
+  registerAuthRequest: "Register auth request",
+  approveAuthRequest: "Approve request",
+  rejectAuthRequest: "Reject request",
+  nodeRegistrationKey: "Registration key",
+  nodeRegistrationKeyPlaceholder: "nodekey:...",
+  authId: "Auth ID",
+  authIdPlaceholder: "auth request id",
+  registeredNode: "Registered machine",
   setupDevice: "Set up device",
   setupAuthKey: "Set up authentication key",
   generateInstallScript: "Generate install script",
@@ -242,6 +287,13 @@ const englishCopy = {
   owner: "Owner",
   addresses: "Addresses",
   tags: "Tags",
+  editTags: "Edit tags",
+  editNodeTagsTitle: "Edit machine tags",
+  editNodeTagsDescription:
+    "Headscale replaces the full tag list. Keep every tag that should stay on this machine.",
+  nodeTags: "Machine tags",
+  replaceTagsWarning: "Saving replaces the current tags instead of appending to them.",
+  saveTags: "Save tags",
   routes: "Routes",
   lastSeen: "Last seen",
   expires: "Expires",
@@ -302,6 +354,14 @@ const englishCopy = {
   deviceCount: "devices",
   memberDevices: "Devices",
   deleteMember: "Delete user",
+  renameMember: "Rename user",
+  renameMemberTitle: "Rename user",
+  renameMemberDescription: "Change the Headscale username used for this account.",
+  saveMemberName: "Save user name",
+  deleteMemberTitle: "Delete user",
+  deleteMemberDescription:
+    "This removes the user from Headscale. Review their machines and auth keys before continuing.",
+  confirmDeleteMember: "Delete user",
   noUsersMatch: "No users match these filters.",
   invitesTitle: "Auth keys",
   invitesSubtitle: "Create keys that let machines join without exposing server internals.",
@@ -326,6 +386,12 @@ const englishCopy = {
   unused: "Ready",
   expireInvite: "Expire key",
   deleteInvite: "Delete key",
+  expireInviteTitle: "Expire auth key",
+  expireInviteDescription: "This key will stop accepting new machines.",
+  deleteInviteTitle: "Delete auth key",
+  deleteInviteDescription: "This removes the auth key from Headscale.",
+  confirmExpireInvite: "Expire key",
+  confirmDeleteInvite: "Delete key",
   noAuthKeys: "No auth keys match these filters.",
   routesTitle: "Routes",
   routesSubtitle: "Review subnet and exit routes before making them available to users.",
@@ -341,6 +407,12 @@ const englishCopy = {
   approveExitRouteDescription:
     "Exit routes can carry internet-bound traffic through this machine. Confirm that this server should be trusted for that path.",
   approveAll: "Approve all",
+  approveRoutesTitle: "Approve advertised routes",
+  approveRoutesDescription: "This approves every currently advertised route for this machine.",
+  approveExitRoutesTitle: "Approve exit routes",
+  approveExitRoutesDescription:
+    "This includes exit routes, which can carry internet-bound traffic through this machine.",
+  confirmApproveRoutes: "Approve routes",
   routesApproved: "Approved",
   noRoutes: "No advertised routes are waiting for review.",
   noRouteValues: "None",
@@ -393,6 +465,9 @@ const englishCopy = {
   addSelectedOwner: "Add owner",
   addTagOwner: "Add tag owner",
   removeItem: "Remove",
+  confirmRemovePolicyItemTitle: "Remove this access control item?",
+  confirmRemovePolicyItemDescription:
+    "This removes it from the visual policy draft. Save the policy to apply the change.",
   safetyReview: "Safety review",
   readyToSave: "Ready to save",
   policyWarningOpenAccess: "A rule currently allows every source to reach every destination.",
@@ -441,13 +516,36 @@ const englishCopy = {
   policyRulesTableActions: "Actions",
   copied: "Copied",
   copy: "Copy",
+  openServerSettings: "Server settings",
+  serverSettingsTitle: "Server settings",
+  serverSettingsDescription: "Manage server-scoped credentials and maintenance actions.",
+  apiKeysTitle: "API keys",
+  apiKeysDescription:
+    "API keys can control this Headscale server. The full key is only shown once.",
+  apiKeyPrefix: "Prefix",
+  createdApiKey: "Created API key",
+  apiKeyOnlyShownOnce: "Copy it now. Headscale will not return the full key again.",
+  createApiKeyTitle: "Create API key",
+  apiKeyExpiration: "API key expiration",
+  expireApiKeyTitle: "Expire API key",
+  deleteApiKeyTitle: "Delete API key",
+  confirmExpireApiKey: "Expire API key",
+  confirmDeleteApiKey: "Delete API key",
+  maintenance: "Maintenance",
+  maintenanceDescription:
+    "These actions are server-wide. Use them only when repairing or validating Headscale state.",
+  backfillNodeIps: "Backfill node IPs",
+  backfillNodeIpsDescription: "Run Headscale's global node IP backfill maintenance action.",
+  confirmBackfillNodeIps: "Run backfill",
+  backfillResult: "Backfill result",
   refreshData: "Refresh data",
   lastUpdated: "Last updated",
 } as const;
 
 type ProductCopy = typeof englishCopy;
+type SourceLocale = Exclude<Locale, "zh-Hant">;
 
-const productCopy: Record<Locale, ProductCopy> = {
+const productCopyBase = {
   en: englishCopy,
   zh: {
     nav: {
@@ -479,8 +577,32 @@ const productCopy: Record<Locale, ProductCopy> = {
     addDevice: "添加设备",
     addLinuxServerTitle: "添加 Linux 服务器",
     addClientDeviceTitle: "添加客户端设备",
-    backToMachines: "返回全部机器",
+    pendingRegistrationTitle: "注册待审批设备",
+    wizardStepPreferencesDescription: "设置设备标签和生命周期行为。",
+    wizardStepAuthKeyDescription: "选择认证密钥的使用方式。",
+    wizardStepGenerateDescription: "创建密钥并复制安装命令。",
+    wizardStepPendingDescription: "注册或审核正在等待的设备。",
+    wizardStepResultDescription: "检查执行结果并继续。",
+    wizardResult: "结果",
+    nextStep: "下一步",
+    previousStep: "上一步",
+    finish: "完成",
     deviceSetupLead: "选择设备偏好，然后生成安装命令。",
+    pendingRegistrationDescription: "使用等待审批设备显示的 registration key 或 auth ID。",
+    pendingNode: "待注册节点密钥",
+    pendingNodeDescription: "粘贴 Tailscale 客户端显示的节点注册密钥。",
+    registrationRequest: "浏览器认证请求",
+    registrationRequestDescription:
+      "新版 Headscale 认证流程可以粘贴 auth ID，然后批准或拒绝该请求。",
+    registerPendingNode: "注册待审批节点",
+    registerAuthRequest: "注册认证请求",
+    approveAuthRequest: "批准请求",
+    rejectAuthRequest: "拒绝请求",
+    nodeRegistrationKey: "注册密钥",
+    nodeRegistrationKeyPlaceholder: "nodekey:...",
+    authId: "Auth ID",
+    authIdPlaceholder: "认证请求 ID",
+    registeredNode: "已注册机器",
     setupDevice: "设置设备",
     setupAuthKey: "设置认证密钥",
     generateInstallScript: "生成安装脚本",
@@ -516,6 +638,12 @@ const productCopy: Record<Locale, ProductCopy> = {
     owner: "归属",
     addresses: "地址",
     tags: "标签",
+    editTags: "编辑标签",
+    editNodeTagsTitle: "编辑机器标签",
+    editNodeTagsDescription: "Headscale 会替换完整标签列表。需要保留的标签也要留在这里。",
+    nodeTags: "机器标签",
+    replaceTagsWarning: "保存会替换当前标签，而不是追加标签。",
+    saveTags: "保存标签",
     routes: "路由",
     lastSeen: "最后在线",
     expires: "过期时间",
@@ -574,6 +702,13 @@ const productCopy: Record<Locale, ProductCopy> = {
     deviceCount: "设备",
     memberDevices: "设备",
     deleteMember: "删除用户",
+    renameMember: "重命名用户",
+    renameMemberTitle: "重命名用户",
+    renameMemberDescription: "修改这个账号在 Headscale 中使用的用户名。",
+    saveMemberName: "保存用户名",
+    deleteMemberTitle: "删除用户",
+    deleteMemberDescription: "这会从 Headscale 删除该用户。继续前请检查他的机器和认证密钥。",
+    confirmDeleteMember: "删除用户",
     noUsersMatch: "没有匹配筛选条件的用户。",
     invitesTitle: "认证密钥",
     invitesSubtitle: "生成让机器入网的密钥，不需要暴露服务端细节。",
@@ -598,6 +733,12 @@ const productCopy: Record<Locale, ProductCopy> = {
     unused: "可使用",
     expireInvite: "使密钥过期",
     deleteInvite: "删除密钥",
+    expireInviteTitle: "使认证密钥过期",
+    expireInviteDescription: "这个密钥将不再接受新机器接入。",
+    deleteInviteTitle: "删除认证密钥",
+    deleteInviteDescription: "这会从 Headscale 删除该认证密钥。",
+    confirmExpireInvite: "使密钥过期",
+    confirmDeleteInvite: "删除密钥",
     noAuthKeys: "没有匹配筛选条件的认证密钥。",
     routesTitle: "路由",
     routesSubtitle: "先审核子网路由和出口路由，再开放给用户。",
@@ -611,6 +752,11 @@ const productCopy: Record<Locale, ProductCopy> = {
     approveExitRouteTitle: "批准出口路由",
     approveExitRouteDescription: "出口路由可能承载公网流量，请确认这台机器适合作为该路径的出口。",
     approveAll: "全部批准",
+    approveRoutesTitle: "批准公布路由",
+    approveRoutesDescription: "这会批准这台机器当前公布的全部路由。",
+    approveExitRoutesTitle: "批准出口路由",
+    approveExitRoutesDescription: "其中包含出口路由，可能会让公网流量经过这台机器。",
+    confirmApproveRoutes: "批准路由",
     routesApproved: "已批准",
     noRoutes: "当前没有待审核路由。",
     noRouteValues: "无",
@@ -663,6 +809,8 @@ const productCopy: Record<Locale, ProductCopy> = {
     addSelectedOwner: "添加归属者",
     addTagOwner: "添加标签归属",
     removeItem: "移除",
+    confirmRemovePolicyItemTitle: "移除这个访问控制项？",
+    confirmRemovePolicyItemDescription: "这会从可视化策略草稿中移除它。保存策略后才会应用变更。",
     safetyReview: "安全检查",
     readyToSave: "可以保存",
     policyWarningOpenAccess: "当前有规则允许所有来源访问所有目标。",
@@ -708,6 +856,26 @@ const productCopy: Record<Locale, ProductCopy> = {
     policyRulesTableActions: "操作",
     copied: "已复制",
     copy: "复制",
+    openServerSettings: "服务器设置",
+    serverSettingsTitle: "服务器设置",
+    serverSettingsDescription: "管理服务器级凭证和维护操作。",
+    apiKeysTitle: "API Keys",
+    apiKeysDescription: "API key 可以控制这个 Headscale 服务器。完整 key 只会显示一次。",
+    apiKeyPrefix: "Prefix",
+    createdApiKey: "已创建 API Key",
+    apiKeyOnlyShownOnce: "现在复制保存。Headscale 不会再次返回完整 key。",
+    createApiKeyTitle: "创建 API Key",
+    apiKeyExpiration: "API Key 过期时间",
+    expireApiKeyTitle: "过期 API Key",
+    deleteApiKeyTitle: "删除 API Key",
+    confirmExpireApiKey: "过期 API Key",
+    confirmDeleteApiKey: "删除 API Key",
+    maintenance: "维护",
+    maintenanceDescription: "这些操作会影响整个服务端。仅在修复或核验 Headscale 状态时使用。",
+    backfillNodeIps: "回填节点 IP",
+    backfillNodeIpsDescription: "执行 Headscale 的全局节点 IP 回填维护操作。",
+    confirmBackfillNodeIps: "执行回填",
+    backfillResult: "回填结果",
     refreshData: "刷新数据",
     lastUpdated: "最后更新",
   },
@@ -896,6 +1064,11 @@ const productCopy: Record<Locale, ProductCopy> = {
     policyRulesTableRisk: "المخاطرة",
     policyRulesTableActions: "الإجراءات",
   },
+} satisfies Record<SourceLocale, ProductCopy>;
+
+const productCopy: Record<Locale, ProductCopy> = {
+  ...productCopyBase,
+  "zh-Hant": toTraditionalChineseValue(productCopyBase.zh),
 };
 
 function defaultConnectionForm(): ConnectionForm {
@@ -932,7 +1105,7 @@ function profileToForm(profile: ConnectionProfile): ConnectionForm {
     mode: profile.mode,
     baseUrl: profile.baseUrl,
     apiKey: profile.apiKey,
-    remember: true,
+    remember: profileStorage.getProfileScope(profile.id) !== "session",
   };
 }
 
@@ -953,24 +1126,19 @@ function normalizeProfile(profile: Partial<ConnectionProfile>): ConnectionProfil
   };
 }
 
+function normalizeProfiles(profileRecords: Partial<ConnectionProfile>[]) {
+  return profileRecords
+    .map((profile) => normalizeProfile(profile))
+    .filter((profile): profile is ConnectionProfile => profile !== null);
+}
+
 function loadConnectionProfiles(): ConnectionProfile[] {
-  if (typeof localStorage === "undefined") {
-    return [];
+  const savedProfiles = normalizeProfiles(profileStorage.loadProfiles());
+  if (savedProfiles.length > 0) {
+    return savedProfiles;
   }
 
-  const savedProfiles = localStorage.getItem(profilesStorageKey);
-  if (savedProfiles) {
-    try {
-      const parsed = JSON.parse(savedProfiles) as Partial<ConnectionProfile>[];
-      return parsed
-        .map((profile) => normalizeProfile(profile))
-        .filter((profile) => profile !== null);
-    } catch {
-      localStorage.removeItem(profilesStorageKey);
-    }
-  }
-
-  const legacyConnection = localStorage.getItem(legacyConnectionStorageKey);
+  const legacyConnection = profileStorage.consumeLegacyConnection();
   if (!legacyConnection) {
     return [];
   }
@@ -980,15 +1148,13 @@ function loadConnectionProfiles(): ConnectionProfile[] {
       ...(JSON.parse(legacyConnection) as Partial<ConnectionProfile>),
       name: "Default",
     });
-    localStorage.removeItem(legacyConnectionStorageKey);
     if (!migrated) {
       return [];
     }
-    localStorage.setItem(profilesStorageKey, JSON.stringify([migrated]));
-    localStorage.setItem(activeProfileStorageKey, migrated.id);
+    profileStorage.saveProfile(migrated, "persistent");
+    profileStorage.setActiveProfile(migrated.id, "persistent");
     return [migrated];
   } catch {
-    localStorage.removeItem(legacyConnectionStorageKey);
     return [];
   }
 }
@@ -1039,9 +1205,18 @@ const snapshot = ref<HeadscaleSnapshot>(mockClient.snapshot);
 const isAuthorized = ref(false);
 const isConnecting = ref(false);
 const isRestoringSession = ref(true);
+const connectionDialogOpen = ref(false);
+const authenticatingProfileId = ref<string | null>(null);
+const profileValidationDialogOpen = ref(false);
+const profileValidationError = ref("");
+const pendingDeleteProfile = ref<ConnectionProfile | null>(null);
 const profileMenuOpen = ref(false);
 const profileSubmenu = ref<ProfileSubmenu | null>(null);
+const deviceSetupDialogOpen = ref(false);
 const deviceSetupTask = ref<AddDeviceTask | null>(null);
+const addDeviceStep = ref<AddDeviceStep>("type");
+const serverSettingsDialogOpen = ref(false);
+const serverSettingsTab = ref<ServerSettingsTab>("apiKeys");
 const activeSection = ref<ProductSection>("home");
 const lastError = ref("");
 const copiedKey = ref("");
@@ -1050,6 +1225,8 @@ const policyDraft = ref("");
 const activePolicyTab = ref<PolicyWorkspaceTab>("rules");
 const policyGroupMemberSelection = ref("");
 const policyTagOwnerSelection = ref("");
+const policyRemovalDialogOpen = ref(false);
+const pendingPolicyRemoval = ref<PolicyRemovalTarget | null>(null);
 const deviceSearch = ref("");
 const machineFilter = ref<MachineFilter>("all");
 const authKeyExpiryDays = ref(7);
@@ -1062,6 +1239,7 @@ const renameDialogOpen = ref(false);
 const memberDialogOpen = ref(false);
 const inviteDialogOpen = ref(false);
 const isCreatingInvite = ref(false);
+const returnToDeviceSetupAfterInvite = ref(false);
 const expireDialogOpen = ref(false);
 const removeDialogOpen = ref(false);
 const routeApprovalDialogOpen = ref(false);
@@ -1069,6 +1247,12 @@ const selectedRenameNode = ref<HeadscaleNode | null>(null);
 const selectedExpireNode = ref<HeadscaleNode | null>(null);
 const selectedRemoveNode = ref<HeadscaleNode | null>(null);
 const selectedRouteApproval = ref<RouteApprovalTarget | null>(null);
+const selectedTagsNode = ref<HeadscaleNode | null>(null);
+const selectedRenameUser = ref<HeadscaleUser | null>(null);
+const pendingDeleteUser = ref<HeadscaleUser | null>(null);
+const pendingInviteAction = ref<InviteActionTarget | null>(null);
+const pendingApiKeyAction = ref<ApiKeyActionTarget | null>(null);
+const selectedRoutesApprovalNode = ref<HeadscaleNode | null>(null);
 const selectedDetailNode = ref<HeadscaleNode | null>(null);
 const selectedDetailUser = ref<HeadscaleUser | null>(null);
 const memberForm = reactive({
@@ -1083,6 +1267,26 @@ const inviteForm = reactive({
   expiration: "2026-12-31T23:59:00Z",
   aclTags: "",
 });
+const pendingRegistrationForm = reactive({
+  user: "1",
+  key: "nodekey:pending-demo",
+  authId: "auth-demo",
+});
+const tagsForm = reactive({
+  tags: "",
+});
+const renameMemberForm = reactive({
+  name: "",
+});
+const apiKeyForm = reactive({
+  expiration: "2026-12-31T23:59:00Z",
+});
+const lastRegisteredNode = ref<HeadscaleNode | null>(null);
+const authRequestResult = ref("");
+const createdApiKey = ref("");
+const backfillNodeIpsDialogOpen = ref(false);
+const backfillNodeIpsConfirmed = ref(false);
+const backfillNodeIpsResult = ref("");
 const policyRules = ref<PolicyRule[]>([]);
 const policyGroups = ref<PolicyGroup[]>([]);
 const policyTagOwners = ref<PolicyTagOwner[]>([]);
@@ -1245,6 +1449,12 @@ const selectedUserPolicyReferences = computed(() =>
 const selectedUserPendingRoutesCount = computed(() =>
   selectedUserDevices.value.reduce((total, node) => total + nodePendingRoutes(node).length, 0),
 );
+const selectedRoutesApprovalPending = computed(() =>
+  selectedRoutesApprovalNode.value ? nodePendingRoutes(selectedRoutesApprovalNode.value) : [],
+);
+const selectedRoutesApprovalHasExitRoute = computed(() =>
+  selectedRoutesApprovalPending.value.some((route) => isExitRoute(route)),
+);
 const authKeyDialogUsers = computed(() =>
   visibleUsers.value.map((user) => ({
     id: user.id,
@@ -1281,16 +1491,77 @@ const installCommand = computed(() => {
   return `tailscale up --login-server ${normalizedBaseUrl(settings.baseUrl)} --authkey ${lastCreatedInvite.value}`;
 });
 const deviceSetupTitle = computed(() => {
+  if (deviceSetupTask.value === "pending") {
+    return copy.value.pendingRegistrationTitle;
+  }
   if (deviceSetupTask.value === "server") {
     return copy.value.addLinuxServerTitle;
   }
   return copy.value.addClientDeviceTitle;
 });
-const deviceSetupDescription = computed(() =>
-  deviceSetupTask.value === "server"
+const deviceSetupDescription = computed(() => {
+  if (deviceSetupTask.value === "pending") {
+    return copy.value.pendingRegistrationDescription;
+  }
+  return deviceSetupTask.value === "server"
     ? copy.value.linuxServerDescription
-    : copy.value.clientDeviceDescription,
+    : copy.value.clientDeviceDescription;
+});
+const addDeviceSteps = computed<Array<{ id: AddDeviceStep; label: string; description: string }>>(
+  () => {
+    if (deviceSetupTask.value === "pending") {
+      return [
+        {
+          id: "pending",
+          label: copy.value.pendingRegistrationTitle,
+          description: copy.value.wizardStepPendingDescription,
+        },
+        {
+          id: "result",
+          label: copy.value.wizardResult,
+          description: copy.value.wizardStepResultDescription,
+        },
+      ];
+    }
+
+    if (deviceSetupTask.value) {
+      return [
+        {
+          id: "preferences",
+          label: copy.value.setupDevice,
+          description: copy.value.wizardStepPreferencesDescription,
+        },
+        {
+          id: "authKey",
+          label: copy.value.setupAuthKey,
+          description: copy.value.wizardStepAuthKeyDescription,
+        },
+        {
+          id: "generate",
+          label: copy.value.generateInstallScript,
+          description: copy.value.wizardStepGenerateDescription,
+        },
+      ];
+    }
+
+    return [];
+  },
 );
+const addDeviceStepIndex = computed(() => {
+  const index = addDeviceSteps.value.findIndex((step) => step.id === addDeviceStep.value);
+  return index === -1 ? 0 : index;
+});
+const canMoveAddDeviceNext = computed(() => {
+  if (addDeviceStepIndex.value >= addDeviceSteps.value.length - 1) {
+    return false;
+  }
+
+  if (addDeviceStep.value === "pending") {
+    return Boolean(lastRegisteredNode.value || authRequestResult.value);
+  }
+
+  return deviceSetupTask.value !== null;
+});
 const knownPolicyTags = computed(() =>
   Array.from(
     new Set([
@@ -1524,6 +1795,13 @@ const filteredPolicyTagOwners = computed(() => {
 });
 const themeLabel = computed(() => themeModeLabel(colorMode.value));
 const currentProfileLabel = computed(() => connectionForm.profileName || t("profile"));
+const selectedProfile = computed(() =>
+  profiles.value.find((profile) => profile.id === connectionForm.profileId),
+);
+const restoringProfile = computed(() => {
+  const profileId = routeProfileId();
+  return profileId ? profiles.value.find((profile) => profile.id === profileId) : null;
+});
 const serverSignalStrength = computed<ServerSignalStrength>(() => {
   const health = snapshot.value.health;
   if (!health?.serverReachable) {
@@ -1589,6 +1867,15 @@ function themeModeLabel(mode: ThemeMode) {
     return t("light");
   }
   return t("system");
+}
+
+function profileAvatarLabel(profile: ConnectionProfile) {
+  const source = profile.name || profile.baseUrl;
+  return source.trim().slice(0, 2).toUpperCase() || "HS";
+}
+
+function profileModeLabel(mode: ConnectionSettings["mode"]) {
+  return mode === "mock" ? t("mockMode") : t("realMode");
 }
 
 function routeParam(value: unknown) {
@@ -1849,12 +2136,21 @@ async function refreshRouteApprovalTarget(nodeId: string, route: string, generat
   selectedRouteApproval.value = { node: nextNode, route };
 }
 
-function saveProfiles() {
-  if (typeof localStorage === "undefined") {
-    return;
-  }
+function reloadProfiles() {
+  profiles.value = normalizeProfiles(profileStorage.loadProfiles());
+}
 
-  localStorage.setItem(profilesStorageKey, JSON.stringify(profiles.value));
+function profileScopeFromForm(): ProfileStorageScope {
+  return connectionForm.remember ? "persistent" : "session";
+}
+
+function formConnectionSettings(): ConnectionSettings {
+  const baseUrl = connectionForm.baseUrl.trim();
+  return {
+    mode: resolveConnectionMode(connectionForm.mode, baseUrl),
+    baseUrl,
+    apiKey: connectionForm.apiKey.trim(),
+  };
 }
 
 function loadProfile(profileId: string) {
@@ -1871,6 +2167,30 @@ function loadProfile(profileId: string) {
   }
 
   Object.assign(connectionForm, profileToForm(profile));
+}
+
+function openConnectionDialog(profileId: string) {
+  lastError.value = "";
+  loadProfile(profileId);
+  connectionDialogOpen.value = true;
+}
+
+async function enterProfile(profile: ConnectionProfile) {
+  connectionDialogOpen.value = false;
+  await switchAuthorizedProfile(profile);
+}
+
+function editProfile(profile: ConnectionProfile) {
+  openConnectionDialog(profile.id);
+}
+
+function handleConnectionDialogOpen(open: boolean) {
+  connectionDialogOpen.value = open;
+  if (!open) {
+    lastError.value = "";
+    profileValidationDialogOpen.value = false;
+    profileValidationError.value = "";
+  }
 }
 
 function persistConnection(): string {
@@ -1895,19 +2215,16 @@ function persistConnection(): string {
   connectionForm.profileId = profile.id;
   connectionForm.profileName = profile.name;
   connectionForm.mode = profile.mode;
-  saveProfiles();
-
-  if (typeof localStorage !== "undefined" && connectionForm.remember) {
-    localStorage.setItem(activeProfileStorageKey, profile.id);
-  } else if (typeof localStorage !== "undefined") {
-    localStorage.removeItem(activeProfileStorageKey);
-  }
+  const scope = profileScopeFromForm();
+  profileStorage.saveProfile(profile, scope);
+  reloadProfiles();
 
   return profile.id;
 }
 
 async function authorizeProfile(profile: ConnectionProfile, section: ProductSection) {
   Object.assign(connectionForm, profileToForm(profile));
+  const startedAt = performance.now();
   const nextSettings: ConnectionSettings = {
     mode: profile.mode,
     baseUrl: profile.baseUrl,
@@ -1916,6 +2233,7 @@ async function authorizeProfile(profile: ConnectionProfile, section: ProductSect
 
   setActiveSection(section);
   isConnecting.value = true;
+  authenticatingProfileId.value = profile.id;
   lastError.value = "";
 
   try {
@@ -1925,17 +2243,21 @@ async function authorizeProfile(profile: ConnectionProfile, section: ProductSect
     settings.apiKey = nextSettings.apiKey;
     applySnapshot(nextSnapshot);
     isAuthorized.value = true;
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(activeProfileStorageKey, profile.id);
-    }
+    profileStorage.setActiveProfile(
+      profile.id,
+      profileStorage.getProfileScope(profile.id) ?? "session",
+    );
   } catch (error) {
     isAuthorized.value = false;
     lastError.value = error instanceof Error ? error.message : String(error);
-    if (typeof localStorage !== "undefined") {
-      localStorage.removeItem(activeProfileStorageKey);
-    }
+    profileStorage.clearActiveProfile();
   } finally {
+    const remainingMs = profileLoginMinimumMs - (performance.now() - startedAt);
+    if (remainingMs > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, remainingMs));
+    }
     isConnecting.value = false;
+    authenticatingProfileId.value = null;
   }
 }
 
@@ -1950,7 +2272,6 @@ async function syncProfileRoute() {
   try {
     if (!profileId) {
       isAuthorized.value = false;
-      lastError.value = "";
       return;
     }
 
@@ -1966,11 +2287,18 @@ async function syncProfileRoute() {
     if (!profile) {
       isAuthorized.value = false;
       lastError.value = "Profile not found.";
+      profileStorage.clearActiveProfile();
       loadProfile(newProfileId);
+      await router.replace({ name: "login" });
       return;
     }
 
     await authorizeProfile(profile, section);
+    if (!isAuthorized.value) {
+      const errorMessage = lastError.value;
+      await router.replace({ name: "login" });
+      lastError.value = errorMessage;
+    }
   } finally {
     if (generation === profileRouteSyncGeneration) {
       isRestoringSession.value = false;
@@ -1978,45 +2306,43 @@ async function syncProfileRoute() {
   }
 }
 
-async function connect() {
-  const baseUrl = connectionForm.baseUrl.trim();
-  const nextSettings: ConnectionSettings = {
-    mode: resolveConnectionMode(connectionForm.mode, baseUrl),
-    baseUrl,
-    apiKey: connectionForm.apiKey.trim(),
-  };
-
+async function addProfile() {
+  const nextSettings = formConnectionSettings();
   isConnecting.value = true;
   lastError.value = "";
   connectionForm.mode = nextSettings.mode;
 
   try {
-    const nextSnapshot = await fetchSnapshot(createClient(nextSettings));
-    settings.mode = nextSettings.mode;
-    settings.baseUrl = nextSettings.baseUrl;
-    settings.apiKey = nextSettings.apiKey;
-    applySnapshot(nextSnapshot);
-    isAuthorized.value = true;
-    const profileId = persistConnection();
-    await pushProfileRoute(profileId, activeSection.value);
+    await fetchSnapshot(createClient(nextSettings));
+    persistConnection();
+    connectionDialogOpen.value = false;
   } catch (error) {
-    isAuthorized.value = false;
-    lastError.value = error instanceof Error ? error.message : String(error);
-    if (typeof localStorage !== "undefined") {
-      localStorage.removeItem(activeProfileStorageKey);
-    }
+    profileValidationError.value = error instanceof Error ? error.message : String(error);
+    profileValidationDialogOpen.value = true;
   } finally {
     isConnecting.value = false;
   }
 }
 
+function reviewProfileConnection() {
+  lastError.value = profileValidationError.value;
+  profileValidationDialogOpen.value = false;
+}
+
+function continueAddingProfile() {
+  persistConnection();
+  profileValidationDialogOpen.value = false;
+  profileValidationError.value = "";
+  lastError.value = "";
+  connectionDialogOpen.value = false;
+}
+
 function logout() {
-  if (typeof localStorage !== "undefined") {
-    localStorage.removeItem(activeProfileStorageKey);
-  }
+  profileStorage.clearActiveProfile();
 
   stopHealthProbe();
   isAuthorized.value = false;
+  connectionDialogOpen.value = false;
   lastError.value = "";
   Object.assign(connectionForm, {
     ...defaultConnectionForm(),
@@ -2030,9 +2356,25 @@ function logout() {
   void router.push({ name: "login" });
 }
 
-function saveProfileFromForm() {
-  connectionForm.remember = true;
-  persistConnection();
+function requestDeleteProfile(profile: ConnectionProfile) {
+  pendingDeleteProfile.value = profile;
+}
+
+function handleDeleteProfileDialogOpen(open: boolean) {
+  if (!open) {
+    window.setTimeout(() => {
+      pendingDeleteProfile.value = null;
+    }, 0);
+  }
+}
+
+function confirmDeleteProfile() {
+  const profileId = pendingDeleteProfile.value?.id;
+  pendingDeleteProfile.value = null;
+  if (!profileId) {
+    return;
+  }
+  deleteProfile(profileId);
 }
 
 function deleteProfile(profileId: string) {
@@ -2041,14 +2383,8 @@ function deleteProfile(profileId: string) {
   }
 
   profiles.value = profiles.value.filter((profile) => profile.id !== profileId);
-  saveProfiles();
-
-  if (
-    typeof localStorage !== "undefined" &&
-    localStorage.getItem(activeProfileStorageKey) === profileId
-  ) {
-    localStorage.removeItem(activeProfileStorageKey);
-  }
+  profileStorage.deleteProfile(profileId);
+  reloadProfiles();
 
   if (connectionForm.profileId === profileId) {
     loadProfile(profiles.value[0]?.id ?? newProfileId);
@@ -2081,10 +2417,21 @@ function openInviteDialog() {
   void refreshOpenInviteDialog(generation);
 }
 
+function openInviteDialogFromDeviceSetup() {
+  returnToDeviceSetupAfterInvite.value = true;
+  addDeviceStep.value = "generate";
+  deviceSetupDialogOpen.value = false;
+  openInviteDialog();
+}
+
 function handleInviteDialogOpen(open: boolean) {
   inviteDialogOpen.value = open;
   if (!open) {
     inviteDialogRefreshGeneration += 1;
+    if (returnToDeviceSetupAfterInvite.value) {
+      returnToDeviceSetupAfterInvite.value = false;
+      deviceSetupDialogOpen.value = deviceSetupTask.value !== null;
+    }
   }
 }
 
@@ -2099,6 +2446,41 @@ function handleMemberDialogOpen(open: boolean) {
   memberDialogOpen.value = open;
   if (!open) {
     memberDialogRefreshGeneration += 1;
+  }
+}
+
+function firstVisibleUserId() {
+  return visibleUsers.value[0]?.id ?? "";
+}
+
+function ensureWorkflowUser() {
+  const fallback = firstVisibleUserId();
+  if (!pendingRegistrationForm.user && fallback) {
+    pendingRegistrationForm.user = fallback;
+  }
+  if (!inviteForm.user && fallback) {
+    inviteForm.user = fallback;
+  }
+}
+
+function openServerSettings() {
+  profileMenuOpen.value = false;
+  serverSettingsTab.value = "apiKeys";
+  serverSettingsDialogOpen.value = true;
+  createdApiKey.value = "";
+}
+
+function handleServerSettingsOpen(open: boolean) {
+  serverSettingsDialogOpen.value = open;
+  if (!open) {
+    createdApiKey.value = "";
+    backfillNodeIpsResult.value = "";
+  }
+}
+
+function changeServerSettingsTab(nextTab: string) {
+  if (nextTab === "apiKeys" || nextTab === "maintenance") {
+    serverSettingsTab.value = nextTab;
   }
 }
 
@@ -2678,19 +3060,100 @@ function setAuthKeyExpiryDays(value: number) {
   syncInviteExpirationFromDays();
 }
 
-function prepareDeviceInvite(task: AddDeviceTask) {
-  deviceSetupTask.value = task;
-  inviteForm.reusable = task === "server";
-  inviteForm.ephemeral = task === "client";
-  inviteForm.aclTags = task === "server" ? "tag:server" : "";
-  setAuthKeyExpiryDays(7);
+function goToNextAddDeviceStep() {
+  if (!canMoveAddDeviceNext.value) {
+    return;
+  }
+
+  addDeviceStep.value =
+    addDeviceSteps.value[addDeviceStepIndex.value + 1]?.id ?? addDeviceStep.value;
+}
+
+function goToPreviousAddDeviceStep() {
+  if (addDeviceStepIndex.value <= 0) {
+    deviceSetupTask.value = null;
+    addDeviceStep.value = "type";
+    lastCreatedInvite.value = "";
+    lastRegisteredNode.value = null;
+    authRequestResult.value = "";
+    return;
+  }
+
+  addDeviceStep.value = addDeviceSteps.value[addDeviceStepIndex.value - 1]?.id ?? "type";
+}
+
+function goToAddDeviceStep(index: number) {
+  if (index > addDeviceStepIndex.value) {
+    return;
+  }
+
+  addDeviceStep.value = addDeviceSteps.value[index]?.id ?? addDeviceStep.value;
+}
+
+function finishAddDeviceFlow() {
+  handleDeviceSetupDialogOpen(false);
+}
+
+function isAddDeviceStepComplete(index: number) {
+  return index < addDeviceStepIndex.value;
+}
+
+function openDeviceSetupDialog() {
+  deviceSetupTask.value = null;
+  addDeviceStep.value = "type";
   lastCreatedInvite.value = "";
+  lastRegisteredNode.value = null;
+  authRequestResult.value = "";
+  deviceSetupDialogOpen.value = true;
   selectSection("devices");
 }
 
-function backToMachines() {
-  deviceSetupTask.value = null;
+function prepareDeviceInvite(task: AddDeviceTask) {
+  if (task === "pending") {
+    preparePendingRegistration();
+    return;
+  }
+
+  deviceSetupTask.value = task;
+  addDeviceStep.value = "preferences";
+  deviceSetupDialogOpen.value = true;
+  inviteForm.reusable = task === "server";
+  inviteForm.ephemeral = task === "client";
+  inviteForm.aclTags = task === "server" ? "tag:server" : "";
+  ensureWorkflowUser();
+  setAuthKeyExpiryDays(7);
   lastCreatedInvite.value = "";
+  lastRegisteredNode.value = null;
+  authRequestResult.value = "";
+  selectSection("devices");
+}
+
+function preparePendingRegistration() {
+  deviceSetupTask.value = "pending";
+  addDeviceStep.value = "pending";
+  deviceSetupDialogOpen.value = true;
+  ensureWorkflowUser();
+  lastCreatedInvite.value = "";
+  lastRegisteredNode.value = null;
+  authRequestResult.value = "";
+  selectSection("devices");
+}
+
+function handleDeviceSetupDialogOpen(open: boolean) {
+  deviceSetupDialogOpen.value = open;
+  if (!open) {
+    returnToDeviceSetupAfterInvite.value = false;
+    deviceSetupTask.value = null;
+    addDeviceStep.value = "type";
+    lastCreatedInvite.value = "";
+    lastRegisteredNode.value = null;
+    authRequestResult.value = "";
+  }
+}
+
+function openAccessFromDeviceSetup() {
+  handleDeviceSetupDialogOpen(false);
+  selectSection("access");
 }
 
 function openPolicyRuleDialog() {
@@ -2731,6 +3194,15 @@ function addPolicyRule() {
   handlePolicyRuleDialogOpen(false);
 }
 
+function requestRemovePolicyRule(rule: PolicyRule) {
+  pendingPolicyRemoval.value = {
+    kind: "rule",
+    id: rule.id,
+    label: policyRuleSentence(rule.source, rule.destination, rule.ports),
+  };
+  policyRemovalDialogOpen.value = true;
+}
+
 function removePolicyRule(id: string) {
   policyRules.value = policyRules.value.filter((rule) => rule.id !== id);
 }
@@ -2750,6 +3222,15 @@ function addPolicyGroup() {
     },
   ];
   handlePolicyGroupDialogOpen(false);
+}
+
+function requestRemovePolicyGroup(group: PolicyGroup) {
+  pendingPolicyRemoval.value = {
+    kind: "group",
+    id: group.id,
+    label: group.name,
+  };
+  policyRemovalDialogOpen.value = true;
 }
 
 function removePolicyGroup(id: string) {
@@ -2773,8 +3254,52 @@ function addPolicyTagOwner() {
   handlePolicyTagOwnerDialogOpen(false);
 }
 
+function requestRemovePolicyTagOwner(tagOwner: PolicyTagOwner) {
+  pendingPolicyRemoval.value = {
+    kind: "tagOwner",
+    id: tagOwner.id,
+    label: tagOwner.tag,
+  };
+  policyRemovalDialogOpen.value = true;
+}
+
 function removePolicyTagOwner(id: string) {
   policyTagOwners.value = policyTagOwners.value.filter((tagOwner) => tagOwner.id !== id);
+}
+
+function handlePolicyRemovalDialogOpen(open: boolean) {
+  policyRemovalDialogOpen.value = open;
+  if (open) {
+    return;
+  }
+
+  window.setTimeout(() => {
+    if (!policyRemovalDialogOpen.value) {
+      pendingPolicyRemoval.value = null;
+    }
+  });
+}
+
+function confirmRemovePolicyItem() {
+  const target = pendingPolicyRemoval.value;
+  if (!target) {
+    return;
+  }
+
+  if (target.kind === "rule") {
+    removePolicyRule(target.id);
+  }
+
+  if (target.kind === "group") {
+    removePolicyGroup(target.id);
+  }
+
+  if (target.kind === "tagOwner") {
+    removePolicyTagOwner(target.id);
+  }
+
+  pendingPolicyRemoval.value = null;
+  policyRemovalDialogOpen.value = false;
 }
 
 async function mutate(action: (client: HeadscaleClient) => Promise<unknown>) {
@@ -2787,6 +3312,252 @@ async function mutate(action: (client: HeadscaleClient) => Promise<unknown>) {
     lastError.value = error instanceof Error ? error.message : String(error);
     return false;
   }
+}
+
+async function registerPendingNode() {
+  lastError.value = "";
+  lastRegisteredNode.value = null;
+  authRequestResult.value = "";
+  try {
+    const response = await createClient().registerNode({
+      user: pendingRegistrationForm.user,
+      key: pendingRegistrationForm.key,
+    });
+    lastRegisteredNode.value = response.node;
+    addDeviceStep.value = "result";
+    await refreshSnapshot();
+  } catch (error) {
+    lastError.value = error instanceof Error ? error.message : String(error);
+  }
+}
+
+async function registerAuthRequest() {
+  lastError.value = "";
+  authRequestResult.value = "";
+  try {
+    const response = await createClient().authRegister({
+      user: pendingRegistrationForm.user,
+      authId: pendingRegistrationForm.authId,
+    });
+    lastRegisteredNode.value = response.node;
+    authRequestResult.value = copy.value.registerAuthRequest;
+    addDeviceStep.value = "result";
+    await refreshSnapshot();
+  } catch (error) {
+    lastError.value = error instanceof Error ? error.message : String(error);
+  }
+}
+
+async function approveAuthRequest() {
+  const approved = await mutate((client) =>
+    client.authApprove({ authId: pendingRegistrationForm.authId }),
+  );
+  if (approved) {
+    authRequestResult.value = copy.value.approveAuthRequest;
+    addDeviceStep.value = "result";
+  }
+}
+
+async function rejectAuthRequest() {
+  const rejected = await mutate((client) =>
+    client.authReject({ authId: pendingRegistrationForm.authId }),
+  );
+  if (rejected) {
+    authRequestResult.value = copy.value.rejectAuthRequest;
+    addDeviceStep.value = "result";
+  }
+}
+
+function openTagsDialog(node: HeadscaleNode) {
+  selectedTagsNode.value = node;
+  tagsForm.tags = node.tags.join(", ");
+}
+
+function handleTagsDialogOpen(open: boolean) {
+  if (!open) {
+    selectedTagsNode.value = null;
+    tagsForm.tags = "";
+  }
+}
+
+async function confirmSetNodeTags() {
+  const node = selectedTagsNode.value;
+  if (!node) {
+    return;
+  }
+
+  const updated = await mutate((client) =>
+    client.setTags({
+      nodeId: node.id,
+      tags: tagsForm.tags,
+    }),
+  );
+  if (updated) {
+    handleTagsDialogOpen(false);
+  }
+}
+
+function openRenameMemberDialog(user: HeadscaleUser) {
+  selectedRenameUser.value = user;
+  renameMemberForm.name = user.name;
+}
+
+function handleRenameMemberDialogOpen(open: boolean) {
+  if (!open) {
+    selectedRenameUser.value = null;
+    renameMemberForm.name = "";
+  }
+}
+
+async function confirmRenameMember() {
+  const user = selectedRenameUser.value;
+  if (!user) {
+    return;
+  }
+
+  const renamed = await mutate((client) =>
+    client.renameUser({
+      id: user.id,
+      newName: renameMemberForm.name,
+    }),
+  );
+  if (renamed) {
+    handleRenameMemberDialogOpen(false);
+  }
+}
+
+function requestDeleteMember(user: HeadscaleUser) {
+  pendingDeleteUser.value = user;
+}
+
+function handleDeleteMemberDialogOpen(open: boolean) {
+  if (!open) {
+    pendingDeleteUser.value = null;
+  }
+}
+
+async function confirmDeleteMember() {
+  const user = pendingDeleteUser.value;
+  if (!user) {
+    return;
+  }
+
+  const deleted = await mutate((client) => client.deleteUser({ id: user.id }));
+  if (deleted) {
+    handleDeleteMemberDialogOpen(false);
+  }
+}
+
+function requestInviteAction(kind: InviteActionTarget["kind"], key: PreAuthKey) {
+  pendingInviteAction.value = { kind, key };
+}
+
+function handleInviteActionDialogOpen(open: boolean) {
+  if (!open) {
+    pendingInviteAction.value = null;
+  }
+}
+
+async function confirmInviteAction() {
+  const target = pendingInviteAction.value;
+  if (!target) {
+    return;
+  }
+
+  const completed = await mutate((client) =>
+    target.kind === "expire"
+      ? client.expirePreAuthKey({ id: target.key.id })
+      : client.deletePreAuthKey({ id: target.key.id }),
+  );
+  if (completed) {
+    handleInviteActionDialogOpen(false);
+  }
+}
+
+function requestApiKeyAction(kind: ApiKeyActionTarget["kind"], key: ApiKey) {
+  pendingApiKeyAction.value = { kind, key };
+}
+
+function handleApiKeyActionDialogOpen(open: boolean) {
+  if (!open) {
+    pendingApiKeyAction.value = null;
+  }
+}
+
+async function createServerApiKey() {
+  lastError.value = "";
+  createdApiKey.value = "";
+  try {
+    const response = await createClient().createApiKey({
+      expiration: apiKeyForm.expiration,
+    });
+    createdApiKey.value = response.apiKey;
+    await refreshSnapshot();
+  } catch (error) {
+    lastError.value = error instanceof Error ? error.message : String(error);
+  }
+}
+
+async function confirmApiKeyAction() {
+  const target = pendingApiKeyAction.value;
+  if (!target) {
+    return;
+  }
+
+  const completed = await mutate((client) =>
+    target.kind === "expire"
+      ? client.expireApiKey({ prefix: target.key.prefix, id: target.key.id })
+      : client.deleteApiKey({ prefix: target.key.prefix, id: target.key.id }),
+  );
+  if (completed) {
+    handleApiKeyActionDialogOpen(false);
+  }
+}
+
+function openBackfillNodeIpsDialog() {
+  backfillNodeIpsConfirmed.value = false;
+  backfillNodeIpsResult.value = "";
+  backfillNodeIpsDialogOpen.value = true;
+}
+
+function handleBackfillNodeIpsDialogOpen(open: boolean) {
+  backfillNodeIpsDialogOpen.value = open;
+  if (!open) {
+    backfillNodeIpsConfirmed.value = false;
+  }
+}
+
+async function confirmBackfillNodeIps() {
+  lastError.value = "";
+  backfillNodeIpsResult.value = "";
+  try {
+    const response = await createClient().backfillNodeIps({ confirmed: true });
+    backfillNodeIpsResult.value = response.changes.join(", ") || copy.value.readyToSave;
+    await refreshSnapshot();
+    handleBackfillNodeIpsDialogOpen(false);
+  } catch (error) {
+    lastError.value = error instanceof Error ? error.message : String(error);
+  }
+}
+
+function requestApproveRoutes(node: HeadscaleNode) {
+  selectedRoutesApprovalNode.value = node;
+}
+
+function handleApproveRoutesDialogOpen(open: boolean) {
+  if (!open) {
+    selectedRoutesApprovalNode.value = null;
+  }
+}
+
+async function confirmApproveRoutes() {
+  const node = selectedRoutesApprovalNode.value;
+  if (!node) {
+    return;
+  }
+
+  await approveRoutes(node);
+  handleApproveRoutesDialogOpen(false);
 }
 
 async function createMember() {
@@ -2807,10 +3578,6 @@ async function createMember() {
   handleMemberDialogOpen(false);
 }
 
-async function deleteMember(user: HeadscaleUser) {
-  await mutate((client) => client.deleteUser({ id: user.id }));
-}
-
 async function createInvite(payload: AuthKeyDialogPayload) {
   inviteForm.user = payload.user;
   inviteForm.reusable = payload.reusable;
@@ -2829,6 +3596,7 @@ async function createInvite(payload: AuthKeyDialogPayload) {
       aclTags: payload.aclTags,
     });
     lastCreatedInvite.value = response.preAuthKey.key;
+    addDeviceStep.value = "generate";
     await refreshSnapshot();
     handleInviteDialogOpen(false);
   } catch (error) {
@@ -2836,14 +3604,6 @@ async function createInvite(payload: AuthKeyDialogPayload) {
   } finally {
     isCreatingInvite.value = false;
   }
-}
-
-async function expireInvite(key: PreAuthKey) {
-  await mutate((client) => client.expirePreAuthKey({ id: key.id }));
-}
-
-async function deleteInvite(key: PreAuthKey) {
-  await mutate((client) => client.deletePreAuthKey({ id: key.id }));
 }
 
 async function renameNode(node: HeadscaleNode) {
@@ -3053,180 +3813,346 @@ onBeforeUnmount(stopHealthProbe);
 <template>
   <main class="min-h-screen bg-background">
     <section v-if="isProfileRoute && isRestoringSession && !isAuthorized" class="flex min-h-screen items-center justify-center px-4" data-testid="session-restore">
-      <div class="flex items-center gap-3 text-sm text-muted-foreground">
-        <HeadscaleLogo class="h-8 w-8" />
+      <div class="grid justify-items-center gap-4 text-center text-sm text-muted-foreground">
+        <div class="relative flex h-16 w-16 items-center justify-center rounded-full border bg-card shadow-sm">
+          <HeadscaleLogo class="h-9 w-9 opacity-60" />
+          <LoaderCircle class="absolute h-16 w-16 animate-spin text-primary" aria-hidden="true" />
+        </div>
+        <div class="grid gap-1">
+          <p class="font-medium text-foreground">{{ restoringProfile?.name ?? t("profile") }}</p>
+          <p>{{ t("checkingCredentials") }}</p>
+        </div>
       </div>
     </section>
 
-    <section v-else-if="!isAuthorized" class="mx-auto flex min-h-screen max-w-3xl items-start px-3 py-4 sm:px-4 sm:py-10">
-      <Card class="w-full p-4 sm:p-6">
-        <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <HeadscaleLogo class="mb-3 h-11 w-11" />
-            <h1 class="text-2xl font-semibold">{{ t("connectTitle") }}</h1>
-            <p class="mt-2 text-sm text-muted-foreground">{{ t("connectSubtitle") }}</p>
+    <section v-else-if="!isAuthorized" class="min-h-screen bg-background">
+      <header class="border-b bg-card text-card-foreground">
+        <div class="container mx-auto flex h-14 w-full items-center gap-3 px-4">
+          <div class="flex min-w-0 items-center gap-2">
+            <HeadscaleLogo class="h-8 w-8 shrink-0" />
+            <span class="truncate text-sm font-semibold leading-none sm:text-base">Headscale UI</span>
           </div>
-          <div class="grid w-full grid-cols-2 gap-2 sm:w-40 sm:shrink-0 sm:grid-cols-1">
-            <Label for="login-locale-select" class="sr-only">{{ t("language") }}</Label>
-            <NativeSelect
-              id="login-locale-select"
-              :model-value="locale"
-              data-testid="locale-select"
-              :aria-label="`${t('language')}: ${LOCALE_META[locale].nativeLabel}`"
-              @update:model-value="changeLocale"
-            >
-              <NativeSelectOption v-for="option in SUPPORTED_LOCALES" :key="option" :value="option">
-                {{ LOCALE_META[option].nativeLabel }}
-              </NativeSelectOption>
-            </NativeSelect>
-            <Label for="login-theme-select" class="sr-only">{{ t("theme") }}</Label>
-            <NativeSelect
-              id="login-theme-select"
-              :model-value="colorMode"
-              data-testid="theme-select"
-              :aria-label="`${t('theme')}: ${themeLabel}`"
-              @update:model-value="changeTheme"
-            >
-              <NativeSelectOption v-for="mode in themeModes" :key="mode" :value="mode">
-                {{ themeModeLabel(mode) }}
-              </NativeSelectOption>
-            </NativeSelect>
+
+          <div class="ms-auto flex items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger as-child>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  data-testid="locale-select"
+                  :aria-label="`${t('language')}: ${LOCALE_META[locale].nativeLabel}`"
+                >
+                  <Languages class="h-5 w-5" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" class="w-48">
+                <DropdownMenuLabel>{{ t("language") }}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  v-for="option in SUPPORTED_LOCALES"
+                  :key="option"
+                  :data-testid="`locale-option-${option}`"
+                  @click="chooseLocale(option)"
+                >
+                  <span>{{ LOCALE_META[option].nativeLabel }}</span>
+                  <Check v-if="locale === option" class="ms-auto h-4 w-4" aria-hidden="true" />
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger as-child>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  data-testid="theme-select"
+                  :aria-label="`${t('theme')}: ${themeLabel}`"
+                >
+                  <SunMedium v-if="colorMode === 'light'" class="h-5 w-5" aria-hidden="true" />
+                  <MoonStar v-else-if="colorMode === 'dark'" class="h-5 w-5" aria-hidden="true" />
+                  <MonitorCog v-else class="h-5 w-5" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" class="w-44">
+                <DropdownMenuLabel>{{ t("theme") }}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  v-for="mode in themeModes"
+                  :key="mode"
+                  :data-testid="`theme-option-${mode}`"
+                  @click="chooseTheme(mode)"
+                >
+                  <SunMedium v-if="mode === 'light'" class="h-4 w-4" aria-hidden="true" />
+                  <MoonStar v-else-if="mode === 'dark'" class="h-4 w-4" aria-hidden="true" />
+                  <MonitorCog v-else class="h-4 w-4" aria-hidden="true" />
+                  <span>{{ themeModeLabel(mode) }}</span>
+                  <Check v-if="colorMode === mode" class="ms-auto h-4 w-4" aria-hidden="true" />
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
+      </header>
 
-        <form class="grid gap-4" data-testid="connect-form" @submit.prevent="connect">
-          <div>
-            <Label for="connect-profile">{{ t("profile") }}</Label>
-            <div class="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
-              <NativeSelect
-                id="connect-profile"
-                :model-value="connectionForm.profileId"
-                data-testid="connect-profile"
-                @update:model-value="loadProfile"
-              >
-                <NativeSelectOption :value="newProfileId">{{ t("newProfile") }}</NativeSelectOption>
-                <NativeSelectOption v-for="profile in profiles" :key="profile.id" :value="profile.id">
-                  {{ profile.name }}
-                </NativeSelectOption>
-              </NativeSelect>
-              <Button
-                variant="outline"
-                size="icon"
-                type="button"
-                data-testid="delete-profile"
-                :disabled="connectionForm.profileId === newProfileId"
-                :aria-label="t('deleteProfile')"
-                @click="deleteProfile(connectionForm.profileId)"
-              >
-                <Trash2 class="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </div>
+      <div class="container mx-auto flex min-h-[calc(100vh-3.5rem)] w-full items-center justify-center px-4 py-8 sm:py-10">
+        <div class="w-full max-w-5xl min-w-0 text-center">
+          <div class="mx-auto max-w-2xl">
+            <h1 class="text-2xl font-semibold sm:text-3xl">{{ t("profileSelectorTitle") }}</h1>
+            <p class="mt-2 text-sm text-muted-foreground sm:text-base">
+              {{ t("profileSelectorDescription") }}
+            </p>
           </div>
 
-          <div>
-            <Label for="connect-profile-name">{{ t("profileName") }}</Label>
-            <Input
-              id="connect-profile-name"
-              v-model="connectionForm.profileName"
-              data-testid="connect-profile-name"
-              class="mt-2"
-            />
-          </div>
-
-          <div>
-            <Label for="connect-mode">{{ t("mode") }}</Label>
-            <NativeSelect id="connect-mode" v-model="connectionForm.mode" data-testid="connect-mode" class="mt-2">
-              <NativeSelectOption value="mock">{{ t("mockMode") }}</NativeSelectOption>
-              <NativeSelectOption value="real">{{ t("realMode") }}</NativeSelectOption>
-            </NativeSelect>
-          </div>
-
-          <div>
-            <Label for="connect-server-url">{{ t("serverUrl") }}</Label>
-            <Input
-              id="connect-server-url"
-              v-model="connectionForm.baseUrl"
-              data-testid="connect-server-url"
-              class="mt-2"
-            />
-          </div>
-
-          <div>
-            <Label for="connect-api-key">{{ t("apiKey") }}</Label>
-            <Input
-              id="connect-api-key"
-              v-model="connectionForm.apiKey"
-              data-testid="connect-api-key"
-              type="password"
-              class="mt-2"
-              :placeholder="t('apiKeyPlaceholder')"
-            />
-          </div>
-
-          <div class="flex min-h-11 items-center gap-2 rounded-md border px-3 py-2 text-sm">
-            <Checkbox id="connect-remember" v-model="connectionForm.remember" data-testid="connect-remember" />
-            <Label for="connect-remember">{{ t("rememberConnection") }}</Label>
-          </div>
-
-          <div class="grid gap-2 sm:grid-cols-2">
-            <Button type="button" variant="outline" data-testid="save-profile" @click="saveProfileFromForm">
-              <Check class="h-4 w-4" aria-hidden="true" />
-              {{ t("saveProfile") }}
-            </Button>
-            <Button type="submit" data-testid="connect-submit" :disabled="isConnecting">
-              <ShieldCheck class="h-4 w-4" aria-hidden="true" />
-              {{ isConnecting ? t("running") : t("connect") }}
-            </Button>
-          </div>
-
-          <p
-            v-if="lastError"
-            data-testid="connect-error"
+          <div
+            v-if="lastError && !connectionDialogOpen"
+            data-testid="login-error"
             role="alert"
-            class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            class="mx-auto mt-4 max-w-xl rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-start text-sm text-destructive"
           >
             {{ lastError }}
-          </p>
-        </form>
+          </div>
 
-        <div v-if="profiles.length" class="mt-6 border-t pt-5">
-          <h2 class="text-sm font-semibold uppercase text-muted-foreground">{{ t("savedProfiles") }}</h2>
-          <div class="mt-3 grid gap-2">
+          <div class="mx-auto mt-6 grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-testid="profile-picker">
             <div
               v-for="profile in profiles"
               :key="profile.id"
-              class="grid gap-2 rounded-md border px-3 py-2 sm:grid-cols-[1fr_auto_auto]"
+              class="relative min-w-0"
               :data-testid="`profile-row-${profile.name}`"
             >
               <Button
                 type="button"
                 variant="ghost"
-                :data-testid="`load-profile-${profile.name}`"
-                class="h-auto w-full justify-start px-0 py-0 text-start hover:bg-transparent"
-                @click="loadProfile(profile.id)"
+                :data-testid="`profile-option-${profile.name}`"
+                class="h-auto min-h-36 w-full flex-col items-center justify-center gap-3 border bg-card p-4 text-center hover:bg-accent hover:text-accent-foreground"
+                :aria-busy="authenticatingProfileId === profile.id"
+                :disabled="isConnecting"
+                @click="enterProfile(profile)"
               >
-                <span>
-                  <span class="block text-sm font-medium">{{ profile.name }}</span>
-                  <span class="block break-all text-xs text-muted-foreground">{{ profile.baseUrl }} · {{ profile.mode }}</span>
+                <span
+                  class="relative flex h-16 w-16 items-center justify-center rounded-full border bg-background text-lg font-semibold transition-colors"
+                  :class="authenticatingProfileId === profile.id ? 'border-primary/50 bg-primary/10 text-primary' : ''"
+                >
+                  <LoaderCircle
+                    v-if="authenticatingProfileId === profile.id"
+                    class="absolute h-14 w-14 animate-spin"
+                    aria-hidden="true"
+                    :data-testid="`profile-loading-${profile.name}`"
+                  />
+                  <span :class="authenticatingProfileId === profile.id ? 'opacity-35' : ''">
+                    {{ profileAvatarLabel(profile) }}
+                  </span>
+                </span>
+                <span class="grid w-full min-w-0 gap-1">
+                  <span class="truncate text-sm font-semibold">{{ profile.name }}</span>
+                  <span class="break-all text-xs text-muted-foreground">{{ profile.baseUrl }}</span>
+                  <span v-if="authenticatingProfileId === profile.id" class="text-xs text-primary">
+                    {{ t("checkingCredentials") }}
+                  </span>
+                  <span v-else class="text-xs text-muted-foreground">
+                    {{ profileModeLabel(profile.mode) }} · {{ t("updatedProfile") }} {{ formatDate(profile.updatedAt) }}
+                  </span>
                 </span>
               </Button>
-              <Button type="button" variant="outline" size="sm" :data-testid="`use-profile-${profile.name}`" class="w-full sm:w-auto" @click="loadProfile(profile.id)">
-                {{ t("useProfile") }}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                :data-testid="`edit-profile-${profile.name}`"
+                class="absolute start-2 top-2 h-8 w-8 bg-background/80"
+                :aria-label="t('editProfile')"
+                :disabled="isConnecting"
+                @click.stop="editProfile(profile)"
+              >
+                <Pencil class="h-4 w-4" aria-hidden="true" />
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 :data-testid="`delete-profile-${profile.name}`"
+                class="absolute end-2 top-2 h-8 w-8 bg-background/80"
                 :aria-label="t('deleteProfile')"
-                @click="deleteProfile(profile.id)"
+                :disabled="isConnecting"
+                @click.stop="requestDeleteProfile(profile)"
               >
                 <Trash2 class="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
+
+            <Button
+              type="button"
+              variant="ghost"
+              data-testid="profile-option-new"
+              class="h-auto min-h-36 flex-col items-center justify-center gap-3 border border-dashed bg-card p-4 text-center hover:bg-accent hover:text-accent-foreground"
+              @click="openConnectionDialog(newProfileId)"
+            >
+              <span class="flex h-14 w-14 items-center justify-center rounded-full border bg-background">
+                <Plus class="h-6 w-6" aria-hidden="true" />
+              </span>
+              <span class="grid gap-1">
+                <span class="text-sm font-semibold">{{ t("addServerProfile") }}</span>
+                <span class="text-xs text-muted-foreground">{{ t("newProfile") }}</span>
+              </span>
+            </Button>
           </div>
         </div>
-      </Card>
+      </div>
+
+      <Dialog :open="connectionDialogOpen" @update:open="handleConnectionDialogOpen">
+        <DialogScrollContent
+          class="my-4 max-h-[calc(100svh-2rem)] max-w-[calc(100%-2rem)] overflow-y-auto sm:my-8 sm:max-h-[calc(100svh-4rem)] sm:max-w-2xl"
+          data-testid="connection-dialog"
+        >
+          <DialogHeader class="pe-6">
+            <DialogTitle class="truncate">
+              {{ selectedProfile ? `${t("editProfile")} ${selectedProfile.name}` : t("addServerProfile") }}
+            </DialogTitle>
+            <DialogDescription class="truncate">{{ t("connectSubtitle") }}</DialogDescription>
+          </DialogHeader>
+
+          <form class="grid min-w-0 gap-4 md:grid-cols-2" data-testid="connect-form" @submit.prevent="addProfile">
+            <div class="min-w-0">
+              <Label for="connect-profile-name">{{ t("profileName") }}</Label>
+              <Input
+                id="connect-profile-name"
+                v-model="connectionForm.profileName"
+                data-testid="connect-profile-name"
+                class="mt-2"
+              />
+            </div>
+
+            <div class="min-w-0 [&_[data-slot=native-select-wrapper]]:w-full">
+              <Label for="connect-mode">{{ t("mode") }}</Label>
+              <NativeSelect id="connect-mode" v-model="connectionForm.mode" data-testid="connect-mode" class="mt-2">
+                <NativeSelectOption value="mock">{{ t("mockMode") }}</NativeSelectOption>
+                <NativeSelectOption value="real">{{ t("realMode") }}</NativeSelectOption>
+              </NativeSelect>
+            </div>
+
+            <div class="min-w-0 md:col-span-2">
+              <Label for="connect-server-url">{{ t("serverUrl") }}</Label>
+              <Input
+                id="connect-server-url"
+                v-model="connectionForm.baseUrl"
+                data-testid="connect-server-url"
+                class="mt-2"
+              />
+            </div>
+
+            <div class="min-w-0 md:col-span-2">
+              <Label for="connect-api-key">{{ t("apiKey") }}</Label>
+              <Input
+                id="connect-api-key"
+                v-model="connectionForm.apiKey"
+                data-testid="connect-api-key"
+                type="password"
+                class="mt-2"
+                :placeholder="t('apiKeyPlaceholder')"
+              />
+            </div>
+
+            <details class="group min-w-0 rounded-md border bg-muted/35 p-3 text-sm md:col-span-2" data-testid="api-key-guide">
+              <summary class="flex cursor-pointer list-none items-start gap-2 [&::-webkit-details-marker]:hidden">
+                <KeyRound class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <div class="min-w-0">
+                  <h3 class="font-medium">{{ t("apiKeyGuideTitle") }}</h3>
+                  <p class="mt-1 text-muted-foreground">{{ t("apiKeyGuideDescription") }}</p>
+                </div>
+              </summary>
+              <div class="mt-3 rounded-md border bg-background p-3">
+                <p class="text-xs font-medium text-muted-foreground">{{ t("apiKeyGuideCommandLabel") }}</p>
+                <code class="mt-2 block break-all font-mono text-xs text-foreground">{{ apiKeyCommand }}</code>
+              </div>
+              <ol class="mt-3 grid gap-1 ps-5 text-xs text-muted-foreground">
+                <li>{{ t("apiKeyGuideStepServer") }}</li>
+                <li>{{ t("apiKeyGuideStepCreate") }}</li>
+                <li>{{ t("apiKeyGuideStepCopy") }}</li>
+                <li>{{ t("apiKeyGuideStepPaste") }}</li>
+              </ol>
+              <p class="mt-3 text-xs text-muted-foreground">{{ t("apiKeyGuideHint") }}</p>
+              <a
+                :href="headscaleRemoteCliDocsUrl"
+                target="_blank"
+                rel="noreferrer"
+                class="mt-3 inline-flex cursor-pointer text-xs font-medium text-primary underline-offset-4 hover:underline"
+                data-testid="api-key-docs-link"
+              >
+                {{ t("headscaleDocs") }}
+              </a>
+            </details>
+
+            <div class="flex min-h-11 items-center gap-2 rounded-md border px-3 py-2 text-sm md:col-span-2">
+              <Checkbox id="connect-remember" v-model="connectionForm.remember" data-testid="connect-remember" />
+              <Label for="connect-remember">{{ t("rememberConnection") }}</Label>
+            </div>
+
+            <DialogFooter class="md:col-span-2">
+              <Button type="submit" data-testid="connect-submit" :disabled="isConnecting">
+                <LoaderCircle v-if="isConnecting" class="h-4 w-4 animate-spin" aria-hidden="true" />
+                <Plus v-else class="h-4 w-4" aria-hidden="true" />
+                {{ isConnecting ? t("addingProfile") : t("addProfile") }}
+              </Button>
+            </DialogFooter>
+
+            <p
+              v-if="lastError"
+              data-testid="connect-error"
+              role="alert"
+              class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive md:col-span-2"
+            >
+              {{ lastError }}
+            </p>
+          </form>
+        </DialogScrollContent>
+      </Dialog>
+
+      <AlertDialog v-model:open="profileValidationDialogOpen">
+        <AlertDialogContent data-testid="profile-validation-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{{ t("continueAddProfileTitle") }}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {{ t("continueAddProfileDescription") }}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <p
+            v-if="profileValidationError"
+            data-testid="profile-validation-error"
+            class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {{ profileValidationError }}
+          </p>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="review-profile-connection" @click="reviewProfileConnection">
+              {{ t("reviewProfileConnection") }}
+            </AlertDialogCancel>
+            <AlertDialogAction data-testid="continue-add-profile" @click="continueAddingProfile">
+              {{ t("continueAddProfile") }}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog :open="Boolean(pendingDeleteProfile)" @update:open="handleDeleteProfileDialogOpen">
+        <AlertDialogContent data-testid="delete-profile-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{{ t("confirmDeleteProfileTitle") }}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {{ t("confirmDeleteProfileDescription") }}
+              <span v-if="pendingDeleteProfile" class="mt-2 block break-all font-medium text-foreground">
+                {{ pendingDeleteProfile.name }} · {{ pendingDeleteProfile.baseUrl }}
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="cancel-delete-profile">{{ t("cancel") }}</AlertDialogCancel>
+            <AlertDialogAction data-testid="confirm-delete-profile" @click="confirmDeleteProfile">
+              {{ t("deleteProfile") }}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
 
     <div v-else class="min-h-screen bg-background text-foreground">
@@ -3304,9 +4230,9 @@ onBeforeUnmount(stopHealthProbe);
                       @focus="openProfileSubmenu('theme')"
                       @pointermove="openProfileSubmenu('theme')"
                     >
-                      <Sun v-if="colorMode === 'light'" class="h-4 w-4" aria-hidden="true" />
-                      <Moon v-else-if="colorMode === 'dark'" class="h-4 w-4" aria-hidden="true" />
-                      <Monitor v-else class="h-4 w-4" aria-hidden="true" />
+                      <SunMedium v-if="colorMode === 'light'" class="h-4 w-4" aria-hidden="true" />
+                      <MoonStar v-else-if="colorMode === 'dark'" class="h-4 w-4" aria-hidden="true" />
+                      <MonitorCog v-else class="h-4 w-4" aria-hidden="true" />
                       <span>{{ t("theme") }}</span>
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent class="w-44" :side-offset="-16">
@@ -3316,12 +4242,19 @@ onBeforeUnmount(stopHealthProbe);
                         :data-testid="`theme-option-${mode}`"
                         @click="chooseTheme(mode)"
                       >
+                        <SunMedium v-if="mode === 'light'" class="h-4 w-4" aria-hidden="true" />
+                        <MoonStar v-else-if="mode === 'dark'" class="h-4 w-4" aria-hidden="true" />
+                        <MonitorCog v-else class="h-4 w-4" aria-hidden="true" />
                         <span>{{ themeModeLabel(mode) }}</span>
                         <Check v-if="colorMode === mode" class="ms-auto h-4 w-4" aria-hidden="true" />
                       </DropdownMenuItem>
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem data-testid="open-server-settings" @click="openServerSettings">
+                    <ShieldCheck class="h-4 w-4" aria-hidden="true" />
+                    {{ copy.openServerSettings }}
+                  </DropdownMenuItem>
                   <DropdownMenuItem variant="destructive" data-testid="logout" @click="logoutFromMenu">
                     <LogOut class="h-4 w-4" aria-hidden="true" />
                     {{ t("logout") }}
@@ -3333,6 +4266,7 @@ onBeforeUnmount(stopHealthProbe);
 
           <Tabs
             :model-value="activeSection"
+            :dir="meta.dir"
             class="w-full min-w-0 gap-0"
             data-testid="header-navigation"
             @update:model-value="changeSection"
@@ -3369,6 +4303,170 @@ onBeforeUnmount(stopHealthProbe);
           @update:open="handleInviteDialogOpen"
           @submit="createInvite"
         />
+
+        <Dialog :open="serverSettingsDialogOpen" @update:open="handleServerSettingsOpen">
+          <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-4xl" data-testid="server-settings-dialog">
+            <DialogHeader>
+              <DialogTitle>{{ copy.serverSettingsTitle }}</DialogTitle>
+              <DialogDescription>{{ copy.serverSettingsDescription }}</DialogDescription>
+            </DialogHeader>
+
+            <Tabs
+              :model-value="serverSettingsTab"
+              :dir="meta.dir"
+              class="grid gap-4"
+              @update:model-value="changeServerSettingsTab"
+            >
+              <TabsList class="w-full justify-start overflow-x-auto">
+                <TabsTrigger value="apiKeys" data-testid="server-tab-api-keys">
+                  <KeyRound class="h-4 w-4" aria-hidden="true" />
+                  {{ copy.apiKeysTitle }}
+                </TabsTrigger>
+                <TabsTrigger value="maintenance" data-testid="server-tab-maintenance">
+                  <Server class="h-4 w-4" aria-hidden="true" />
+                  {{ copy.maintenance }}
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="apiKeys" class="grid gap-4" data-testid="api-key-settings">
+                <div class="grid gap-2">
+                  <h3 class="text-sm font-semibold">{{ copy.apiKeysTitle }}</h3>
+                  <p class="text-sm text-muted-foreground">{{ copy.apiKeysDescription }}</p>
+                </div>
+                <div class="grid gap-3 rounded-md border bg-background p-3">
+                  <div class="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+                    <div class="grid gap-2">
+                      <Label for="api-key-expiration">{{ copy.apiKeyExpiration }}</Label>
+                      <DateTimePicker
+                        id="api-key-expiration"
+                        v-model="apiKeyForm.expiration"
+                        :locale="locale"
+                        :time-label="copy.time"
+                        :hour-label="copy.hour"
+                        :minute-label="copy.minute"
+                        data-testid="api-key-expiration"
+                      />
+                    </div>
+                    <Button type="button" data-testid="create-api-key-confirm" @click="createServerApiKey">
+                      <Plus class="h-4 w-4" aria-hidden="true" />
+                      {{ copy.createApiKeyTitle }}
+                    </Button>
+                  </div>
+                  <div v-if="createdApiKey" class="grid gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300" data-testid="created-api-key">
+                    <p class="text-sm font-semibold">{{ copy.createdApiKey }}</p>
+                    <code class="break-all rounded bg-background/70 px-2 py-1 text-xs text-foreground">{{ createdApiKey }}</code>
+                    <p class="text-xs">{{ copy.apiKeyOnlyShownOnce }}</p>
+                    <Button type="button" variant="outline" size="sm" class="w-fit" data-testid="copy-created-api-key" @click="copyInviteKey(createdApiKey)">
+                      <Copy class="h-4 w-4" aria-hidden="true" />
+                      {{ copiedKey === createdApiKey ? copy.copied : copy.copy }}
+                    </Button>
+                  </div>
+                </div>
+                <Card class="overflow-x-auto" data-testid="api-key-table">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{{ copy.apiKeyPrefix }}</TableHead>
+                        <TableHead>{{ copy.joined }}</TableHead>
+                        <TableHead>{{ copy.expires }}</TableHead>
+                        <TableHead>{{ copy.lastSeen }}</TableHead>
+                        <TableHead>{{ copy.actions }}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow v-for="key in snapshot.apiKeys" :key="key.id" :data-testid="`api-key-row-${key.prefix}`">
+                        <TableCell class="font-mono text-xs">{{ key.prefix }}</TableCell>
+                        <TableCell class="text-sm text-muted-foreground">{{ formatDate(key.createdAt) }}</TableCell>
+                        <TableCell class="text-sm text-muted-foreground">{{ formatDate(key.expiration) }}</TableCell>
+                        <TableCell class="text-sm text-muted-foreground">{{ formatDate(key.lastSeen) }}</TableCell>
+                        <TableCell>
+                          <div class="flex justify-start gap-2">
+                            <Button type="button" size="sm" variant="outline" :data-testid="`expire-api-key-${key.prefix}`" @click="requestApiKeyAction('expire', key)">
+                              {{ copy.expireApiKeyTitle }}
+                            </Button>
+                            <Button type="button" size="sm" variant="destructive" :data-testid="`delete-api-key-${key.prefix}`" @click="requestApiKeyAction('delete', key)">
+                              {{ copy.deleteApiKeyTitle }}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="maintenance" class="grid gap-4" data-testid="server-maintenance-settings">
+                <div class="grid gap-2">
+                  <h3 class="text-sm font-semibold">{{ copy.maintenance }}</h3>
+                  <p class="text-sm text-muted-foreground">{{ copy.maintenanceDescription }}</p>
+                </div>
+                <Card class="grid gap-3 p-4">
+                  <div>
+                    <h4 class="text-sm font-semibold">{{ copy.backfillNodeIps }}</h4>
+                    <p class="mt-1 text-sm text-muted-foreground">{{ copy.backfillNodeIpsDescription }}</p>
+                  </div>
+                  <Button type="button" variant="outline" class="w-fit" data-testid="open-backfill-node-ips" @click="openBackfillNodeIpsDialog">
+                    <Server class="h-4 w-4" aria-hidden="true" />
+                    {{ copy.backfillNodeIps }}
+                  </Button>
+                  <p v-if="backfillNodeIpsResult" class="rounded-md bg-muted px-3 py-2 text-sm" data-testid="backfill-node-ips-result">
+                    {{ copy.backfillResult }}: {{ backfillNodeIpsResult }}
+                  </p>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog :open="Boolean(pendingApiKeyAction)" @update:open="handleApiKeyActionDialogOpen">
+          <AlertDialogContent v-if="pendingApiKeyAction" :data-testid="pendingApiKeyAction.kind === 'expire' ? 'expire-api-key-dialog' : 'delete-api-key-dialog'">
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {{ pendingApiKeyAction.kind === "expire" ? copy.expireApiKeyTitle : copy.deleteApiKeyTitle }}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {{ copy.apiKeysDescription }}
+                <span class="mt-2 block font-mono text-xs text-foreground">{{ pendingApiKeyAction.key.prefix }}</span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="cancel-api-key-action">{{ copy.cancel }}</AlertDialogCancel>
+              <Button
+                type="button"
+                variant="destructive"
+                data-testid="confirm-api-key-action"
+                @click="confirmApiKeyAction"
+              >
+                {{ pendingApiKeyAction.kind === "expire" ? copy.confirmExpireApiKey : copy.confirmDeleteApiKey }}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog :open="backfillNodeIpsDialogOpen" @update:open="handleBackfillNodeIpsDialogOpen">
+          <AlertDialogContent data-testid="backfill-node-ips-dialog">
+            <AlertDialogHeader>
+              <AlertDialogTitle>{{ copy.backfillNodeIps }}</AlertDialogTitle>
+              <AlertDialogDescription>{{ copy.backfillNodeIpsDescription }}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <label class="flex items-start gap-2 rounded-md border bg-background p-3 text-sm" for="backfill-node-ips-confirmed">
+              <Checkbox id="backfill-node-ips-confirmed" v-model="backfillNodeIpsConfirmed" data-testid="backfill-node-ips-confirmed" />
+              <span>{{ copy.maintenanceDescription }}</span>
+            </label>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="cancel-backfill-node-ips">{{ copy.cancel }}</AlertDialogCancel>
+              <Button
+                type="button"
+                variant="destructive"
+                data-testid="confirm-backfill-node-ips"
+                :disabled="!backfillNodeIpsConfirmed"
+                @click="confirmBackfillNodeIps"
+              >
+                {{ copy.confirmBackfillNodeIps }}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <Dialog :open="Boolean(selectedDetailNode)" @update:open="handleNodeDetailsOpen">
           <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-3xl" data-testid="device-detail-dialog">
@@ -3483,6 +4581,10 @@ onBeforeUnmount(stopHealthProbe);
                   <Button type="button" variant="outline" size="sm" data-testid="device-detail-rename" @click="openRenameDialogFromDetails(selectedDetailNode)">
                     <Pencil class="h-4 w-4" aria-hidden="true" />
                     {{ copy.rename }}
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" data-testid="device-detail-edit-tags" @click="openTagsDialog(selectedDetailNode)">
+                    <ShieldCheck class="h-4 w-4" aria-hidden="true" />
+                    {{ copy.editTags }}
                   </Button>
                 </div>
                 <div class="flex flex-wrap gap-2">
@@ -3609,6 +4711,75 @@ onBeforeUnmount(stopHealthProbe);
           </DialogContent>
         </Dialog>
 
+        <Dialog :open="Boolean(selectedRenameUser)" @update:open="handleRenameMemberDialogOpen">
+          <DialogContent v-if="selectedRenameUser" data-testid="rename-member-dialog">
+            <DialogHeader>
+              <DialogTitle>{{ copy.renameMemberTitle }}</DialogTitle>
+              <DialogDescription>{{ copy.renameMemberDescription }}</DialogDescription>
+            </DialogHeader>
+            <div class="grid gap-2">
+              <Label for="rename-member-name">{{ copy.memberName }}</Label>
+              <Input
+                id="rename-member-name"
+                v-model="renameMemberForm.name"
+                data-testid="rename-member-name"
+                @keydown.enter.prevent="confirmRenameMember"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" data-testid="rename-member-cancel" @click="handleRenameMemberDialogOpen(false)">
+                {{ copy.cancel }}
+              </Button>
+              <Button type="button" data-testid="confirm-rename-member" @click="confirmRenameMember">
+                {{ copy.saveMemberName }}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog :open="Boolean(pendingDeleteUser)" @update:open="handleDeleteMemberDialogOpen">
+          <AlertDialogContent v-if="pendingDeleteUser" data-testid="delete-member-dialog">
+            <AlertDialogHeader>
+              <AlertDialogTitle>{{ copy.deleteMemberTitle }}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {{ copy.deleteMemberDescription }}
+                <span class="mt-2 block font-medium text-foreground">{{ userLabel(pendingDeleteUser) }}</span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="cancel-delete-member">{{ copy.cancel }}</AlertDialogCancel>
+              <Button type="button" variant="destructive" data-testid="confirm-delete-member" @click="confirmDeleteMember">
+                {{ copy.confirmDeleteMember }}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog :open="Boolean(pendingInviteAction)" @update:open="handleInviteActionDialogOpen">
+          <AlertDialogContent v-if="pendingInviteAction" :data-testid="pendingInviteAction.kind === 'expire' ? 'expire-invite-dialog' : 'delete-invite-dialog'">
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {{ pendingInviteAction.kind === "expire" ? copy.expireInviteTitle : copy.deleteInviteTitle }}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {{ pendingInviteAction.kind === "expire" ? copy.expireInviteDescription : copy.deleteInviteDescription }}
+                <span class="mt-2 block font-mono text-xs text-foreground">{{ shortSecret(pendingInviteAction.key.key) }}</span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="cancel-invite-action">{{ copy.cancel }}</AlertDialogCancel>
+              <Button
+                type="button"
+                variant="destructive"
+                data-testid="confirm-invite-action"
+                @click="confirmInviteAction"
+              >
+                {{ pendingInviteAction.kind === "expire" ? copy.confirmExpireInvite : copy.confirmDeleteInvite }}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <Dialog :open="renameDialogOpen" @update:open="handleRenameDialogOpen">
           <DialogContent v-if="selectedRenameNode" data-testid="rename-node-dialog">
             <DialogHeader>
@@ -3632,6 +4803,37 @@ onBeforeUnmount(stopHealthProbe);
               </Button>
               <Button data-testid="rename-node-confirm" @click="confirmRenameNode">
                 {{ copy.saveName }}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog :open="Boolean(selectedTagsNode)" @update:open="handleTagsDialogOpen">
+          <DialogContent v-if="selectedTagsNode" data-testid="node-tags-dialog">
+            <DialogHeader>
+              <DialogTitle>{{ copy.editNodeTagsTitle }}</DialogTitle>
+              <DialogDescription>
+                {{ copy.editNodeTagsDescription }}
+              </DialogDescription>
+            </DialogHeader>
+            <div class="grid gap-2">
+              <Label for="node-tags-input">{{ copy.nodeTags }}</Label>
+              <Input
+                id="node-tags-input"
+                v-model="tagsForm.tags"
+                data-testid="node-tags-input"
+                placeholder="tag:server, tag:router"
+              />
+              <p class="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                {{ copy.replaceTagsWarning }}
+              </p>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" data-testid="node-tags-cancel" @click="handleTagsDialogOpen(false)">
+                {{ copy.cancel }}
+              </Button>
+              <Button type="button" data-testid="node-tags-confirm" @click="confirmSetNodeTags">
+                {{ copy.saveTags }}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -3746,147 +4948,331 @@ onBeforeUnmount(stopHealthProbe);
         </section>
 
         <section v-else-if="activeSection === 'devices'" class="space-y-3 sm:space-y-4">
-          <div v-if="deviceSetupTask" class="grid max-w-3xl gap-4" data-testid="device-setup-flow">
-            <button
-              type="button"
-              class="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-              data-testid="back-to-machines"
-              @click="backToMachines"
-            >
-              <ArrowLeft class="h-4 w-4" aria-hidden="true" />
-              {{ copy.backToMachines }}
-            </button>
+          <Dialog :open="deviceSetupDialogOpen" @update:open="handleDeviceSetupDialogOpen">
+            <DialogContent class="max-h-[min(90vh,760px)] overflow-y-auto sm:max-w-4xl" data-testid="add-device-dialog">
+              <div class="grid gap-4" data-testid="add-device-wizard">
+                <DialogHeader>
+                  <DialogTitle>{{ deviceSetupTask ? deviceSetupTitle : copy.addDevice }}</DialogTitle>
+                  <DialogDescription>
+                    <span class="block">{{ copy.deviceSetupLead }}</span>
+                    <span v-if="deviceSetupTask" class="mt-1 block">{{ deviceSetupDescription }}</span>
+                  </DialogDescription>
+                </DialogHeader>
 
-            <div class="grid gap-1">
-              <h1 class="text-2xl font-semibold">{{ deviceSetupTitle }}</h1>
-              <p class="text-sm text-muted-foreground">{{ copy.deviceSetupLead }}</p>
-              <p class="text-sm text-muted-foreground">{{ deviceSetupDescription }}</p>
-            </div>
-
-            <div class="grid gap-7 pt-1">
-              <section class="grid gap-3" data-testid="setup-device-step">
-                <div class="flex items-baseline gap-2">
-                  <span class="text-sm font-semibold text-muted-foreground">1.</span>
-                  <h2 class="text-lg font-semibold">{{ copy.setupDevice }}</h2>
-                </div>
-                <div class="grid gap-4 border-b pb-5">
-                  <div class="grid gap-2">
-                    <div class="flex items-start justify-between gap-4">
-                      <div>
-                        <h3 class="text-sm font-semibold">{{ copy.tags }}</h3>
-                        <p class="mt-1 text-xs leading-5 text-muted-foreground">{{ copy.useTagsDescription }}</p>
-                      </div>
-                      <Switch
-                        :model-value="inviteForm.aclTags.trim().length > 0"
-                        data-testid="setup-tags-enabled"
-                        @update:model-value="inviteForm.aclTags = $event ? 'tag:server' : ''"
-                      />
-                    </div>
-                    <Input id="setup-tags" v-model="inviteForm.aclTags" data-testid="setup-tags" placeholder="tag:server" />
+                <div class="grid gap-4">
+                  <nav
+                    v-if="deviceSetupTask"
+                    class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4"
+                    :aria-label="copy.addDevice"
+                    data-testid="add-device-stepper"
+                  >
                     <button
+                      v-for="(step, index) in addDeviceSteps"
+                      :key="step.id"
                       type="button"
-                      class="w-fit text-xs font-medium text-primary underline underline-offset-4"
-                      data-testid="setup-manage-tags"
-                      @click="selectSection('access')"
+                      class="flex min-w-0 items-start gap-2 rounded-md border bg-background px-3 py-2 text-start"
+                      :class="[
+                        addDeviceStep === step.id
+                          ? 'border-primary bg-primary/5 text-foreground'
+                          : 'text-muted-foreground',
+                        isAddDeviceStepComplete(index) ? 'border-primary/40' : '',
+                      ]"
+                      :disabled="index > addDeviceStepIndex"
+                      :aria-current="addDeviceStep === step.id ? 'step' : undefined"
+                      :data-testid="`add-device-step-${step.id}`"
+                      @click="goToAddDeviceStep(index)"
                     >
-                      {{ copy.manageTags }}
+                      <span class="flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium">
+                        <Check v-if="isAddDeviceStepComplete(index)" class="h-3 w-3" aria-hidden="true" />
+                        <span v-else>{{ index + 1 }}</span>
+                      </span>
+                      <span class="grid min-w-0 gap-0.5">
+                        <span class="truncate text-sm font-medium">{{ step.label }}</span>
+                        <span class="line-clamp-2 text-xs leading-4 text-muted-foreground">{{ step.description }}</span>
+                      </span>
                     </button>
-                  </div>
-                  <div class="flex items-start justify-between gap-4">
-                    <div>
-                      <h3 class="text-sm font-semibold">{{ copy.ephemeral }}</h3>
-                      <p class="mt-1 text-xs leading-5 text-muted-foreground">{{ copy.ephemeralDescription }}</p>
-                    </div>
-                    <Switch v-model="inviteForm.ephemeral" data-testid="setup-ephemeral" />
-                  </div>
-                  <div class="flex items-start justify-between gap-4">
-                    <div>
-                      <h3 class="text-sm font-semibold">{{ copy.exitRoute }}</h3>
-                      <p class="mt-1 text-xs leading-5 text-muted-foreground">{{ copy.exitNodeDescription }}</p>
-                    </div>
-                    <Switch data-testid="setup-exit-node" />
-                  </div>
-                </div>
-              </section>
+                  </nav>
 
-              <section class="grid gap-3" data-testid="setup-auth-key-step">
-                <div class="flex items-baseline gap-2">
-                  <span class="text-sm font-semibold text-muted-foreground">2.</span>
-                  <h2 class="text-lg font-semibold">{{ copy.setupAuthKey }}</h2>
-                </div>
-                <div class="grid gap-4 border-b pb-5">
-                  <div class="grid gap-2">
-                    <div class="flex items-start justify-between gap-4">
-                      <div>
-                        <h3 class="text-sm font-semibold">{{ copy.reusable }}</h3>
-                        <p class="mt-1 text-xs leading-5 text-muted-foreground">{{ copy.reusableDescription }}</p>
-                      </div>
-                      <Switch v-model="inviteForm.reusable" data-testid="setup-reusable" />
+                  <div class="min-w-0">
+                    <div v-if="addDeviceStep === 'type'" class="grid gap-3 sm:grid-cols-3" data-testid="add-device-options">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        class="h-auto w-full items-start justify-start gap-3 whitespace-normal p-4 text-start"
+                        data-testid="add-linux-device"
+                        @click="prepareDeviceInvite('server')"
+                      >
+                        <Server class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span class="grid min-w-0 gap-1">
+                          <span class="font-medium">{{ copy.linuxServer }}</span>
+                          <span class="text-xs leading-5 text-muted-foreground">{{ copy.linuxServerDescription }}</span>
+                        </span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        class="h-auto w-full items-start justify-start gap-3 whitespace-normal p-4 text-start"
+                        data-testid="add-client-device"
+                        @click="prepareDeviceInvite('client')"
+                      >
+                        <Network class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span class="grid min-w-0 gap-1">
+                          <span class="font-medium">{{ copy.clientDevice }}</span>
+                          <span class="text-xs leading-5 text-muted-foreground">{{ copy.clientDeviceDescription }}</span>
+                        </span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        class="h-auto w-full items-start justify-start gap-3 whitespace-normal p-4 text-start"
+                        data-testid="add-pending-node"
+                        @click="preparePendingRegistration"
+                      >
+                        <ShieldCheck class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span class="grid min-w-0 gap-1">
+                          <span class="font-medium">{{ copy.pendingRegistrationTitle }}</span>
+                          <span class="text-xs leading-5 text-muted-foreground">{{ copy.pendingRegistrationDescription }}</span>
+                        </span>
+                      </Button>
                     </div>
-                    <p class="rounded-md bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-                      {{ copy.authKeyAutomationHint }}
-                    </p>
-                  </div>
-                  <div class="grid gap-2">
-                    <Label for="setup-expiration">{{ copy.inviteExpiration }}</Label>
-                    <p class="text-xs leading-5 text-muted-foreground">{{ copy.authKeyExpirationDescription }}</p>
-                    <div class="flex flex-wrap items-center gap-2">
-                      <div class="inline-flex h-9 items-center overflow-hidden rounded-md border bg-background">
-                        <Input
-                          id="setup-expiration"
-                          :model-value="String(authKeyExpiryDays)"
-                          data-testid="setup-expiration"
-                          inputmode="numeric"
-                          class="h-9 w-14 rounded-none border-0 text-center"
-                          @update:model-value="setAuthKeyExpiryDays(Number($event))"
-                        />
-                        <button type="button" class="h-9 border-l px-3 text-sm" data-testid="setup-expiration-decrement" @click="setAuthKeyExpiryDays(authKeyExpiryDays - 1)">
-                          -
-                        </button>
-                        <button type="button" class="h-9 border-l px-3 text-sm" data-testid="setup-expiration-increment" @click="setAuthKeyExpiryDays(authKeyExpiryDays + 1)">
-                          +
-                        </button>
-                      </div>
-                      <span class="text-sm text-muted-foreground">{{ copy.days }}</span>
-                    </div>
-                    <p class="text-xs text-muted-foreground">{{ copy.mustBeBetweenDays }}</p>
-                    <p class="rounded-md bg-muted/60 px-3 py-2 text-xs leading-5 text-muted-foreground">
-                      {{ copy.keyExpiryHint }}
-                    </p>
-                  </div>
-                </div>
-              </section>
 
-              <section class="grid gap-3" data-testid="setup-generate-step">
-                <div class="flex items-baseline gap-2">
-                  <span class="text-sm font-semibold text-muted-foreground">3.</span>
-                  <h2 class="text-lg font-semibold">{{ copy.generateInstallScript }}</h2>
+                    <div
+                      v-else-if="deviceSetupTask === 'pending' && addDeviceStep === 'pending'"
+                      class="grid gap-4"
+                      data-testid="pending-registration-flow"
+                    >
+                      <div class="grid gap-4 md:grid-cols-2">
+                        <section class="grid gap-3 rounded-md border bg-background p-4">
+                          <div>
+                            <h3 class="text-sm font-semibold">{{ copy.pendingNode }}</h3>
+                            <p class="mt-1 text-xs leading-5 text-muted-foreground">{{ copy.pendingNodeDescription }}</p>
+                          </div>
+                          <div class="grid gap-2">
+                            <Label for="pending-registration-user">{{ copy.inviteOwner }}</Label>
+                            <NativeSelect id="pending-registration-user" v-model="pendingRegistrationForm.user" data-testid="pending-registration-user">
+                              <NativeSelectOption v-for="user in visibleUsers" :key="user.id" :value="user.id">
+                                {{ userLabel(user) }}
+                              </NativeSelectOption>
+                            </NativeSelect>
+                          </div>
+                          <div class="grid gap-2">
+                            <Label for="pending-node-key">{{ copy.nodeRegistrationKey }}</Label>
+                            <Input
+                              id="pending-node-key"
+                              v-model="pendingRegistrationForm.key"
+                              data-testid="pending-node-key"
+                              :placeholder="copy.nodeRegistrationKeyPlaceholder"
+                            />
+                          </div>
+                          <Button type="button" class="w-fit" data-testid="register-pending-node" @click="registerPendingNode">
+                            <ShieldCheck class="h-4 w-4" aria-hidden="true" />
+                            {{ copy.registerPendingNode }}
+                          </Button>
+                        </section>
+
+                        <section class="grid gap-3 rounded-md border bg-background p-4">
+                          <div>
+                            <h3 class="text-sm font-semibold">{{ copy.registrationRequest }}</h3>
+                            <p class="mt-1 text-xs leading-5 text-muted-foreground">{{ copy.registrationRequestDescription }}</p>
+                          </div>
+                          <div class="grid gap-2">
+                            <Label for="auth-request-id">{{ copy.authId }}</Label>
+                            <Input
+                              id="auth-request-id"
+                              v-model="pendingRegistrationForm.authId"
+                              data-testid="auth-request-id"
+                              :placeholder="copy.authIdPlaceholder"
+                            />
+                          </div>
+                          <div class="flex flex-wrap gap-2">
+                            <Button type="button" data-testid="auth-register" @click="registerAuthRequest">
+                              {{ copy.registerAuthRequest }}
+                            </Button>
+                            <Button type="button" variant="outline" data-testid="auth-approve" @click="approveAuthRequest">
+                              {{ copy.approveAuthRequest }}
+                            </Button>
+                            <Button type="button" variant="destructive" data-testid="auth-reject" @click="rejectAuthRequest">
+                              {{ copy.rejectAuthRequest }}
+                            </Button>
+                          </div>
+                        </section>
+                      </div>
+                    </div>
+
+                    <div
+                      v-else-if="deviceSetupTask === 'pending' && addDeviceStep === 'result'"
+                      class="grid gap-2 rounded-md border bg-card p-4"
+                      data-testid="registration-result"
+                    >
+                      <p v-if="lastRegisteredNode" class="text-sm font-medium">
+                        {{ copy.registeredNode }}: {{ lastRegisteredNode.name }}
+                      </p>
+                      <p v-if="authRequestResult" class="text-sm text-muted-foreground">{{ authRequestResult }}</p>
+                    </div>
+
+                    <div v-else-if="deviceSetupTask" class="grid gap-4" data-testid="device-setup-flow">
+                      <section v-if="addDeviceStep === 'preferences'" class="grid gap-3" data-testid="setup-device-step">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">{{ deviceSetupTask === "server" ? copy.linuxServer : copy.clientDevice }}</Badge>
+                          <h2 class="text-lg font-semibold">{{ copy.setupDevice }}</h2>
+                        </div>
+                        <div class="grid gap-4">
+                          <div class="grid gap-2">
+                            <div class="flex items-start justify-between gap-4">
+                              <div>
+                                <h3 class="text-sm font-semibold">{{ copy.tags }}</h3>
+                                <p class="mt-1 text-xs leading-5 text-muted-foreground">{{ copy.useTagsDescription }}</p>
+                              </div>
+                              <Switch
+                                :model-value="inviteForm.aclTags.trim().length > 0"
+                                data-testid="setup-tags-enabled"
+                                @update:model-value="inviteForm.aclTags = $event ? 'tag:server' : ''"
+                              />
+                            </div>
+                            <Input id="setup-tags" v-model="inviteForm.aclTags" data-testid="setup-tags" placeholder="tag:server" />
+                            <button
+                              type="button"
+                              class="w-fit text-xs font-medium text-primary underline underline-offset-4"
+                              data-testid="setup-manage-tags"
+                              @click="openAccessFromDeviceSetup"
+                            >
+                              {{ copy.manageTags }}
+                            </button>
+                          </div>
+                          <div class="flex items-start justify-between gap-4">
+                            <div>
+                              <h3 class="text-sm font-semibold">{{ copy.ephemeral }}</h3>
+                              <p class="mt-1 text-xs leading-5 text-muted-foreground">{{ copy.ephemeralDescription }}</p>
+                            </div>
+                            <Switch v-model="inviteForm.ephemeral" data-testid="setup-ephemeral" />
+                          </div>
+                          <div class="flex items-start justify-between gap-4">
+                            <div>
+                              <h3 class="text-sm font-semibold">{{ copy.exitRoute }}</h3>
+                              <p class="mt-1 text-xs leading-5 text-muted-foreground">{{ copy.exitNodeDescription }}</p>
+                            </div>
+                            <Switch data-testid="setup-exit-node" />
+                          </div>
+                        </div>
+                      </section>
+
+                      <section v-else-if="addDeviceStep === 'authKey'" class="grid gap-3" data-testid="setup-auth-key-step">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">{{ deviceSetupTask === "server" ? copy.linuxServer : copy.clientDevice }}</Badge>
+                          <h2 class="text-lg font-semibold">{{ copy.setupAuthKey }}</h2>
+                        </div>
+                        <div class="grid gap-4">
+                          <div class="grid gap-2">
+                            <div class="flex items-start justify-between gap-4">
+                              <div>
+                                <h3 class="text-sm font-semibold">{{ copy.reusable }}</h3>
+                                <p class="mt-1 text-xs leading-5 text-muted-foreground">{{ copy.reusableDescription }}</p>
+                              </div>
+                              <Switch v-model="inviteForm.reusable" data-testid="setup-reusable" />
+                            </div>
+                            <p class="rounded-md bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+                              {{ copy.authKeyAutomationHint }}
+                            </p>
+                          </div>
+                          <div class="grid gap-2">
+                            <Label for="setup-expiration">{{ copy.inviteExpiration }}</Label>
+                            <p class="text-xs leading-5 text-muted-foreground">{{ copy.authKeyExpirationDescription }}</p>
+                            <div class="flex flex-wrap items-center gap-2">
+                              <div class="inline-flex h-9 items-center overflow-hidden rounded-md border bg-background">
+                                <Input
+                                  id="setup-expiration"
+                                  :model-value="String(authKeyExpiryDays)"
+                                  data-testid="setup-expiration"
+                                  inputmode="numeric"
+                                  class="h-9 w-14 rounded-none border-0 text-center"
+                                  @update:model-value="setAuthKeyExpiryDays(Number($event))"
+                                />
+                                <button
+                                  type="button"
+                                  class="h-9 border-s px-3 text-sm"
+                                  data-testid="setup-expiration-decrement"
+                                  @click="setAuthKeyExpiryDays(authKeyExpiryDays - 1)"
+                                >
+                                  -
+                                </button>
+                                <button
+                                  type="button"
+                                  class="h-9 border-s px-3 text-sm"
+                                  data-testid="setup-expiration-increment"
+                                  @click="setAuthKeyExpiryDays(authKeyExpiryDays + 1)"
+                                >
+                                  +
+                                </button>
+                              </div>
+                              <span class="text-sm text-muted-foreground">{{ copy.days }}</span>
+                            </div>
+                            <p class="text-xs text-muted-foreground">{{ copy.mustBeBetweenDays }}</p>
+                            <p class="rounded-md bg-muted/60 px-3 py-2 text-xs leading-5 text-muted-foreground">
+                              {{ copy.keyExpiryHint }}
+                            </p>
+                          </div>
+                        </div>
+                      </section>
+
+                      <section v-else-if="addDeviceStep === 'generate'" class="grid gap-3" data-testid="setup-generate-step">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">{{ deviceSetupTask === "server" ? copy.linuxServer : copy.clientDevice }}</Badge>
+                          <Badge v-if="inviteForm.aclTags" variant="outline">{{ inviteForm.aclTags }}</Badge>
+                          <Badge v-if="inviteForm.reusable" variant="outline">{{ copy.reusable }}</Badge>
+                          <Badge v-if="inviteForm.ephemeral" variant="outline">{{ copy.ephemeral }}</Badge>
+                        </div>
+                        <div class="grid gap-3">
+                          <Button class="w-fit" data-testid="generate-install-script" @click="openInviteDialogFromDeviceSetup">
+                            <KeyRound class="h-4 w-4" aria-hidden="true" />
+                            {{ copy.generateInstallScript }}
+                          </Button>
+                          <div v-if="lastCreatedInvite" class="grid gap-3 rounded-md border bg-card p-4" data-testid="created-invite">
+                            <div>
+                              <p class="text-sm font-medium">{{ copy.inviteKey }}</p>
+                              <code class="mt-2 block break-all rounded-md bg-secondary px-2 py-1 text-xs">{{ lastCreatedInvite }}</code>
+                            </div>
+                            <div>
+                              <p class="text-sm font-medium">{{ copy.installCommand }}</p>
+                              <code class="mt-2 block break-all rounded-md bg-secondary px-2 py-1 text-xs">{{ installCommand }}</code>
+                            </div>
+                            <Button size="sm" variant="outline" class="w-fit" data-testid="copy-setup-install-command" @click="copyInviteKey(installCommand)">
+                              <Copy class="h-4 w-4" aria-hidden="true" />
+                              {{ copiedKey === installCommand ? copy.copied : copy.copyCommand }}
+                            </Button>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+                  </div>
                 </div>
-                <div class="grid gap-3">
-                  <Button class="w-fit" data-testid="generate-install-script" @click="openInviteDialog">
-                    <KeyRound class="h-4 w-4" aria-hidden="true" />
-                    {{ copy.generateInstallScript }}
+
+                <DialogFooter v-if="deviceSetupTask" class="gap-2 sm:justify-between">
+                  <Button type="button" variant="outline" data-testid="add-device-prev" @click="goToPreviousAddDeviceStep">
+                    {{ copy.previousStep }}
                   </Button>
-                  <div v-if="lastCreatedInvite" class="grid gap-3 rounded-md border bg-card p-4" data-testid="created-invite">
-                    <div>
-                      <p class="text-sm font-medium">{{ copy.inviteKey }}</p>
-                      <code class="mt-2 block break-all rounded-md bg-secondary px-2 py-1 text-xs">{{ lastCreatedInvite }}</code>
-                    </div>
-                    <div>
-                      <p class="text-sm font-medium">{{ copy.installCommand }}</p>
-                      <code class="mt-2 block break-all rounded-md bg-secondary px-2 py-1 text-xs">{{ installCommand }}</code>
-                    </div>
-                    <Button size="sm" variant="outline" class="w-fit" data-testid="copy-setup-install-command" @click="copyInviteKey(installCommand)">
-                      <Copy class="h-4 w-4" aria-hidden="true" />
-                      {{ copiedKey === installCommand ? copy.copied : copy.copyCommand }}
-                    </Button>
-                  </div>
-                </div>
-              </section>
-            </div>
-          </div>
+                  <Button
+                    v-if="addDeviceStep === 'generate' || addDeviceStep === 'result'"
+                    type="button"
+                    data-testid="add-device-finish"
+                    @click="finishAddDeviceFlow"
+                  >
+                    {{ copy.finish }}
+                  </Button>
+                  <Button
+                    v-else
+                    type="button"
+                    data-testid="add-device-next"
+                    :disabled="!canMoveAddDeviceNext"
+                    @click="goToNextAddDeviceStep"
+                  >
+                    {{ copy.nextStep }}
+                  </Button>
+                </DialogFooter>
+              </div>
+            </DialogContent>
+          </Dialog>
 
-          <div v-else class="grid gap-3" data-testid="machines-workbench">
+          <div class="grid gap-3" data-testid="machines-workbench">
             <div class="grid gap-2 sm:flex sm:items-start sm:justify-between sm:gap-3">
               <div>
                 <h1 class="text-xl font-semibold">{{ copy.devicesTitle }}</h1>
@@ -3894,37 +5280,17 @@ onBeforeUnmount(stopHealthProbe);
                   {{ copy.devicesSubtitle }}
                   <a
                     href="https://tailscale.com/kb/1017/install"
-                    class="font-medium text-primary underline underline-offset-4"
+                    class="cursor-pointer font-medium text-primary underline underline-offset-4"
                     data-testid="install-docs-link"
                   >
                     {{ copy.learnMore }}
                   </a>
                 </p>
               </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger as-child>
-                  <Button size="sm" class="w-fit" data-testid="add-device-toggle">
-                    <Plus class="h-4 w-4" aria-hidden="true" />
-                    {{ copy.addDevice }}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" class="w-72 p-2" data-testid="add-device-menu">
-                  <DropdownMenuItem class="items-start gap-3 p-3" data-testid="add-linux-device" @click="prepareDeviceInvite('server')">
-                    <Server class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                    <span>
-                      <span class="block font-medium">{{ copy.linuxServer }}</span>
-                      <span class="block text-xs leading-5 text-muted-foreground">{{ copy.linuxServerDescription }}</span>
-                    </span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem class="items-start gap-3 p-3" data-testid="add-client-device" @click="prepareDeviceInvite('client')">
-                    <Network class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                    <span>
-                      <span class="block font-medium">{{ copy.clientDevice }}</span>
-                      <span class="block text-xs leading-5 text-muted-foreground">{{ copy.clientDeviceDescription }}</span>
-                    </span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button size="sm" class="w-fit" data-testid="add-device-toggle" @click="openDeviceSetupDialog">
+                <Plus class="h-4 w-4" aria-hidden="true" />
+                {{ copy.addDevice }}
+              </Button>
             </div>
 
             <Card v-if="snapshot.nodes.length === 0" class="relative overflow-hidden bg-accent/35 p-5 sm:p-8" data-testid="machines-empty">
@@ -3987,7 +5353,7 @@ onBeforeUnmount(stopHealthProbe);
                       <TableHead>{{ copy.devicesTableUser }}</TableHead>
                       <TableHead>{{ copy.devicesTableRoutes }}</TableHead>
                       <TableHead>{{ copy.devicesTableActivity }}</TableHead>
-                      <TableHead class="hidden text-end md:table-cell">{{ copy.actions }}</TableHead>
+                      <TableHead class="hidden md:table-cell">{{ copy.actions }}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -4058,6 +5424,10 @@ onBeforeUnmount(stopHealthProbe);
                                 <Pencil class="h-4 w-4" aria-hidden="true" />
                                 {{ copy.rename }}
                               </DropdownMenuItem>
+                              <DropdownMenuItem :data-testid="`edit-node-tags-action-mobile-${node.id}`" @click="openTagsDialog(node)">
+                                <ShieldCheck class="h-4 w-4" aria-hidden="true" />
+                                {{ copy.editTags }}
+                              </DropdownMenuItem>
                               <DropdownMenuItem :data-testid="`expire-node-action-mobile-${node.id}`" @click="openExpireDialog(node)">
                                 <Clock class="h-4 w-4" aria-hidden="true" />
                                 {{ copy.expire }}
@@ -4074,7 +5444,7 @@ onBeforeUnmount(stopHealthProbe);
                         <div v-if="hasVisibleUser(node.user)">
                           <button
                             type="button"
-                            class="text-start underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="text-left underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             :data-testid="`device-owner-link-${node.id}`"
                             @click="openUserDetails(node.user)"
                           >
@@ -4088,7 +5458,7 @@ onBeforeUnmount(stopHealthProbe);
                         <button
                           v-if="nodePendingRoutes(node).length"
                           type="button"
-                          class="flex flex-wrap gap-1 rounded-md text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          class="flex flex-wrap gap-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           :data-testid="`device-pending-routes-${node.id}`"
                           @click="jumpToRoutesForMachine(node)"
                         >
@@ -4133,7 +5503,7 @@ onBeforeUnmount(stopHealthProbe);
                         <p class="text-xs text-muted-foreground">{{ copy.expires }}: {{ formatDate(node.expiry) }}</p>
                       </TableCell>
                       <TableCell class="hidden align-top md:table-cell md:min-w-16">
-                        <div class="flex justify-end">
+                        <div class="flex justify-start">
                           <DropdownMenu>
                             <DropdownMenuTrigger as-child>
                               <Button
@@ -4161,6 +5531,10 @@ onBeforeUnmount(stopHealthProbe);
                                 <Pencil class="h-4 w-4" aria-hidden="true" />
                                 {{ copy.rename }}
                               </DropdownMenuItem>
+                              <DropdownMenuItem :data-testid="`edit-node-tags-action-${node.id}`" @click="openTagsDialog(node)">
+                                <ShieldCheck class="h-4 w-4" aria-hidden="true" />
+                                {{ copy.editTags }}
+                              </DropdownMenuItem>
                               <DropdownMenuItem :data-testid="`expire-node-action-${node.id}`" @click="openExpireDialog(node)">
                                 <Clock class="h-4 w-4" aria-hidden="true" />
                                 {{ copy.expire }}
@@ -4175,7 +5549,7 @@ onBeforeUnmount(stopHealthProbe);
                       </TableCell>
                     </TableRow>
                     <TableRow v-if="filteredNodes.length === 0">
-                      <TableCell colspan="5" class="py-6 text-center text-sm text-muted-foreground">
+                      <TableCell colspan="5" class="py-6 text-sm text-muted-foreground">
                         {{ copy.noDevices }}
                       </TableCell>
                     </TableRow>
@@ -4266,7 +5640,7 @@ onBeforeUnmount(stopHealthProbe);
                     <TableHead data-testid="member-devices-header">{{ copy.memberDevices }}</TableHead>
                     <TableHead>{{ copy.joined }}</TableHead>
                     <TableHead>{{ copy.authSource }}</TableHead>
-                    <TableHead class="hidden text-end md:table-cell">{{ copy.actions }}</TableHead>
+                    <TableHead class="hidden md:table-cell">{{ copy.actions }}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -4309,7 +5683,11 @@ onBeforeUnmount(stopHealthProbe);
                             {{ copy.createInvite }}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem variant="destructive" :data-testid="`delete-member-mobile-${user.name}`" @click="deleteMember(user)">
+                          <DropdownMenuItem :data-testid="`rename-member-mobile-${user.name}`" @click="openRenameMemberDialog(user)">
+                            <Pencil class="h-4 w-4" aria-hidden="true" />
+                            {{ copy.renameMember }}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem variant="destructive" :data-testid="`delete-member-mobile-${user.name}`" @click="requestDeleteMember(user)">
                             <Trash2 class="h-4 w-4" aria-hidden="true" />
                             {{ copy.deleteMember }}
                           </DropdownMenuItem>
@@ -4339,7 +5717,7 @@ onBeforeUnmount(stopHealthProbe);
                     <TableCell class="align-top text-sm text-muted-foreground md:min-w-40">{{ formatDate(user.createdAt) }}</TableCell>
                     <TableCell class="align-top md:min-w-36" :data-testid="`member-auth-source-${user.name}`">{{ userAuthSource(user) }}</TableCell>
                     <TableCell class="hidden align-top md:table-cell md:min-w-16">
-                      <div class="flex justify-end">
+                      <div class="flex justify-start">
                         <DropdownMenu>
                           <DropdownMenuTrigger as-child>
                             <Button
@@ -4363,11 +5741,15 @@ onBeforeUnmount(stopHealthProbe);
                               {{ copy.viewMachines }}
                             </DropdownMenuItem>
                             <DropdownMenuItem :data-testid="`create-invite-for-member-${user.name}`" @click="openInviteDialogForUser(user)">
-                              <KeyRound class="h-4 w-4" aria-hidden="true" />
-                              {{ copy.createInvite }}
+                            <KeyRound class="h-4 w-4" aria-hidden="true" />
+                            {{ copy.createInvite }}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                            <DropdownMenuItem :data-testid="`rename-member-${user.name}`" @click="openRenameMemberDialog(user)">
+                              <Pencil class="h-4 w-4" aria-hidden="true" />
+                              {{ copy.renameMember }}
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem variant="destructive" :data-testid="`delete-member-${user.name}`" @click="deleteMember(user)">
+                            <DropdownMenuItem variant="destructive" :data-testid="`delete-member-${user.name}`" @click="requestDeleteMember(user)">
                               <Trash2 class="h-4 w-4" aria-hidden="true" />
                               {{ copy.deleteMember }}
                             </DropdownMenuItem>
@@ -4377,7 +5759,7 @@ onBeforeUnmount(stopHealthProbe);
                     </TableCell>
                   </TableRow>
                   <TableRow v-if="filteredUsers.length === 0">
-                    <TableCell colspan="6" class="py-6 text-center text-sm text-muted-foreground">
+                    <TableCell colspan="6" class="py-6 text-sm text-muted-foreground">
                       {{ copy.noUsersMatch }}
                     </TableCell>
                   </TableRow>
@@ -4438,7 +5820,7 @@ onBeforeUnmount(stopHealthProbe);
                     <TableHead>{{ copy.inviteKey }}</TableHead>
                     <TableHead>{{ copy.expires }}</TableHead>
                     <TableHead>{{ copy.aclTags }}</TableHead>
-                    <TableHead class="text-end">{{ copy.actions }}</TableHead>
+                    <TableHead>{{ copy.actions }}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -4454,7 +5836,7 @@ onBeforeUnmount(stopHealthProbe);
                       <button
                         v-if="hasVisibleUser(key.user)"
                         type="button"
-                        class="text-start underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        class="text-left underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         :data-testid="`invite-owner-link-${key.id}`"
                         @click="openUserDetails(key.user)"
                       >
@@ -4486,14 +5868,14 @@ onBeforeUnmount(stopHealthProbe);
                       </div>
                     </TableCell>
                     <TableCell class="min-w-48">
-                      <div class="flex justify-end gap-2">
-                        <Button size="sm" variant="outline" :data-testid="`expire-invite-${key.id}`" @click="expireInvite(key)">{{ copy.expireInvite }}</Button>
-                        <Button size="sm" variant="destructive" :data-testid="`delete-invite-${key.id}`" @click="deleteInvite(key)">{{ copy.deleteInvite }}</Button>
+                      <div class="flex justify-start gap-2">
+                        <Button size="sm" variant="outline" :data-testid="`expire-invite-${key.id}`" @click="requestInviteAction('expire', key)">{{ copy.expireInvite }}</Button>
+                        <Button size="sm" variant="destructive" :data-testid="`delete-invite-${key.id}`" @click="requestInviteAction('delete', key)">{{ copy.deleteInvite }}</Button>
                       </div>
                     </TableCell>
                   </TableRow>
                   <TableRow v-if="filteredPreAuthKeys.length === 0">
-                    <TableCell colspan="6" class="py-6 text-center text-sm text-muted-foreground">
+                    <TableCell colspan="6" class="py-6 text-sm text-muted-foreground">
                       {{ copy.noAuthKeys }}
                     </TableCell>
                   </TableRow>
@@ -4561,7 +5943,7 @@ onBeforeUnmount(stopHealthProbe);
                     class="text-muted-foreground hover:text-foreground"
                     :disabled="nodePendingRoutes(node).length === 0"
                     :data-testid="`approve-routes-${node.id}`"
-                    @click="approveRoutes(node)"
+                    @click="requestApproveRoutes(node)"
                   >
                     <Router class="h-4 w-4" aria-hidden="true" />
                     {{ nodePendingRoutes(node).length === 0 ? copy.routesApproved : copy.approveAll }}
@@ -4683,6 +6065,44 @@ onBeforeUnmount(stopHealthProbe);
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          <AlertDialog :open="Boolean(selectedRoutesApprovalNode)" @update:open="handleApproveRoutesDialogOpen">
+            <AlertDialogContent v-if="selectedRoutesApprovalNode" data-testid="approve-routes-dialog">
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {{ selectedRoutesApprovalHasExitRoute ? copy.approveExitRoutesTitle : copy.approveRoutesTitle }}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {{ selectedRoutesApprovalHasExitRoute ? copy.approveExitRoutesDescription : copy.approveRoutesDescription }}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div class="grid gap-2 rounded-md border bg-muted/30 p-3">
+                <p class="text-sm font-medium">{{ selectedRoutesApprovalNode.name }}</p>
+                <Badge
+                  v-for="(route, routeIndex) in selectedRoutesApprovalPending"
+                  :key="route"
+                  variant="outline"
+                  class="w-fit max-w-full whitespace-normal break-all font-mono"
+                  :class="pendingRouteClass(route)"
+                  :data-testid="`approve-routes-target-${routeIndex}`"
+                >
+                  {{ route }}
+                </Badge>
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel data-testid="approve-routes-cancel">{{ copy.cancel }}</AlertDialogCancel>
+                <Button
+                  type="button"
+                  :variant="selectedRoutesApprovalHasExitRoute ? 'destructive' : 'default'"
+                  data-testid="approve-routes-confirm"
+                  @click="confirmApproveRoutes"
+                >
+                  <Router class="h-4 w-4" aria-hidden="true" />
+                  {{ copy.confirmApproveRoutes }}
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </section>
 
         <section v-else-if="activeSection === 'access'" class="space-y-3 sm:space-y-5">
@@ -4720,6 +6140,7 @@ onBeforeUnmount(stopHealthProbe);
 
               <Tabs
                 :model-value="activePolicyTab"
+                :dir="meta.dir"
                 class="w-full min-w-0"
                 data-testid="policy-workspace-tabs"
                 @update:model-value="changePolicyTab"
@@ -4840,12 +6261,12 @@ onBeforeUnmount(stopHealthProbe);
                           <TableHead>{{ copy.policyRulesTableDestination }}</TableHead>
                           <TableHead>{{ copy.policyRulesTableService }}</TableHead>
                           <TableHead>{{ copy.policyRulesTableRisk }}</TableHead>
-                          <TableHead class="text-end">{{ copy.policyRulesTableActions }}</TableHead>
+                          <TableHead>{{ copy.policyRulesTableActions }}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         <TableRow v-if="filteredPolicyRules.length === 0">
-                          <TableCell colspan="6" class="py-6 text-center text-muted-foreground">
+                          <TableCell colspan="6" class="py-6 text-muted-foreground">
                             {{ copy.noPolicyRules }}
                           </TableCell>
                         </TableRow>
@@ -4865,13 +6286,13 @@ onBeforeUnmount(stopHealthProbe);
                               {{ isPolicyRuleHighRisk(rule) ? copy.highRisk : copy.readyToSave }}
                             </Badge>
                           </TableCell>
-                          <TableCell class="text-end">
+                          <TableCell>
                             <Button
                               type="button"
-                              variant="ghost"
+                              variant="destructive"
                               size="sm"
                               :data-testid="`remove-policy-rule-${rule.id}`"
-                              @click="removePolicyRule(rule.id)"
+                              @click="requestRemovePolicyRule(rule)"
                             >
                               {{ copy.removeItem }}
                             </Button>
@@ -4963,12 +6384,12 @@ onBeforeUnmount(stopHealthProbe);
                           <TableRow>
                             <TableHead>{{ copy.groupName }}</TableHead>
                             <TableHead>{{ copy.groupMembers }}</TableHead>
-                            <TableHead class="text-end">{{ copy.actions }}</TableHead>
+                            <TableHead>{{ copy.actions }}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           <TableRow v-if="filteredPolicyGroups.length === 0">
-                            <TableCell colspan="3" class="py-6 text-center text-muted-foreground">
+                            <TableCell colspan="3" class="py-6 text-muted-foreground">
                               {{ copy.noPolicyGroups }}
                             </TableCell>
                           </TableRow>
@@ -4979,8 +6400,8 @@ onBeforeUnmount(stopHealthProbe);
                           >
                             <TableCell class="font-medium">{{ group.name }}</TableCell>
                             <TableCell class="break-all text-muted-foreground">{{ group.members }}</TableCell>
-                            <TableCell class="text-end">
-                              <Button type="button" variant="ghost" size="sm" :data-testid="`remove-policy-group-${group.id}`" @click="removePolicyGroup(group.id)">
+                            <TableCell>
+                              <Button type="button" variant="destructive" size="sm" :data-testid="`remove-policy-group-${group.id}`" @click="requestRemovePolicyGroup(group)">
                                 {{ copy.removeItem }}
                               </Button>
                             </TableCell>
@@ -5071,12 +6492,12 @@ onBeforeUnmount(stopHealthProbe);
                           <TableRow>
                             <TableHead>{{ copy.tagName }}</TableHead>
                             <TableHead>{{ copy.ownersList }}</TableHead>
-                            <TableHead class="text-end">{{ copy.actions }}</TableHead>
+                            <TableHead>{{ copy.actions }}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           <TableRow v-if="filteredPolicyTagOwners.length === 0">
-                            <TableCell colspan="3" class="py-6 text-center text-muted-foreground">
+                            <TableCell colspan="3" class="py-6 text-muted-foreground">
                               {{ copy.noPolicyTagOwners }}
                             </TableCell>
                           </TableRow>
@@ -5087,8 +6508,8 @@ onBeforeUnmount(stopHealthProbe);
                           >
                             <TableCell class="font-medium">{{ tagOwner.tag }}</TableCell>
                             <TableCell class="break-all text-muted-foreground">{{ tagOwner.owners }}</TableCell>
-                            <TableCell class="text-end">
-                              <Button type="button" variant="ghost" size="sm" :data-testid="`remove-policy-tag-owner-${tagOwner.id}`" @click="removePolicyTagOwner(tagOwner.id)">
+                            <TableCell>
+                              <Button type="button" variant="destructive" size="sm" :data-testid="`remove-policy-tag-owner-${tagOwner.id}`" @click="requestRemovePolicyTagOwner(tagOwner)">
                                 {{ copy.removeItem }}
                               </Button>
                             </TableCell>
@@ -5141,6 +6562,30 @@ onBeforeUnmount(stopHealthProbe);
               </Tabs>
             </div>
           </Card>
+
+          <AlertDialog :open="policyRemovalDialogOpen" @update:open="handlePolicyRemovalDialogOpen">
+            <AlertDialogContent data-testid="remove-policy-item-dialog">
+              <AlertDialogHeader>
+                <AlertDialogTitle>{{ copy.confirmRemovePolicyItemTitle }}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {{ copy.confirmRemovePolicyItemDescription }}
+                  <span v-if="pendingPolicyRemoval" class="mt-2 block break-all font-medium text-foreground">
+                    {{ pendingPolicyRemoval.label }}
+                  </span>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel data-testid="cancel-remove-policy-item">{{ copy.cancel }}</AlertDialogCancel>
+                <AlertDialogAction
+                  data-testid="confirm-remove-policy-item"
+                  class="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40"
+                  @click="confirmRemovePolicyItem"
+                >
+                  {{ copy.removeItem }}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
           <div class="flex justify-end sm:hidden">
             <Button data-testid="save-policy-sticky" class="shadow-lg" @click="savePolicy">

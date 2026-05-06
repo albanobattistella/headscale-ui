@@ -25,7 +25,7 @@ const forwardedProps = useForwardProps(delegatedProps);
     v-bind="forwardedProps"
   >
     <slot>
-      <ChevronLeft class="size-4 rtl:rotate-180" />
+      <ChevronLeft class="size-4" />
     </slot>
   </CalendarPrev>
 </template>

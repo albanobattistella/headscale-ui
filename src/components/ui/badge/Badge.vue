@@ -1,33 +1,28 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { reactiveOmit } from "@vueuse/core";
+import type { PrimitiveProps } from "reka-ui";
+import { Primitive } from "reka-ui";
+import type { HTMLAttributes } from "vue";
 import { cn } from "@/lib/utils";
+import type { BadgeVariants } from ".";
+import { badgeVariants } from ".";
 
-const props = withDefaults(
-  defineProps<{
-    variant?: "default" | "secondary" | "outline" | "destructive";
-    class?: string;
-  }>(),
-  {
-    variant: "default",
-  },
-);
+const props = defineProps<
+  PrimitiveProps & {
+    variant?: BadgeVariants["variant"];
+    class?: HTMLAttributes["class"];
+  }
+>();
 
-const badgeClass = computed(() =>
-  cn(
-    "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium",
-    {
-      "bg-primary text-primary-foreground": props.variant === "default",
-      "bg-secondary text-secondary-foreground": props.variant === "secondary",
-      "border border-input text-foreground": props.variant === "outline",
-      "bg-destructive text-destructive-foreground": props.variant === "destructive",
-    },
-    props.class,
-  ),
-);
+const delegatedProps = reactiveOmit(props, "class");
 </script>
 
 <template>
-  <span :class="badgeClass">
+  <Primitive
+    data-slot="badge"
+    :class="cn(badgeVariants({ variant }), props.class)"
+    v-bind="delegatedProps"
+  >
     <slot />
-  </span>
+  </Primitive>
 </template>

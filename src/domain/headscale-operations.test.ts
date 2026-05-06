@@ -18,6 +18,12 @@ describe("headscale operation registry", () => {
     expect(OPERATION_IDS).toContain("policy.set");
   });
 
+  test("tracks the latest Headscale auth request resources", () => {
+    expect(OPERATION_IDS).toContain("auth.register");
+    expect(OPERATION_IDS).toContain("auth.approve");
+    expect(OPERATION_IDS).toContain("auth.reject");
+  });
+
   test("does not expose policy editing as a raw JSON payload field", () => {
     const policySet = HEADSCALE_OPERATIONS.find((operation) => operation.id === "policy.set");
 

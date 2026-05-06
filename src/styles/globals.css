@@ -1,52 +1,77 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  color-scheme: light;
-  --background: oklch(0.985 0.005 230);
-  --foreground: oklch(0.18 0.015 245);
-  --card: oklch(1 0.002 230);
-  --card-foreground: oklch(0.18 0.015 245);
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.015 245);
-  --primary: oklch(0.34 0.08 198);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.94 0.012 235);
-  --secondary-foreground: oklch(0.23 0.02 245);
-  --muted: oklch(0.95 0.01 235);
-  --muted-foreground: oklch(0.49 0.02 245);
-  --accent: oklch(0.91 0.04 190);
-  --accent-foreground: oklch(0.24 0.06 195);
-  --destructive: oklch(0.56 0.18 28);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.88 0.012 240);
-  --input: oklch(0.84 0.014 240);
-  --ring: oklch(0.55 0.03 185);
-  --radius: 0.375rem;
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
 }
 
 .dark {
-  color-scheme: dark;
-  --background: oklch(0.19 0.014 250);
-  --foreground: oklch(0.94 0.008 250);
-  --card: oklch(0.225 0.014 250);
-  --card-foreground: oklch(0.94 0.008 250);
-  --popover: oklch(0.225 0.014 250);
-  --popover-foreground: oklch(0.94 0.008 250);
-  --primary: oklch(0.72 0.08 190);
-  --primary-foreground: oklch(0.16 0.018 250);
-  --secondary: oklch(0.275 0.018 250);
-  --secondary-foreground: oklch(0.9 0.006 250);
-  --muted: oklch(0.27 0.016 250);
-  --muted-foreground: oklch(0.68 0.014 250);
-  --accent: oklch(0.32 0.045 205);
-  --accent-foreground: oklch(0.92 0.025 195);
-  --destructive: oklch(0.62 0.16 28);
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.34 0.018 250);
-  --input: oklch(0.36 0.018 250);
-  --ring: oklch(0.66 0.055 190);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
 }
 
 @theme inline {
@@ -69,48 +94,94 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
 @layer base {
   * {
-    border-color: var(--border);
-  }
-
-  html {
-    min-width: 320px;
-    background: var(--background);
+    @apply border-border outline-ring/50;
   }
 
   body {
-    min-height: 100vh;
-    margin: 0;
-    background: var(--background);
-    color: var(--foreground);
-    font-family:
-      Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    font-size: 14px;
-    letter-spacing: 0;
-    text-rendering: optimizeLegibility;
-  }
-
-  button,
-  input,
-  textarea {
-    font: inherit;
-  }
-
-  a[href],
-  button:not(:disabled),
-  [role="button"]:not([aria-disabled="true"]),
-  [role="menuitem"]:not([data-disabled]),
-  [role="tab"]:not([disabled]) {
-    cursor: pointer;
+    @apply bg-background text-foreground;
   }
 
   #app {
     min-height: 100vh;
+  }
+
+  :is(
+    a[href],
+    a[role="link"],
+    button:not(:disabled),
+    select:not(:disabled),
+    input[type="button"]:not(:disabled),
+    input[type="checkbox"]:not(:disabled),
+    input[type="color"]:not(:disabled),
+    input[type="date"]:not(:disabled),
+    input[type="datetime-local"]:not(:disabled),
+    input[type="file"]:not(:disabled),
+    input[type="month"]:not(:disabled),
+    input[type="radio"]:not(:disabled),
+    input[type="reset"]:not(:disabled),
+    input[type="submit"]:not(:disabled),
+    input[type="time"]:not(:disabled),
+    input[type="week"]:not(:disabled),
+    label[for],
+    summary,
+    [data-slot="button"]:not(:disabled):not([disabled]):not([aria-disabled="true"]):not(
+      [data-disabled]
+    ),
+    [data-slot$="-button"]:not(:disabled):not([disabled]):not([aria-disabled="true"]):not(
+      [data-disabled]
+    ),
+    [data-slot$="-trigger"]:not(:disabled):not([disabled]):not([aria-disabled="true"]):not(
+      [data-disabled]
+    ),
+    [data-slot$="-item"]:not(:disabled):not([disabled]):not([aria-disabled="true"]):not(
+      [data-disabled]
+    ),
+    [role="button"]:not([aria-disabled="true"]),
+    [role="checkbox"]:not([aria-disabled="true"]),
+    [role="menuitem"]:not([data-disabled]),
+    [role="menuitemcheckbox"]:not([data-disabled]),
+    [role="menuitemradio"]:not([data-disabled]),
+    [role="option"]:not([aria-disabled="true"]),
+    [role="radio"]:not([aria-disabled="true"]),
+    [role="switch"]:not([aria-disabled="true"]),
+    [role="tab"]:not([disabled])
+  ) {
+    cursor: pointer;
+  }
+
+  :is(
+    button:disabled,
+    select:disabled,
+    input:disabled,
+    textarea:disabled,
+    [data-slot="button"]:is(:disabled, [disabled], [aria-disabled="true"], [data-disabled]),
+    [data-slot$="-button"]:is(:disabled, [disabled], [aria-disabled="true"], [data-disabled]),
+    [data-slot$="-trigger"]:is(:disabled, [disabled], [aria-disabled="true"], [data-disabled]),
+    [data-slot$="-item"]:is(:disabled, [disabled], [aria-disabled="true"], [data-disabled]),
+    [aria-disabled="true"],
+    [data-disabled]
+  ) {
+    cursor: not-allowed;
   }
 }

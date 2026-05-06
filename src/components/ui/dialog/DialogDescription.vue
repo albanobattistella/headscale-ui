@@ -8,11 +8,16 @@ import { cn } from "@/lib/utils";
 const props = defineProps<DialogDescriptionProps & { class?: HTMLAttributes["class"] }>();
 
 const delegatedProps = reactiveOmit(props, "class");
+
 const forwardedProps = useForwardProps(delegatedProps);
 </script>
 
 <template>
-  <DialogDescription data-slot="dialog-description" v-bind="forwardedProps" :class="cn('text-sm text-muted-foreground', props.class)">
+  <DialogDescription
+    data-slot="dialog-description"
+    v-bind="forwardedProps"
+    :class="cn('text-muted-foreground text-sm', props.class)"
+  >
     <slot />
   </DialogDescription>
 </template>

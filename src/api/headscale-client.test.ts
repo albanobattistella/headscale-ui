@@ -84,6 +84,12 @@ function responseFor(path: string) {
   if (path === "/api/v1/debug/node") {
     return { node: { ...node, id: "2", name: "debug-router" } };
   }
+  if (path === "/api/v1/auth/register") {
+    return { node: { ...node, id: "4", name: "auth-registered" } };
+  }
+  if (path === "/api/v1/auth/approve" || path === "/api/v1/auth/reject") {
+    return {};
+  }
   if (path === "/api/v1/apikey") {
     return { apiKeys: [{ id: "1", prefix: "ak_live_demo" }], apiKey: "ak_live_demo.secret" };
   }
@@ -163,6 +169,9 @@ describe("RestHeadscaleClient", () => {
     await api.listNodes({ user: "alice" });
     await api.getNode({ nodeId: "1" });
     await api.registerNode({ user: "1", key: "nodekey:pending-demo" });
+    await api.authRegister({ user: "1", authId: "auth-demo" });
+    await api.authApprove({ authId: "auth-demo" });
+    await api.authReject({ authId: "auth-denied" });
     await api.debugCreateNode({
       user: "1",
       key: "nodekey:debug",
@@ -170,7 +179,11 @@ describe("RestHeadscaleClient", () => {
       routes: "10.10.0.0/16",
     });
     await api.renameNode({ nodeId: "1", newName: "alice-main" });
-    await api.expireNode({ nodeId: "2", expiry: "2026-05-04T00:00:00Z" });
+    await api.expireNode({
+      nodeId: "2",
+      expiry: "2026-05-04T00:00:00Z",
+      disableExpiry: true,
+    });
     await api.deleteNode({ nodeId: "3" });
     await api.setTags({ nodeId: "1", tags: "tag:server,tag:router" });
     await api.setApprovedRoutes({ nodeId: "2", routes: "10.42.0.0/16,0.0.0.0/0,::/0" });
@@ -212,6 +225,16 @@ describe("RestHeadscaleClient", () => {
       key: "nodekey:pending-demo",
       user: "1",
     });
+    expect(seen("/api/v1/auth/register", "POST")?.body).toEqual({
+      authId: "auth-demo",
+      user: "1",
+    });
+    expect(seen("/api/v1/auth/approve", "POST")?.body).toEqual({
+      authId: "auth-demo",
+    });
+    expect(seen("/api/v1/auth/reject", "POST")?.body).toEqual({
+      authId: "auth-denied",
+    });
     expect(seen("/api/v1/debug/node", "POST")?.body).toEqual({
       key: "nodekey:debug",
       name: "debug-router",
@@ -220,6 +243,7 @@ describe("RestHeadscaleClient", () => {
     });
     expect(seen("/api/v1/node/1/rename/alice-main", "POST")).toBeTruthy();
     expect(seen("/api/v1/node/2/expire", "POST")?.query).toEqual({
+      disableExpiry: "true",
       expiry: "2026-05-04T00:00:00Z",
     });
     expect(seen("/api/v1/node/3", "DELETE")).toBeTruthy();

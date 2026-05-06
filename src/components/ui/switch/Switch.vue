@@ -1,54 +1,34 @@
 <script setup lang="ts">
+import { reactiveOmit } from "@vueuse/core";
+import type { SwitchRootEmits, SwitchRootProps } from "reka-ui";
+import { SwitchRoot, SwitchThumb, useForwardPropsEmits } from "reka-ui";
 import type { HTMLAttributes } from "vue";
 import { cn } from "@/lib/utils";
 
-defineOptions({
-  inheritAttrs: false,
-});
+const props = defineProps<SwitchRootProps & { class?: HTMLAttributes["class"] }>();
 
-withDefaults(
-  defineProps<{
-    class?: HTMLAttributes["class"];
-    disabled?: boolean;
-    modelValue?: boolean;
-  }>(),
-  {
-    disabled: false,
-    modelValue: false,
-  },
-);
+const emits = defineEmits<SwitchRootEmits>();
 
-defineEmits<{
-  "update:modelValue": [value: boolean];
-}>();
+const delegatedProps = reactiveOmit(props, "class");
+
+const forwarded = useForwardPropsEmits(delegatedProps, emits);
 </script>
 
 <template>
-  <label
-    :class="
-      cn(
-        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center',
-        disabled && 'cursor-not-allowed opacity-50',
-        $props.class,
-      )
-    "
+  <SwitchRoot
+    v-slot="slotProps"
+    data-slot="switch"
+    v-bind="forwarded"
+    :class="cn(
+      'peer data-[state=checked]:bg-primary data-[state=unchecked]:bg-input focus-visible:border-ring focus-visible:ring-ring/50 dark:data-[state=unchecked]:bg-input/80 inline-flex h-[1.15rem] w-8 shrink-0 cursor-pointer items-center rounded-full border border-transparent shadow-xs transition-all outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50',
+      props.class,
+    )"
   >
-    <input
-      v-bind="$attrs"
-      type="checkbox"
-      role="switch"
-      :checked="modelValue"
-      :disabled="disabled"
-      class="peer sr-only"
-      @change="$emit('update:modelValue', ($event.target as HTMLInputElement).checked)"
-    />
-    <span
-      class="h-5 w-9 rounded-full bg-muted transition-colors peer-checked:bg-primary peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2"
-      aria-hidden="true"
-    />
-    <span
-      class="pointer-events-none absolute start-0.5 h-4 w-4 rounded-full bg-background shadow-sm transition-transform ltr:peer-checked:translate-x-4 rtl:peer-checked:-translate-x-4"
-      aria-hidden="true"
-    />
-  </label>
+    <SwitchThumb
+      data-slot="switch-thumb"
+      :class="cn('bg-background dark:data-[state=unchecked]:bg-foreground dark:data-[state=checked]:bg-primary-foreground pointer-events-none block size-4 rounded-full ring-0 transition-all data-[state=checked]:ms-auto')"
+    >
+      <slot name="thumb" v-bind="slotProps" />
+    </SwitchThumb>
+  </SwitchRoot>
 </template>

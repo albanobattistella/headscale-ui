@@ -21,6 +21,7 @@ beforeEach(async () => {
   await page.viewport(1366, 768);
   document.body.innerHTML = "";
   localStorage.clear();
+  sessionStorage.clear();
   i18n.global.locale.value = "en";
   document.documentElement.lang = "en";
   document.documentElement.dir = "ltr";
@@ -43,7 +44,19 @@ async function renderLogin(path = "/") {
 }
 
 async function connectWithDefaults() {
-  await page.getByTestId("connect-submit").click();
+  const form = document.querySelector<HTMLElement>('[data-testid="connect-form"]');
+  const defaultProfile = document.querySelector<HTMLElement>(
+    '[data-testid="profile-option-Local mock"]',
+  );
+  if (!defaultProfile && (!form || form.getBoundingClientRect().width === 0)) {
+    await page.getByTestId("profile-option-new").click();
+  }
+  if (!defaultProfile) {
+    await expect.element(page.getByTestId("connect-form")).toBeVisible();
+    await page.getByTestId("connect-submit").click();
+    await expect.element(page.getByTestId("profile-option-Local mock")).toBeVisible();
+  }
+  await page.getByTestId("profile-option-Local mock").click();
   await expect.element(page.getByTestId("profile-menu-trigger")).toBeVisible();
 }
 
@@ -56,10 +69,179 @@ function expectNoHorizontalOverflow() {
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
 }
 
+function expectDialogFitsViewport(testId: string) {
+  const dialog = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+  expect(dialog).toBeTruthy();
+  const rect = (dialog as HTMLElement).getBoundingClientRect();
+  expect(rect.top).toBeGreaterThanOrEqual(0);
+  expect(rect.left).toBeGreaterThanOrEqual(0);
+  expect(rect.height).toBeLessThanOrEqual(window.innerHeight);
+  expect(rect.width).toBeLessThanOrEqual(window.innerWidth);
+}
+
+function expectConnectionFormGridLayout() {
+  const profileName = document.querySelector<HTMLElement>('[data-testid="connect-profile-name"]');
+  const mode = document.querySelector<HTMLElement>('[data-testid="connect-mode"]');
+  const serverUrl = document.querySelector<HTMLElement>('[data-testid="connect-server-url"]');
+  const apiKey = document.querySelector<HTMLElement>('[data-testid="connect-api-key"]');
+  expect(profileName).toBeTruthy();
+  expect(mode).toBeTruthy();
+  expect(serverUrl).toBeTruthy();
+  expect(apiKey).toBeTruthy();
+  const modeWrapper = (mode as HTMLElement).closest<HTMLElement>(
+    '[data-slot="native-select-wrapper"]',
+  );
+  expect(modeWrapper).toBeTruthy();
+
+  const profileNameRect = (profileName as HTMLElement).getBoundingClientRect();
+  const modeRect = (mode as HTMLElement).getBoundingClientRect();
+  const modeWrapperRect = (modeWrapper as HTMLElement).getBoundingClientRect();
+  const serverUrlRect = (serverUrl as HTMLElement).getBoundingClientRect();
+  const apiKeyRect = (apiKey as HTMLElement).getBoundingClientRect();
+  expect(Math.abs(profileNameRect.top - modeRect.top)).toBeLessThan(2);
+  expect(Math.abs(modeWrapperRect.width - profileNameRect.width)).toBeLessThan(2);
+  expect(Math.abs(serverUrlRect.left - profileNameRect.left)).toBeLessThan(2);
+  expect(Math.abs(apiKeyRect.left - profileNameRect.left)).toBeLessThan(2);
+  expect(serverUrlRect.width).toBeGreaterThan(profileNameRect.width * 1.8);
+  expect(apiKeyRect.width).toBeGreaterThan(modeRect.width * 1.8);
+}
+
+function expectDialogHasNoInternalScrollbar(testId: string) {
+  const dialog = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+  expect(dialog).toBeTruthy();
+  expect((dialog as HTMLElement).scrollHeight).toBeLessThanOrEqual(
+    (dialog as HTMLElement).clientHeight + 1,
+  );
+}
+
+function expectTextAlignsToStart(element: HTMLElement) {
+  expect(getComputedStyle(element).textAlign).toMatch(
+    document.documentElement.dir === "rtl" ? /^(right|start)$/ : /^(left|start)$/,
+  );
+}
+
 function expectPointerCursor(testId: string) {
   const element = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
   expect(element).toBeTruthy();
   expect(getComputedStyle(element as HTMLElement).cursor).toBe("pointer");
+}
+
+const interactiveCursorSelectors = [
+  "a[href]",
+  "button:not(:disabled):not([aria-disabled='true'])",
+  "select:not(:disabled)",
+  "input[type='button']:not(:disabled)",
+  "input[type='checkbox']:not(:disabled)",
+  "input[type='color']:not(:disabled)",
+  "input[type='date']:not(:disabled)",
+  "input[type='datetime-local']:not(:disabled)",
+  "input[type='file']:not(:disabled)",
+  "input[type='month']:not(:disabled)",
+  "input[type='radio']:not(:disabled)",
+  "input[type='reset']:not(:disabled)",
+  "input[type='submit']:not(:disabled)",
+  "input[type='time']:not(:disabled)",
+  "input[type='week']:not(:disabled)",
+  "label[for]",
+  "summary",
+  "[role='button']:not([aria-disabled='true'])",
+  "[role='checkbox']:not([aria-disabled='true'])",
+  "[role='menuitem']:not([data-disabled])",
+  "[role='menuitemcheckbox']:not([data-disabled])",
+  "[role='menuitemradio']:not([data-disabled])",
+  "[role='option']:not([aria-disabled='true'])",
+  "[role='radio']:not([aria-disabled='true'])",
+  "[role='switch']:not([aria-disabled='true'])",
+  "[role='tab']:not([disabled])",
+];
+
+function isVisibleCursorTarget(element: HTMLElement) {
+  const rect = element.getBoundingClientRect();
+  const style = getComputedStyle(element);
+  return (
+    rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden"
+  );
+}
+
+function describeCursorTarget(element: HTMLElement) {
+  return [
+    element.tagName.toLowerCase(),
+    element.dataset.testid ? `[data-testid="${element.dataset.testid}"]` : "",
+    element.getAttribute("role") ? `[role="${element.getAttribute("role")}"]` : "",
+    element.id ? `#${element.id}` : "",
+  ].join("");
+}
+
+function expectVisibleInteractiveElementsUsePointer() {
+  const offenders = Array.from(
+    document.querySelectorAll<HTMLElement>(interactiveCursorSelectors.join(",")),
+  )
+    .filter(isVisibleCursorTarget)
+    .filter((element) => getComputedStyle(element).pointerEvents !== "none")
+    .filter((element) => getComputedStyle(element).cursor !== "pointer")
+    .map((element) => `${describeCursorTarget(element)} -> ${getComputedStyle(element).cursor}`);
+
+  expect(offenders).toEqual([]);
+}
+
+function expectDialogMirrorsInlineEnd(testId: string) {
+  const dialog = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+  const close = dialog?.querySelector<HTMLElement>('[data-slot="dialog-close"]');
+  const header = dialog?.querySelector<HTMLElement>('[data-slot="dialog-header"]');
+  expect(dialog).toBeTruthy();
+  expect(close).toBeTruthy();
+  expect(header).toBeTruthy();
+  expectTextAlignsToStart(header as HTMLElement);
+
+  const dialogRect = (dialog as HTMLElement).getBoundingClientRect();
+  const closeRect = (close as HTMLElement).getBoundingClientRect();
+  const distanceToLeft = Math.abs(closeRect.left - dialogRect.left);
+  const distanceToRight = Math.abs(dialogRect.right - closeRect.right);
+  if (document.documentElement.dir === "rtl") {
+    expect(distanceToLeft).toBeLessThan(distanceToRight);
+  } else {
+    expect(distanceToRight).toBeLessThan(distanceToLeft);
+  }
+}
+
+function expectNativeSelectIconMirrorsInlineEnd(testId: string) {
+  const select = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+  const wrapper = select?.closest<HTMLElement>('[data-slot="native-select-wrapper"]');
+  const icon = wrapper?.querySelector<HTMLElement>('[data-slot="native-select-icon"]');
+  expect(wrapper).toBeTruthy();
+  expect(icon).toBeTruthy();
+
+  const wrapperRect = (wrapper as HTMLElement).getBoundingClientRect();
+  const iconRect = (icon as HTMLElement).getBoundingClientRect();
+  const distanceToLeft = Math.abs(iconRect.left - wrapperRect.left);
+  const distanceToRight = Math.abs(wrapperRect.right - iconRect.right);
+  if (document.documentElement.dir === "rtl") {
+    expect(distanceToLeft).toBeLessThan(distanceToRight);
+  } else {
+    expect(distanceToRight).toBeLessThan(distanceToLeft);
+  }
+}
+
+function expectSwitchThumbMirrorsCurrentState(testId: string) {
+  const switchRoot = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+  const thumb = switchRoot?.querySelector<HTMLElement>('[data-slot="switch-thumb"]');
+  expect(switchRoot).toBeTruthy();
+  expect(thumb).toBeTruthy();
+
+  const rootRect = (switchRoot as HTMLElement).getBoundingClientRect();
+  const thumbRect = (thumb as HTMLElement).getBoundingClientRect();
+  const thumbCenter = thumbRect.left + thumbRect.width / 2;
+  const rootCenter = rootRect.left + rootRect.width / 2;
+  const checked = (switchRoot as HTMLElement).dataset.state === "checked";
+  if (document.documentElement.dir === "rtl" && checked) {
+    expect(thumbCenter).toBeLessThan(rootCenter);
+  } else if (document.documentElement.dir === "rtl") {
+    expect(thumbCenter).toBeGreaterThan(rootCenter);
+  } else if (checked) {
+    expect(thumbCenter).toBeGreaterThan(rootCenter);
+  } else {
+    expect(thumbCenter).toBeLessThan(rootCenter);
+  }
 }
 
 function visibleSectionButtons() {
@@ -142,6 +324,7 @@ function expectAppHeader() {
   expect(document.querySelector<SVGElement>('[data-testid="app-logo"] svg')).toBeTruthy();
   expect(document.querySelector<HTMLElement>('[data-testid="profile-menu-trigger"]')).toBeTruthy();
   expect(document.querySelector<HTMLElement>('[data-testid="current-server"]')).toBeNull();
+  expect(navigation?.getAttribute("dir")).toBe(document.documentElement.dir);
 
   const headerRect = header?.getBoundingClientRect();
   const primaryRect = primaryRow?.getBoundingClientRect();
@@ -247,11 +430,32 @@ function operationCount(id: string) {
   return window.__headscaleUiOperationCalls?.filter((call) => call.id === id).length ?? 0;
 }
 
-function clickLastByTestIdPrefix(prefix: string) {
+function lastElementByTestIdPrefix(prefix: string) {
   const elements = Array.from(document.querySelectorAll<HTMLElement>(`[data-testid^="${prefix}"]`));
   const element = elements.at(-1);
   expect(element).toBeTruthy();
-  element?.click();
+  return element as HTMLElement;
+}
+
+function clickLastByTestIdPrefix(prefix: string) {
+  lastElementByTestIdPrefix(prefix).click();
+}
+
+function expectLastPolicyRemovalDestructive(prefix: string) {
+  const button = lastElementByTestIdPrefix(prefix);
+  expect(button.className).toContain("bg-destructive");
+}
+
+async function expectPolicyRemovalDialog() {
+  await expect.element(page.getByTestId("remove-policy-item-dialog")).toBeVisible();
+  const confirm = document.querySelector<HTMLElement>('[data-testid="confirm-remove-policy-item"]');
+  expect(confirm?.className).toContain("bg-destructive");
+}
+
+async function expectPolicyRemovalDialogClosed() {
+  await expect
+    .poll(() => document.querySelector('[data-testid="remove-policy-item-dialog"]'))
+    .toBeNull();
 }
 
 function latestSavedPolicy() {
@@ -375,16 +579,28 @@ async function closeProfileMenu() {
   }
 }
 
+async function closeLayerWithEscape(testId: string) {
+  const layer = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+  const closeButton = layer?.querySelector<HTMLButtonElement>('[data-slot="dialog-close"]');
+  if (closeButton) {
+    closeButton.click();
+  } else {
+    await userEvent.keyboard("{Escape}");
+  }
+  await expect.poll(() => document.querySelector(`[data-testid="${testId}"]`)).toBeNull();
+}
+
 async function chooseProfileMenuOption(testId: string) {
   await openProfileMenu();
   if (testId.startsWith("locale-option-")) {
-    await page.getByTestId("language-menu-trigger").hover();
+    clickDomTestId("language-menu-trigger");
   }
   if (testId.startsWith("theme-option-")) {
-    await page.getByTestId("theme-menu-trigger").hover();
+    clickDomTestId("theme-menu-trigger");
   }
   await expect.element(page.getByTestId(testId)).toBeVisible();
-  await page.getByTestId(testId).click();
+  clickDomTestId(testId);
+  await closeProfileMenu();
 }
 
 async function selectSectionTab(section: string) {
@@ -392,45 +608,60 @@ async function selectSectionTab(section: string) {
   expect(window.location.pathname.endsWith(`/${section}`)).toBe(true);
 }
 
+async function confirmDeleteProfile(name: string) {
+  await page.getByTestId(`delete-profile-${name}`).click();
+  await expect.element(page.getByTestId("delete-profile-dialog")).toBeVisible();
+  await page.getByTestId("confirm-delete-profile").click();
+}
+
 test("manages multiple saved connection profiles and supports logout", async () => {
   const rendered = await renderLogin();
 
+  await page.getByTestId("profile-option-new").click();
   await expect.element(page.getByTestId("connect-form")).toBeVisible();
   await page.getByTestId("connect-profile-name").fill("Office");
   await page.getByTestId("connect-api-key").fill("office-api-key");
   await page.getByTestId("connect-remember").click();
   await page.getByTestId("connect-remember").click();
-  await page.getByTestId("save-profile").click();
+  await page.getByTestId("connect-submit").click();
   expect(localStorage.getItem("headscale-ui-profiles")).toContain("Office");
   const officeProfile = storedProfiles().find((profile) => profile.name === "Office");
   expect(officeProfile?.id).toMatch(
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
   );
   await expect.element(page.getByTestId("profile-row-Office")).toBeVisible();
-  await page.getByTestId("load-profile-Office").click();
+  await page.getByTestId("edit-profile-Office").click();
+  await expect.element(page.getByTestId("connection-dialog")).toBeVisible();
   await expect.element(page.getByTestId("connect-profile-name")).toHaveValue("Office");
+  await page.getByTestId("connect-profile-name").fill("HQ");
+  await page.getByTestId("connect-submit").click();
+  expect(localStorage.getItem("headscale-ui-profiles")).toContain("HQ");
+  expect(localStorage.getItem("headscale-ui-profiles")).not.toContain("Office");
+  const hqProfile = storedProfiles().find((profile) => profile.name === "HQ");
+  expect(hqProfile).toBeTruthy();
+  await expect.element(page.getByTestId("profile-row-HQ")).toBeVisible();
 
-  await page.getByTestId("connect-profile").selectOptions("__new__");
+  await page.getByTestId("profile-option-new").click();
+  await expect.element(page.getByTestId("connection-dialog")).toBeVisible();
   await page.getByTestId("connect-profile-name").fill("Lab");
   await page.getByTestId("connect-api-key").fill("lab-api-key");
-  await page.getByTestId("save-profile").click();
-  expect(localStorage.getItem("headscale-ui-profiles")).toContain("Office");
+  await page.getByTestId("connect-submit").click();
+  expect(localStorage.getItem("headscale-ui-profiles")).toContain("HQ");
   expect(localStorage.getItem("headscale-ui-profiles")).toContain("Lab");
   const labProfile = storedProfiles().find((profile) => profile.name === "Lab");
   expect(labProfile).toBeTruthy();
 
-  await page.getByTestId("use-profile-Office").click();
-  await expect.element(page.getByTestId("connect-server-url")).toHaveValue("http://127.0.0.1:8080");
-  await page.getByTestId("connect-submit").click();
+  await page.getByTestId("profile-option-HQ").click();
   await expect.element(page.getByTestId("section-home")).toBeVisible();
   expectRecentDeviceStatusColors();
   await openProfileMenu();
-  await expect.element(page.getByTestId("profile-menu")).toHaveTextContent("Office");
+  await expect.element(page.getByTestId("profile-menu")).toHaveTextContent("HQ");
   expect(document.querySelector('[data-testid="current-server"]')).toBeNull();
   await closeProfileMenu();
-  expect(window.location.pathname).toBe(`/${officeProfile?.id}/home`);
+  await expect.poll(() => window.location.pathname).toBe(`/${hqProfile?.id}/home`);
+  await expect.element(page.getByTestId("section-devices")).toBeVisible();
   await page.getByTestId("section-devices").click();
-  expect(window.location.pathname).toBe(`/${officeProfile?.id}/devices`);
+  await expect.poll(() => window.location.pathname).toBe(`/${hqProfile?.id}/devices`);
   expectMachinesWorkbench();
 
   const profileRoute = window.location.pathname;
@@ -438,7 +669,7 @@ test("manages multiple saved connection profiles and supports logout", async () 
   await renderLogin(profileRoute);
   await expect.element(page.getByTestId("section-devices")).toBeVisible();
   await openProfileMenu();
-  await expect.element(page.getByTestId("profile-menu")).toHaveTextContent("Office");
+  await expect.element(page.getByTestId("profile-menu")).toHaveTextContent("HQ");
   await closeProfileMenu();
 
   expect(document.querySelector("#server-url")).toBeNull();
@@ -448,20 +679,24 @@ test("manages multiple saved connection profiles and supports logout", async () 
   await page.getByTestId("profile-menu-trigger").click();
   await openProfileMenu();
   await page.getByTestId("logout").click();
-  await expect.element(page.getByTestId("connect-form")).toBeVisible();
+  await expect.element(page.getByTestId("profile-picker")).toBeVisible();
   window.__headscaleUiOperationCalls = [];
   await new Promise((resolve) => window.setTimeout(resolve, 5200));
   expect(window.__headscaleUiOperationCalls).toEqual([]);
   expect(window.location.pathname).toBe("/");
   expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
-  expect(localStorage.getItem("headscale-ui-profiles")).toContain("Office");
+  expect(localStorage.getItem("headscale-ui-profiles")).toContain("HQ");
 
-  await page.getByTestId("delete-profile-Office").click();
-  expect(localStorage.getItem("headscale-ui-profiles")).not.toContain("Office");
+  await page.getByTestId("delete-profile-HQ").click();
+  await expect.element(page.getByTestId("delete-profile-dialog")).toBeVisible();
+  await expect.element(page.getByTestId("delete-profile-dialog")).toHaveTextContent("HQ");
+  await page.getByTestId("cancel-delete-profile").click();
+  expect(localStorage.getItem("headscale-ui-profiles")).toContain("HQ");
+  await confirmDeleteProfile("HQ");
+  expect(localStorage.getItem("headscale-ui-profiles")).not.toContain("HQ");
   expect(localStorage.getItem("headscale-ui-profiles")).toContain("Lab");
-  await page.getByTestId("connect-profile").selectOptions(labProfile?.id ?? "");
-  await page.getByTestId("delete-profile").click();
-  expect(localStorage.getItem("headscale-ui-profiles")).not.toContain("Lab");
+  await confirmDeleteProfile("Lab");
+  expect(localStorage.getItem("headscale-ui-profiles")).toBeNull();
 });
 
 test("does not flash the login form while restoring a profile route", async () => {
@@ -484,6 +719,47 @@ test("does not flash the login form while restoring a profile route", async () =
   expect(window.location.pathname).toBe(`/${profile.id}/devices`);
 });
 
+test("redirects unknown profile routes back to login", async () => {
+  const profile = {
+    id: "profile-office",
+    name: "Office",
+    mode: "mock",
+    baseUrl: "http://127.0.0.1:8080",
+    apiKey: "office-api-key",
+    updatedAt: "2026-05-04T00:00:00.000Z",
+  };
+  localStorage.setItem("headscale-ui-profiles", JSON.stringify([profile]));
+  localStorage.setItem("headscale-ui-active-profile", profile.id);
+
+  await renderLogin("/00000000-0000-4000-8000-000000000000/devices");
+
+  await expect.element(page.getByTestId("profile-picker")).toBeVisible();
+  await expect.poll(() => window.location.pathname).toBe("/");
+  expect(document.querySelector('[data-testid="section-devices"]')).toBeNull();
+  expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
+});
+
+test("validates saved profile credentials before restoring a route", async () => {
+  const profile = {
+    id: "profile-offline",
+    name: "Offline",
+    mode: "real",
+    baseUrl: "ftp://127.0.0.1",
+    apiKey: "offline-api-key",
+    updatedAt: "2026-05-04T00:00:00.000Z",
+  };
+  localStorage.setItem("headscale-ui-profiles", JSON.stringify([profile]));
+  localStorage.setItem("headscale-ui-active-profile", profile.id);
+
+  await renderLogin(`/${profile.id}/devices`);
+
+  await expect.element(page.getByTestId("profile-picker")).toBeVisible();
+  await expect.poll(() => window.location.pathname).toBe("/");
+  await expect.element(page.getByTestId("login-error")).toBeVisible();
+  expect(document.querySelector('[data-testid="section-devices"]')).toBeNull();
+  expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
+});
+
 test("normalizes stale mock profiles with remote URLs into real profiles", async () => {
   localStorage.setItem(
     "headscale-ui-profiles",
@@ -501,26 +777,59 @@ test("normalizes stale mock profiles with remote URLs into real profiles", async
 
   await renderLogin();
 
-  await page.getByTestId("use-profile-Office").click();
+  await page.getByTestId("edit-profile-Office").click();
+  await expect.element(page.getByTestId("connection-dialog")).toBeVisible();
   await expect.element(page.getByTestId("connect-mode")).toHaveValue("real");
   await expect
     .element(page.getByTestId("connect-server-url"))
     .toHaveValue("http://office.example.test");
 });
 
-test("keeps the login panel open when a real server is unreachable", async () => {
+test("asks before saving an unreachable profile and validates it before login", async () => {
   await renderLogin();
 
+  await page.getByTestId("profile-option-new").click();
   await page.getByTestId("connect-mode").selectOptions("real");
   await page.getByTestId("connect-profile-name").fill("Offline");
-  await page.getByTestId("connect-server-url").fill("http://127.0.0.1:9");
+  await page.getByTestId("connect-server-url").fill("ftp://127.0.0.1");
   await page.getByTestId("connect-api-key").fill("offline-api-key");
   await page.getByTestId("connect-submit").click();
 
-  await expect.element(page.getByTestId("connect-error")).toBeVisible();
+  await expect.element(page.getByTestId("profile-validation-dialog")).toBeVisible();
+  await expect.element(page.getByTestId("profile-validation-error")).toBeVisible();
+  await page.getByTestId("review-profile-connection").click();
   await expect.element(page.getByTestId("connect-form")).toBeVisible();
+  await expect.element(page.getByTestId("connect-error")).toBeVisible();
   expect(document.querySelector('[data-testid="section-home"]')).toBeNull();
   expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
+
+  await page.getByTestId("connect-submit").click();
+  await expect.element(page.getByTestId("profile-validation-dialog")).toBeVisible();
+  await page.getByTestId("continue-add-profile").click();
+  await expect.element(page.getByTestId("profile-row-Offline")).toBeVisible();
+  expect(localStorage.getItem("headscale-ui-profiles")).toContain("Offline");
+  expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
+
+  clickDomTestId("profile-option-Offline");
+  await expect.element(page.getByTestId("profile-loading-Offline")).toBeVisible();
+  await expect.element(page.getByTestId("login-error")).toBeVisible();
+  expect(document.querySelector('[data-testid="section-home"]')).toBeNull();
+  expect(window.location.pathname).toBe("/");
+});
+
+test("stores non-remembered profiles in session storage", async () => {
+  await renderLogin();
+
+  await page.getByTestId("profile-option-new").click();
+  await page.getByTestId("connect-profile-name").fill("Temporary");
+  await page.getByTestId("connect-api-key").fill("temporary-api-key");
+  await page.getByTestId("connect-remember").click();
+  await page.getByTestId("connect-submit").click();
+
+  expect(localStorage.getItem("headscale-ui-profiles")).toBeNull();
+  expect(sessionStorage.getItem("headscale-ui-profiles")).toContain("Temporary");
+  expect(sessionStorage.getItem("headscale-ui-active-profile")).toBeNull();
+  await expect.element(page.getByTestId("profile-row-Temporary")).toBeVisible();
 });
 
 test("refreshes data on every section change and repeated dialog open", async () => {
@@ -540,13 +849,13 @@ test("refreshes data on every section change and repeated dialog open", async ()
   await expect.element(page.getByTestId("user-detail-dialog")).toBeVisible();
   await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterMembers);
   const afterFirstUserDialog = operationCount("node.list");
-  await userEvent.keyboard("{Escape}");
+  await closeLayerWithEscape("user-detail-dialog");
 
   await page.getByTestId("member-detail-link-alice").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toBeVisible();
   await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterFirstUserDialog);
   const afterSecondUserDialog = operationCount("node.list");
-  await userEvent.keyboard("{Escape}");
+  await closeLayerWithEscape("user-detail-dialog");
 
   await page.getByTestId("section-invites").click();
   await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterSecondUserDialog);
@@ -566,43 +875,73 @@ test("refreshes data on every section change and repeated dialog open", async ()
 test("supports language and theme selectors before login", async () => {
   await renderLogin();
 
-  await page.getByTestId("locale-select").selectOptions("zh");
-  expect(document.documentElement.lang).toBe("zh");
-  await expect.element(page.getByTestId("connect-submit")).toHaveTextContent("连接");
+  await page.getByTestId("profile-option-new").click();
+  expectConnectionFormGridLayout();
+  const connectionHeader = document.querySelector<HTMLElement>(
+    '[data-testid="connection-dialog"] [data-slot="dialog-header"]',
+  );
+  expect(connectionHeader?.querySelector("svg")).toBeNull();
+  expectDialogHasNoInternalScrollbar("connection-dialog");
+  expect(document.querySelector('[data-testid="save-profile"]')).toBeNull();
+  await expect.element(page.getByTestId("connect-submit")).toHaveTextContent("Add");
+  await expect
+    .element(page.getByTestId("api-key-guide"))
+    .toHaveTextContent("headscale apikeys create --expiration 90d");
+  await expect
+    .element(page.getByTestId("api-key-docs-link"))
+    .toHaveAttribute("href", "https://docs.headscale.org/ref/remote-cli/");
+  await closeLayerWithEscape("connection-dialog");
 
-  await page.getByTestId("theme-select").selectOptions("dark");
+  await page.getByTestId("locale-select").click();
+  await page.getByTestId("locale-option-zh").click();
+  expect(document.documentElement.lang).toBe("zh");
+  await page.getByTestId("profile-option-new").click();
+  await expect.element(page.getByTestId("connect-submit")).toHaveTextContent("添加");
+  await closeLayerWithEscape("connection-dialog");
+
+  await page.getByTestId("theme-select").click();
+  await page.getByTestId("theme-option-dark").click();
   expect(document.documentElement.classList.contains("dark")).toBe(true);
   expect(localStorage.getItem("headscale-ui-theme")).toBe("dark");
 
-  await page.getByTestId("theme-select").selectOptions("auto");
+  await page.getByTestId("theme-select").click();
+  await page.getByTestId("theme-option-auto").click();
   expect(localStorage.getItem("headscale-ui-theme")).toBe("auto");
 });
 
-test("uses pointer cursors for clickable controls and links", async () => {
+test("keeps the add profile dialog inside a short mobile viewport", async () => {
+  await page.viewport(390, 640);
   await renderLogin();
 
+  await page.getByTestId("profile-option-new").click();
+  await expect.element(page.getByTestId("connection-dialog")).toBeVisible();
+  expectDialogFitsViewport("connection-dialog");
+  expectNoHorizontalOverflow();
+});
+
+test("uses pointer cursors for buttons, links, menus and tabs", async () => {
+  await renderLogin();
+
+  expectPointerCursor("profile-option-new");
+  expectVisibleInteractiveElementsUsePointer();
+  await page.getByTestId("profile-option-new").click();
+  await expect.element(page.getByTestId("connect-form")).toBeVisible();
+  expectPointerCursor("api-key-docs-link");
   expectPointerCursor("connect-submit");
-  expectPointerCursor("save-profile");
+  expectVisibleInteractiveElementsUsePointer();
 
   await connectWithDefaults();
   expectPointerCursor("profile-menu-trigger");
-  expectPointerCursor("section-routes");
-  expectPointerCursor("refresh-data");
-
-  await page.getByTestId("section-devices").click();
-  expectPointerCursor("install-docs-link");
-  expectPointerCursor("add-device-toggle");
-
-  await page.getByTestId("section-routes").click();
-  expectPointerCursor("route-machine-link-2");
-  expect(document.querySelector('[data-testid="route-user-link-2"]')).toBeNull();
-  expectPointerCursor("approve-routes-2");
+  expectPointerCursor("section-devices");
+  expectVisibleInteractiveElementsUsePointer();
 
   await openProfileMenu();
   expectPointerCursor("language-menu-trigger");
-  await page.getByTestId("language-menu-trigger").hover();
+  expectVisibleInteractiveElementsUsePointer();
+  clickDomTestId("language-menu-trigger");
   await expect.element(page.getByTestId("locale-option-zh")).toBeVisible();
   expectPointerCursor("locale-option-zh");
+  expectVisibleInteractiveElementsUsePointer();
   await closeProfileMenu();
 });
 
@@ -610,6 +949,7 @@ test("supports consumer-friendly tailnet management flows", async () => {
   window.__headscaleUiOperationCalls = [];
 
   await renderLogin();
+  await page.getByTestId("profile-option-new").click();
   await expect.element(page.getByTestId("connect-form")).toBeVisible();
   await connectWithDefaults();
   expectAppHeader();
@@ -656,7 +996,7 @@ test("supports consumer-friendly tailnet management flows", async () => {
   await expect.element(page.getByTestId("user-detail-device-1")).toHaveTextContent("alice-laptop");
   await page.getByTestId("user-detail-device-1").click();
   await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("alice-laptop");
-  await userEvent.keyboard("{Escape}");
+  await closeLayerWithEscape("device-detail-dialog");
   await page.getByTestId("device-detail-link-2").click();
   await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("edge-router");
   await page.getByTestId("device-detail-view-routes").click();
@@ -674,7 +1014,7 @@ test("supports consumer-friendly tailnet management flows", async () => {
   await expect.element(page.getByTestId("machine-actions-menu-1")).toBeVisible();
   await page.getByTestId("view-node-details-action-1").click();
   await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("alice-laptop");
-  await userEvent.keyboard("{Escape}");
+  await closeLayerWithEscape("device-detail-dialog");
   await page.getByTestId("machine-actions-trigger-2").click();
   await expect.element(page.getByTestId("machine-actions-menu-2")).toBeVisible();
   await page.getByTestId("view-node-routes-action-2").click();
@@ -688,6 +1028,20 @@ test("supports consumer-friendly tailnet management flows", async () => {
   await page.getByTestId("rename-node-dialog-input").fill("alice-main");
   await page.getByTestId("rename-node-confirm").click();
   await expect.element(page.getByTestId("device-1")).toHaveTextContent("alice-main");
+  await page.getByTestId("machine-actions-trigger-1").click();
+  await expect.element(page.getByTestId("machine-actions-menu-1")).toBeVisible();
+  await page.getByTestId("edit-node-tags-action-1").click();
+  await expect.element(page.getByTestId("node-tags-dialog")).toBeVisible();
+  await page.getByTestId("node-tags-input").fill("tag:workstation, tag:laptop");
+  await page.getByTestId("node-tags-cancel").click();
+  await page.getByTestId("machine-actions-trigger-1").click();
+  await page.getByTestId("edit-node-tags-action-1").click();
+  await expect.element(page.getByTestId("node-tags-dialog")).toBeVisible();
+  await page.getByTestId("node-tags-input").fill("tag:laptop");
+  await page.getByTestId("node-tags-confirm").click();
+  await expect
+    .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "node.setTags"))
+    .toBe(true);
 
   window.__headscaleUiOperationCalls = [];
   await page.getByTestId("section-routes").click();
@@ -728,7 +1082,7 @@ test("supports consumer-friendly tailnet management flows", async () => {
 
   expect(document.body.textContent).not.toContain("/api/v1/node");
   expect(document.querySelector('[data-testid="run-operation"]')).toBeNull();
-});
+}, 30000);
 
 test("covers dashboard refresh, machine filters, exports and machine lifecycle actions", async () => {
   await renderLogin();
@@ -834,7 +1188,10 @@ test("covers the empty machine state and add-first-device flow", async () => {
 
   await expect.element(page.getByTestId("machines-empty")).toBeVisible();
   await page.getByTestId("add-first-device").click();
+  await expect.element(page.getByTestId("add-device-dialog")).toBeVisible();
+  await expect.element(page.getByTestId("add-device-stepper")).toBeVisible();
   await expect.element(page.getByTestId("device-setup-flow")).toBeVisible();
+  await expect.element(page.getByTestId("setup-device-step")).toBeVisible();
   await expect.element(page.getByTestId("setup-tags")).toHaveValue("");
 });
 
@@ -846,6 +1203,10 @@ test("renames a machine from the user detail device path", async () => {
   await page.getByTestId("member-detail-link-alice").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Alice Ops");
   await page.getByTestId("user-detail-device-1").click();
+  await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("alice-laptop");
+  await page.getByTestId("device-detail-edit-tags").click();
+  await expect.element(page.getByTestId("node-tags-dialog")).toBeVisible();
+  await page.getByTestId("node-tags-cancel").click();
   await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("alice-laptop");
   await page.getByTestId("device-detail-rename").click();
   await expect.element(page.getByTestId("rename-node-dialog")).toBeVisible();
@@ -881,7 +1242,7 @@ test("covers user filters, user export and member deletion", async () => {
     .toHaveTextContent("old-phone");
   await page.getByTestId("member-device-tag-charlie-3").click();
   await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("old-phone");
-  await userEvent.keyboard("{Escape}");
+  await closeLayerWithEscape("device-detail-dialog");
   await page.getByTestId("member-detail-link-charlie").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Charlie");
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("oidc");
@@ -892,7 +1253,7 @@ test("covers user filters, user export and member deletion", async () => {
   await page.getByTestId("member-actions-trigger-charlie").click();
   await page.getByTestId("view-member-details-charlie").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Charlie");
-  await userEvent.keyboard("{Escape}");
+  await closeLayerWithEscape("user-detail-dialog");
   await page.getByTestId("member-actions-trigger-charlie").click();
   await page.getByTestId("create-invite-for-member-charlie").click();
   await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
@@ -927,7 +1288,41 @@ test("covers user filters, user export and member deletion", async () => {
   await page.getByTestId("create-member").click();
   await expect.element(page.getByTestId("member-erin")).toBeVisible();
   await page.getByTestId("member-actions-trigger-erin").click();
+  await page.getByTestId("rename-member-erin").click();
+  await expect.element(page.getByTestId("rename-member-dialog")).toBeVisible();
+  await page.getByTestId("rename-member-name").fill("erin-admin");
+  await page.getByTestId("rename-member-cancel").click();
+  await expect
+    .poll(() => document.querySelector('[data-testid="rename-member-dialog"]'))
+    .toBeNull();
+  await expect.element(page.getByTestId("member-actions-trigger-erin")).toBeVisible();
+  await page.getByTestId("member-actions-trigger-erin").click();
+  await page.getByTestId("rename-member-erin").click();
+  await expect.element(page.getByTestId("rename-member-dialog")).toBeVisible();
+  await page.getByTestId("rename-member-name").fill("erin-admin");
+  await page.getByTestId("confirm-rename-member").click();
+  await expect.element(page.getByTestId("member-erin-admin")).toBeVisible();
+  await page.getByTestId("member-actions-trigger-erin-admin").click();
+  await page.getByTestId("delete-member-erin-admin").click();
+  await expect.element(page.getByTestId("delete-member-dialog")).toBeVisible();
+  await page.getByTestId("cancel-delete-member").click();
+  await expect
+    .poll(() => document.querySelector('[data-testid="delete-member-dialog"]'))
+    .toBeNull();
+  await expect.element(page.getByTestId("member-actions-trigger-erin-admin")).toBeVisible();
+  await page.getByTestId("member-actions-trigger-erin-admin").click();
+  await page.getByTestId("delete-member-erin-admin").click();
+  await expect.element(page.getByTestId("delete-member-dialog")).toBeVisible();
+  await page.getByTestId("confirm-delete-member").click();
+  expect(document.querySelector('[data-testid="member-erin-admin"]')).toBeNull();
+  await openCreateMemberDialog();
+  await page.getByTestId("member-name").fill("erin");
+  await page.getByTestId("create-member").click();
+  await expect.element(page.getByTestId("member-erin")).toBeVisible();
+  await page.getByTestId("member-actions-trigger-erin").click();
   await page.getByTestId("delete-member-erin").click();
+  await expect.element(page.getByTestId("delete-member-dialog")).toBeVisible();
+  await page.getByTestId("confirm-delete-member").click();
   expect(document.querySelector('[data-testid="member-erin"]')).toBeNull();
 });
 
@@ -941,7 +1336,7 @@ test("covers auth-key filters, expiration and deletion", async () => {
   expect(document.querySelector('[data-testid="invite-1"]')?.closest("table")).toBeTruthy();
   await page.getByTestId("invite-owner-link-1").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Alice Ops");
-  await userEvent.keyboard("{Escape}");
+  await closeLayerWithEscape("user-detail-dialog");
   expect(
     document
       .querySelector('[data-testid="invite-search"]')
@@ -1053,10 +1448,17 @@ test("covers auth-key filters, expiration and deletion", async () => {
   ).toBe(new Date("2026-06-01T00:00").toISOString());
 
   await page.getByTestId("expire-invite-1").click();
+  await expect.element(page.getByTestId("expire-invite-dialog")).toBeVisible();
+  await page.getByTestId("cancel-invite-action").click();
+  await page.getByTestId("expire-invite-1").click();
+  await expect.element(page.getByTestId("expire-invite-dialog")).toBeVisible();
+  await page.getByTestId("confirm-invite-action").click();
   await expect
     .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "preauthkey.expire"))
     .toBe(true);
   await page.getByTestId("delete-invite-2").click();
+  await expect.element(page.getByTestId("delete-invite-dialog")).toBeVisible();
+  await page.getByTestId("confirm-invite-action").click();
   await expect
     .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "preauthkey.delete"))
     .toBe(true);
@@ -1162,15 +1564,33 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   window.__headscaleUiOperationCalls = [];
   await page.getByTestId("policy-tab-rules").click();
   await expect.element(page.getByTestId("policy-rules-toolbar")).toBeVisible();
+  expectLastPolicyRemovalDestructive("remove-policy-rule-");
   clickLastByTestIdPrefix("remove-policy-rule-");
+  await expectPolicyRemovalDialog();
+  await page.getByTestId("cancel-remove-policy-item").click();
+  await expectPolicyRemovalDialogClosed();
+  await expect.poll(() => countTableRowsByTestIdPrefix("policy-rule-")).toBe(initialRules + 1);
+  expectLastPolicyRemovalDestructive("remove-policy-rule-");
+  clickLastByTestIdPrefix("remove-policy-rule-");
+  await expectPolicyRemovalDialog();
+  await page.getByTestId("confirm-remove-policy-item").click();
+  await expectPolicyRemovalDialogClosed();
   await expect.poll(() => countTableRowsByTestIdPrefix("policy-rule-")).toBe(initialRules);
   await page.getByTestId("policy-tab-groups").click();
   await expect.element(page.getByTestId("open-policy-group-dialog")).toBeVisible();
+  expectLastPolicyRemovalDestructive("remove-policy-group-");
   clickLastByTestIdPrefix("remove-policy-group-");
+  await expectPolicyRemovalDialog();
+  await page.getByTestId("confirm-remove-policy-item").click();
+  await expectPolicyRemovalDialogClosed();
   await expect.poll(() => countTableRowsByTestIdPrefix("policy-group-")).toBe(initialGroups);
   await page.getByTestId("policy-tab-tags").click();
   await expect.element(page.getByTestId("open-policy-tag-owner-dialog")).toBeVisible();
+  expectLastPolicyRemovalDestructive("remove-policy-tag-owner-");
   clickLastByTestIdPrefix("remove-policy-tag-owner-");
+  await expectPolicyRemovalDialog();
+  await page.getByTestId("confirm-remove-policy-item").click();
+  await expectPolicyRemovalDialogClosed();
   await expect.poll(() => countTableRowsByTestIdPrefix("policy-tag-owner-")).toBe(initialTagOwners);
 
   expectNoRawPolicyEditor();
@@ -1196,6 +1616,65 @@ test("does not expose a settings page", async () => {
   expect(document.querySelector('[data-testid="section-settings"]')).toBeNull();
   expect(document.querySelector('[data-testid^="settings-"]')).toBeNull();
   expect(document.querySelector('[data-testid="api-key-1"]')).toBeNull();
+});
+
+test("covers server settings API keys and maintenance actions", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+  window.__headscaleUiOperationCalls = [];
+  const clipboard = stubClipboard();
+
+  try {
+    await openProfileMenu();
+    await page.getByTestId("open-server-settings").click();
+    await expect.element(page.getByTestId("server-settings-dialog")).toBeVisible();
+    await page.getByTestId("server-tab-api-keys").click();
+    await expect.element(page.getByTestId("api-key-table")).toBeVisible();
+    await page.getByTestId("api-key-expiration").click();
+    await userEvent.keyboard("{Escape}");
+    await page.getByTestId("create-api-key-confirm").click();
+    await expect.element(page.getByTestId("created-api-key")).toBeVisible();
+    await page.getByTestId("copy-created-api-key").click();
+    expect(clipboard.writes.some((value) => value.startsWith("ak_demo_"))).toBe(true);
+    await expect
+      .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "apikey.create"))
+      .toBe(true);
+
+    await page.getByTestId("expire-api-key-ak_live_demo").click();
+    await expect.element(page.getByTestId("expire-api-key-dialog")).toBeVisible();
+    await page.getByTestId("cancel-api-key-action").click();
+    await page.getByTestId("expire-api-key-ak_live_demo").click();
+    await expect.element(page.getByTestId("expire-api-key-dialog")).toBeVisible();
+    await page.getByTestId("confirm-api-key-action").click();
+    await expect
+      .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "apikey.expire"))
+      .toBe(true);
+
+    await page.getByTestId("delete-api-key-ak_old_demo").click();
+    await expect.element(page.getByTestId("delete-api-key-dialog")).toBeVisible();
+    await page.getByTestId("confirm-api-key-action").click();
+    await expect
+      .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "apikey.delete"))
+      .toBe(true);
+    expect(document.querySelector('[data-testid="api-key-row-ak_old_demo"]')).toBeNull();
+
+    await page.getByTestId("server-tab-maintenance").click();
+    await expect.element(page.getByTestId("server-maintenance-settings")).toBeVisible();
+    await page.getByTestId("open-backfill-node-ips").click();
+    await expect.element(page.getByTestId("backfill-node-ips-dialog")).toBeVisible();
+    await page.getByTestId("cancel-backfill-node-ips").click();
+    await page.getByTestId("open-backfill-node-ips").click();
+    await page.getByTestId("backfill-node-ips-confirmed").click();
+    await page.getByTestId("confirm-backfill-node-ips").click();
+    await expect
+      .poll(() =>
+        window.__headscaleUiOperationCalls?.some((call) => call.id === "node.backfillIps"),
+      )
+      .toBe(true);
+    await expect.element(page.getByTestId("backfill-node-ips-result")).toBeVisible();
+  } finally {
+    clipboard.restore();
+  }
 });
 
 test("covers task navigation and the client-device setup branch", async () => {
@@ -1225,26 +1704,72 @@ test("covers task navigation and the client-device setup branch", async () => {
 
   await page.getByTestId("section-devices").click();
   await page.getByTestId("add-device-toggle").click();
+  await expect.element(page.getByTestId("add-device-dialog")).toBeVisible();
+  expect(document.querySelector('[data-testid="add-device-stepper"]')).toBeNull();
+  await expect.element(page.getByTestId("add-device-options")).toBeVisible();
+  await page.getByTestId("add-pending-node").click();
+  await expect.element(page.getByTestId("pending-registration-flow")).toBeVisible();
+  await page.getByTestId("pending-registration-user").selectOptions("1");
+  await page.getByTestId("pending-node-key").fill("nodekey:pending-e2e");
+  await page.getByTestId("register-pending-node").click();
+  await expect
+    .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "node.register"))
+    .toBe(true);
+  await expect.element(page.getByTestId("registration-result")).toBeVisible();
+  await page.getByTestId("add-device-prev").click();
+  await expect.element(page.getByTestId("pending-registration-flow")).toBeVisible();
+  await page.getByTestId("auth-request-id").fill("auth-e2e");
+  await page.getByTestId("auth-register").click();
+  await expect
+    .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "auth.register"))
+    .toBe(true);
+  await expect.element(page.getByTestId("registration-result")).toBeVisible();
+  await page.getByTestId("add-device-prev").click();
+  await page.getByTestId("auth-approve").click();
+  await expect
+    .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "auth.approve"))
+    .toBe(true);
+  await expect.element(page.getByTestId("registration-result")).toBeVisible();
+  await page.getByTestId("add-device-prev").click();
+  await page.getByTestId("auth-reject").click();
+  await expect
+    .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "auth.reject"))
+    .toBe(true);
+  await expect.element(page.getByTestId("registration-result")).toBeVisible();
+  await page.getByTestId("add-device-finish").click();
+  await page.getByTestId("add-device-toggle").click();
+  await expect.element(page.getByTestId("add-device-options")).toBeVisible();
   await page.getByTestId("add-client-device").click();
   await expect.element(page.getByTestId("device-setup-flow")).toBeVisible();
+  expect(
+    document
+      .querySelector('[data-testid="device-setup-flow"]')
+      ?.closest('[data-testid="add-device-dialog"]'),
+  ).toBeTruthy();
+  await expect.element(page.getByTestId("setup-device-step")).toBeVisible();
   await expect.element(page.getByTestId("setup-tags")).toHaveValue("");
   await expect.element(page.getByTestId("setup-ephemeral")).toBeChecked();
-  await expect.element(page.getByTestId("setup-reusable")).not.toBeChecked();
   clickDomTestId("setup-ephemeral");
   await expect.element(page.getByTestId("setup-ephemeral")).not.toBeChecked();
-  clickDomTestId("setup-reusable");
-  await expect.element(page.getByTestId("setup-reusable")).toBeChecked();
   clickDomTestId("setup-exit-node");
   clickDomTestId("setup-tags-enabled");
   await expect.element(page.getByTestId("setup-tags")).toHaveValue("tag:server");
   await page.getByTestId("setup-tags").fill("tag:client");
   await expect.element(page.getByTestId("setup-tags")).toHaveValue("tag:client");
+  await page.getByTestId("add-device-next").click();
+  await expect.element(page.getByTestId("setup-auth-key-step")).toBeVisible();
+  await expect.element(page.getByTestId("setup-reusable")).not.toBeChecked();
+  clickDomTestId("setup-reusable");
+  await expect.element(page.getByTestId("setup-reusable")).toBeChecked();
   await page.getByTestId("setup-expiration-increment").click();
   await expect.element(page.getByTestId("setup-expiration")).toHaveValue("8");
   await page.getByTestId("setup-expiration-decrement").click();
   await expect.element(page.getByTestId("setup-expiration")).toHaveValue("7");
   await page.getByTestId("setup-expiration").fill("12");
   await expect.element(page.getByTestId("setup-expiration")).toHaveValue("12");
+  await page.getByTestId("add-device-step-preferences").click();
+  await expect.element(page.getByTestId("setup-device-step")).toBeVisible();
+  await expect.element(page.getByTestId("setup-tags")).toHaveValue("tag:client");
   await page.getByTestId("setup-manage-tags").click();
   await expect.element(page.getByTestId("policy-editor")).toBeVisible();
 });
@@ -1264,7 +1789,10 @@ test("copies generated auth keys and install commands", async () => {
 
     await page.getByTestId("section-devices").click();
     await page.getByTestId("add-device-toggle").click();
+    await expect.element(page.getByTestId("add-device-dialog")).toBeVisible();
     await page.getByTestId("add-linux-device").click();
+    await page.getByTestId("add-device-next").click();
+    await page.getByTestId("add-device-next").click();
     await page.getByTestId("generate-install-script").click();
     await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
     await page.getByTestId("create-invite").click();
@@ -1281,6 +1809,7 @@ test("copies generated auth keys and install commands", async () => {
 test("keeps every core function usable on mobile", async () => {
   await page.viewport(390, 844);
   await renderLogin();
+  await page.getByTestId("profile-option-new").click();
   await expect.element(page.getByTestId("connect-form")).toBeVisible();
   expectNoHorizontalOverflow();
 
@@ -1301,9 +1830,13 @@ test("keeps every core function usable on mobile", async () => {
   await page.getByTestId("create-member").click();
   await expect.element(page.getByTestId("member-mobile")).toBeVisible();
   await page.getByTestId("member-actions-trigger-mobile-mobile").click();
+  await page.getByTestId("rename-member-mobile-mobile").click();
+  await expect.element(page.getByTestId("rename-member-dialog")).toBeVisible();
+  await page.getByTestId("rename-member-cancel").click();
+  await page.getByTestId("member-actions-trigger-mobile-mobile").click();
   await page.getByTestId("view-member-details-mobile-mobile").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("mobile");
-  await userEvent.keyboard("{Escape}");
+  await closeLayerWithEscape("user-detail-dialog");
   await page.getByTestId("member-actions-trigger-mobile-mobile").click();
   await page.getByTestId("view-member-machines-mobile-mobile").click();
   await expect.element(page.getByTestId("device-search")).toHaveValue("mobile");
@@ -1314,6 +1847,8 @@ test("keeps every core function usable on mobile", async () => {
   await page.getByTestId("cancel-create-invite").click();
   await page.getByTestId("member-actions-trigger-mobile-mobile").click();
   await page.getByTestId("delete-member-mobile-mobile").click();
+  await expect.element(page.getByTestId("delete-member-dialog")).toBeVisible();
+  await page.getByTestId("confirm-delete-member").click();
   expect(document.querySelector('[data-testid="member-mobile"]')).toBeNull();
   expectNoHorizontalOverflow();
 
@@ -1335,7 +1870,7 @@ test("keeps every core function usable on mobile", async () => {
   await page.getByTestId("machine-actions-trigger-mobile-1").click();
   await page.getByTestId("view-node-details-action-mobile-1").click();
   await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("alice-laptop");
-  await userEvent.keyboard("{Escape}");
+  await closeLayerWithEscape("device-detail-dialog");
   await page.getByTestId("device-search").fill("edge");
   await page.getByTestId("machine-actions-trigger-mobile-2").click();
   await page.getByTestId("view-node-routes-action-mobile-2").click();
@@ -1357,10 +1892,24 @@ test("keeps every core function usable on mobile", async () => {
   await page.getByTestId("rename-node-dialog-input").fill("alice-phone");
   await page.getByTestId("rename-node-confirm").click();
   await expect.element(page.getByTestId("device-1")).toHaveTextContent("alice-phone");
+  await page.getByTestId("machine-actions-trigger-mobile-1").click();
+  await expect.element(page.getByTestId("machine-actions-menu-mobile-1")).toBeVisible();
+  await page.getByTestId("edit-node-tags-action-mobile-1").click();
+  await expect.element(page.getByTestId("node-tags-dialog")).toBeVisible();
+  await page.getByTestId("node-tags-cancel").click();
   expectNoHorizontalOverflow();
 
   await selectSectionTab("routes");
   await page.getByTestId("approve-routes-2").click();
+  await expect.element(page.getByTestId("approve-routes-dialog")).toBeVisible();
+  await expect.element(page.getByTestId("approve-routes-target-0")).toBeVisible();
+  await page.getByTestId("approve-routes-cancel").click();
+  expect(
+    window.__headscaleUiOperationCalls?.some((call) => call.id === "node.setApprovedRoutes"),
+  ).toBe(false);
+  await page.getByTestId("approve-routes-2").click();
+  await expect.element(page.getByTestId("approve-routes-dialog")).toBeVisible();
+  await page.getByTestId("approve-routes-confirm").click();
   await expect
     .poll(() =>
       window.__headscaleUiOperationCalls?.some((call) => call.id === "node.setApprovedRoutes"),
@@ -1385,7 +1934,7 @@ test("keeps every core function usable on mobile", async () => {
   expectNoHorizontalOverflow();
 });
 
-test("defaults to English and supports the United Nations official languages", async () => {
+test("defaults to English and supports the United Nations official languages plus Traditional Chinese", async () => {
   await renderLogin();
   await connectWithDefaults();
 
@@ -1401,6 +1950,17 @@ test("defaults to English and supports the United Nations official languages", a
   selectDomTestId("user-filter", "service");
   expect(document.querySelector('[data-testid="member-tagged-devices"]')).toBeNull();
   await expect.element(page.getByTestId("user-table")).toHaveTextContent("没有匹配筛选条件的用户");
+
+  await chooseProfileMenuOption("locale-option-zh-Hant");
+  expect(document.documentElement.lang).toBe("zh-Hant");
+  expect(document.documentElement.dir).toBe("ltr");
+  await expect.element(page.getByTestId("section-devices")).toHaveTextContent("機器");
+  expect(document.querySelector('[data-testid="member-devices-header"]')?.textContent?.trim()).toBe(
+    "裝置",
+  );
+  await expect
+    .element(page.getByTestId("user-table"))
+    .toHaveTextContent("沒有匹配篩選條件的使用者");
 
   for (const code of ["fr", "ru", "es", "ar"] as const) {
     await chooseProfileMenuOption(`locale-option-${code}`);
@@ -1428,6 +1988,102 @@ test("defaults to English and supports the United Nations official languages", a
   expectNoHorizontalOverflow();
 });
 
+test("adapts every main page and shared controls for Arabic RTL", async () => {
+  await renderLogin();
+
+  await page.getByTestId("locale-select").click();
+  await page.getByTestId("locale-option-ar").click();
+  expect(document.documentElement.lang).toBe("ar");
+  expect(document.documentElement.dir).toBe("rtl");
+  await expect.element(page.getByTestId("profile-picker")).toBeVisible();
+  expectNoHorizontalOverflow();
+
+  await page.getByTestId("profile-option-new").click();
+  await expect.element(page.getByTestId("connection-dialog")).toBeVisible();
+  expectDialogMirrorsInlineEnd("connection-dialog");
+  await closeLayerWithEscape("connection-dialog");
+
+  await connectWithDefaults();
+  expectAppHeader();
+  expectResponsiveTabMenu();
+  expectNoHorizontalOverflow();
+
+  await selectSectionTab("home");
+  await expect.element(page.getByTestId("refresh-data")).toBeVisible();
+  await expect.element(page.getByTestId("section-home")).toHaveTextContent("نظرة عامة");
+  expectNoHorizontalOverflow();
+
+  await selectSectionTab("devices");
+  await expect.element(page.getByTestId("machines-workbench")).toBeVisible();
+  await expect.element(page.getByTestId("machine-list")).toBeVisible();
+  expectNativeSelectIconMirrorsInlineEnd("machine-filter");
+  await page.getByTestId("device-detail-link-1").click();
+  await expect.element(page.getByTestId("device-detail-dialog")).toBeVisible();
+  expectDialogMirrorsInlineEnd("device-detail-dialog");
+  await closeLayerWithEscape("device-detail-dialog");
+  await page.getByTestId("add-device-toggle").click();
+  await expect.element(page.getByTestId("add-device-dialog")).toBeVisible();
+  expectDialogMirrorsInlineEnd("add-device-dialog");
+  await page.getByTestId("add-client-device").click();
+  await expect.element(page.getByTestId("device-setup-flow")).toBeVisible();
+  expectDialogMirrorsInlineEnd("add-device-dialog");
+  await page.getByTestId("add-device-next").click();
+  await expect.element(page.getByTestId("setup-auth-key-step")).toBeVisible();
+  expectSwitchThumbMirrorsCurrentState("setup-reusable");
+  await page.getByTestId("setup-reusable").click();
+  await expect.element(page.getByTestId("setup-reusable")).toBeChecked();
+  expectSwitchThumbMirrorsCurrentState("setup-reusable");
+  await closeLayerWithEscape("add-device-dialog");
+  expectNoHorizontalOverflow();
+
+  await selectSectionTab("members");
+  await expect.element(page.getByTestId("user-table")).toBeVisible();
+  expectNativeSelectIconMirrorsInlineEnd("user-filter");
+  await page.getByTestId("open-create-member").click();
+  await expect.element(page.getByTestId("member-create-dialog")).toBeVisible();
+  expectDialogMirrorsInlineEnd("member-create-dialog");
+  await closeLayerWithEscape("member-create-dialog");
+  expectNoHorizontalOverflow();
+
+  await selectSectionTab("invites");
+  await expect.element(page.getByTestId("invite-table")).toBeVisible();
+  expectNativeSelectIconMirrorsInlineEnd("invite-filter");
+  await page.getByTestId("open-create-invite").click();
+  await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
+  expectDialogMirrorsInlineEnd("invite-create-dialog");
+  await page.getByTestId("invite-expiration").click();
+  expectNativeSelectIconMirrorsInlineEnd("invite-expiration-hour");
+  expectNoHorizontalOverflow();
+  await closeLayerWithEscape("invite-create-dialog");
+
+  await selectSectionTab("routes");
+  await expect.element(page.getByTestId("route-node-2")).toBeVisible();
+  await page.getByTestId("approve-route-2-0").click();
+  await expect.element(page.getByTestId("approve-route-dialog")).toBeVisible();
+  const alertHeader = document.querySelector<HTMLElement>('[data-slot="alert-dialog-header"]');
+  expect(alertHeader).toBeTruthy();
+  expectTextAlignsToStart(alertHeader as HTMLElement);
+  await page.getByTestId("approve-route-cancel").click();
+  expectNoHorizontalOverflow();
+
+  await selectSectionTab("access");
+  await expect.element(page.getByTestId("policy-editor")).toBeVisible();
+  await expect.element(page.getByTestId("policy-rules-table")).toBeVisible();
+  await page.getByTestId("open-policy-rule-dialog").click();
+  await expect.element(page.getByTestId("policy-rule-dialog")).toBeVisible();
+  expectDialogMirrorsInlineEnd("policy-rule-dialog");
+  expectNativeSelectIconMirrorsInlineEnd("policy-simple-source");
+  await closeLayerWithEscape("policy-rule-dialog");
+  expectNoHorizontalOverflow();
+
+  await page.viewport(390, 844);
+  expectResponsiveTabMenu();
+  for (const section of ["home", "devices", "members", "invites", "routes", "access"] as const) {
+    await selectSectionTab(section);
+    expectNoHorizontalOverflow();
+  }
+});
+
 test("mirrors the access policy workspace in Arabic", async () => {
   await renderLogin();
   await connectWithDefaults();
@@ -1452,8 +2108,8 @@ test("mirrors the access policy workspace in Arabic", async () => {
   expect(Math.abs((toolbarRect?.right ?? 0) - (tableRect?.right ?? 0))).toBeLessThan(2);
 
   const headings = Array.from(document.querySelectorAll<HTMLElement>("th"));
-  expect(getComputedStyle(headings[0] as HTMLElement).textAlign).toMatch(/^(right|start)$/);
-  expect(getComputedStyle(headings.at(-1) as HTMLElement).textAlign).toMatch(/^(left|end)$/);
+  expect(getComputedStyle(headings[0] as HTMLElement).textAlign).toBe("left");
+  expect(getComputedStyle(headings.at(-1) as HTMLElement).textAlign).toBe("left");
   expectNoHorizontalOverflow();
 
   await page.viewport(390, 844);
@@ -1480,27 +2136,39 @@ test("supports light, dark and system theme modes", async () => {
   expect(seenThemes).toEqual(new Set(["light", "dark", "auto"]));
 });
 
-test("uses a Tailscale-style add device setup flow", async () => {
+test("uses a Tailscale-style add device setup dialog", async () => {
   await renderLogin();
   await connectWithDefaults();
 
   await page.getByTestId("section-devices").click();
   expectMachinesWorkbench();
   await page.getByTestId("add-device-toggle").click();
+  await expect.element(page.getByTestId("add-device-dialog")).toBeVisible();
+  expect(document.querySelector('[data-testid="add-device-stepper"]')).toBeNull();
+  await expect.element(page.getByTestId("add-device-options")).toBeVisible();
   await page.getByTestId("add-linux-device").click();
 
   await expect.element(page.getByTestId("device-setup-flow")).toBeVisible();
+  await expect.element(page.getByTestId("add-device-stepper")).toBeVisible();
+  expect(
+    document
+      .querySelector('[data-testid="device-setup-flow"]')
+      ?.closest('[data-testid="add-device-dialog"]'),
+  ).toBeTruthy();
   await expect.element(page.getByTestId("setup-device-step")).toBeVisible();
-  await expect.element(page.getByTestId("setup-auth-key-step")).toBeVisible();
-  await expect.element(page.getByTestId("setup-generate-step")).toBeVisible();
   await expect.element(page.getByTestId("setup-tags")).toHaveValue("tag:server");
+  expect(document.querySelector('[data-testid="setup-auth-key-step"]')).toBeNull();
+  await page.getByTestId("add-device-next").click();
+  await expect.element(page.getByTestId("setup-auth-key-step")).toBeVisible();
   await expect.element(page.getByTestId("setup-reusable")).toBeChecked();
+  await page.getByTestId("add-device-next").click();
+  await expect.element(page.getByTestId("setup-generate-step")).toBeVisible();
 
   await page.getByTestId("generate-install-script").click();
   await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
   await page.getByTestId("create-invite").click();
   await expect.element(page.getByTestId("created-invite")).toHaveTextContent("tailscale up");
 
-  await page.getByTestId("back-to-machines").click();
+  await page.getByTestId("add-device-finish").click();
   expectMachinesWorkbench();
 });

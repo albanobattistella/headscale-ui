@@ -300,19 +300,35 @@ export class MockHeadscaleClient implements HeadscaleClient {
 
   async registerNode(payload: OperationPayload) {
     recordOperationCall("node.register", "POST", "/api/v1/node/register", payload);
-    const user =
-      this.snapshot.users.find((item) => item.id === stringValue(payload, "user")) ??
-      this.snapshot.users[0];
+    const user = this.findUser(stringValue(payload, "user")) ?? this.snapshot.users[0];
     const node = this.createNode(user, stringValue(payload, "key") || "registered-node");
     this.snapshot.nodes.push(node);
     return { node };
   }
 
+  async authRegister(payload: OperationPayload) {
+    recordOperationCall("auth.register", "POST", "/api/v1/auth/register", payload);
+    const user = this.findUser(stringValue(payload, "user")) ?? this.snapshot.users[0];
+    const authId = stringValue(payload, "authId") || "auth-request";
+    const node = this.createNode(user, `auth-${authId}`);
+    node.registerMethod = "auth";
+    this.snapshot.nodes.push(node);
+    return { node };
+  }
+
+  async authApprove(payload: OperationPayload) {
+    recordOperationCall("auth.approve", "POST", "/api/v1/auth/approve", payload);
+    return {};
+  }
+
+  async authReject(payload: OperationPayload) {
+    recordOperationCall("auth.reject", "POST", "/api/v1/auth/reject", payload);
+    return {};
+  }
+
   async debugCreateNode(payload: OperationPayload) {
     recordOperationCall("node.debugCreate", "POST", "/api/v1/debug/node", payload);
-    const user =
-      this.snapshot.users.find((item) => item.id === stringValue(payload, "user")) ??
-      this.snapshot.users[0];
+    const user = this.findUser(stringValue(payload, "user")) ?? this.snapshot.users[0];
     const node = this.createNode(user, stringValue(payload, "name") || "debug-node");
     node.availableRoutes = parseList(payload.routes);
     node.subnetRoutes = node.availableRoutes.filter((route) => !route.includes("/0"));
@@ -331,6 +347,10 @@ export class MockHeadscaleClient implements HeadscaleClient {
   async expireNode(payload: OperationPayload) {
     recordOperationCall("node.expire", "POST", "/api/v1/node/{node_id}/expire", payload);
     const node = this.findNode(payload);
+    if (booleanValue(payload, "disableExpiry")) {
+      node.expiry = undefined;
+      return { node };
+    }
     node.expiry = stringValue(payload, "expiry") || nowIso();
     node.online = false;
     return { node };
@@ -427,6 +447,12 @@ export class MockHeadscaleClient implements HeadscaleClient {
     }
 
     return node;
+  }
+
+  private findUser(value: string) {
+    return this.snapshot.users.find(
+      (item) => item.id === value || item.name === value || item.email === value,
+    );
   }
 
   private findApiKey(payload: OperationPayload) {

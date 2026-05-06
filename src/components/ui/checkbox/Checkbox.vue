@@ -1,39 +1,35 @@
 <script setup lang="ts">
+import { reactiveOmit } from "@vueuse/core";
+import { Check } from "lucide-vue-next";
+import type { CheckboxRootEmits, CheckboxRootProps } from "reka-ui";
+import { CheckboxIndicator, CheckboxRoot, useForwardPropsEmits } from "reka-ui";
+import type { HTMLAttributes } from "vue";
 import { cn } from "@/lib/utils";
 
-defineOptions({
-  inheritAttrs: false,
-});
+const props = defineProps<CheckboxRootProps & { class?: HTMLAttributes["class"] }>();
+const emits = defineEmits<CheckboxRootEmits>();
 
-withDefaults(
-  defineProps<{
-    class?: string;
-    disabled?: boolean;
-    modelValue?: boolean;
-  }>(),
-  {
-    disabled: false,
-    modelValue: false,
-  },
-);
+const delegatedProps = reactiveOmit(props, "class");
 
-defineEmits<{
-  "update:modelValue": [value: boolean];
-}>();
+const forwarded = useForwardPropsEmits(delegatedProps, emits);
 </script>
 
 <template>
-  <input
-    v-bind="$attrs"
-    type="checkbox"
-    :checked="modelValue"
-    :disabled="disabled"
+  <CheckboxRoot
+    v-slot="slotProps"
+    data-slot="checkbox"
+    v-bind="forwarded"
     :class="
-      cn(
-        'h-5 w-5 cursor-pointer rounded-sm border border-input bg-background accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
-        $props.class
-      )
-    "
-    @change="$emit('update:modelValue', ($event.target as HTMLInputElement).checked)"
-  />
+      cn('peer border-input data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground data-[state=checked]:border-primary focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive size-4 shrink-0 cursor-pointer rounded-[4px] border shadow-xs transition-shadow outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50',
+         props.class)"
+  >
+    <CheckboxIndicator
+      data-slot="checkbox-indicator"
+      class="grid place-content-center text-current transition-none"
+    >
+      <slot v-bind="slotProps">
+        <Check class="size-3.5" />
+      </slot>
+    </CheckboxIndicator>
+  </CheckboxRoot>
 </template>

@@ -141,6 +141,27 @@ export class RestHeadscaleClient implements HeadscaleClient {
     return (await this.http.post(url)).data;
   }
 
+  async authRegister(payload: OperationPayload) {
+    const body = {
+      user: stringValue(payload, "user"),
+      authId: stringValue(payload, "authId"),
+    };
+    recordOperationCall("auth.register", "POST", "/api/v1/auth/register", body);
+    return (await this.http.post("/api/v1/auth/register", body)).data;
+  }
+
+  async authApprove(payload: OperationPayload) {
+    const body = { authId: stringValue(payload, "authId") };
+    recordOperationCall("auth.approve", "POST", "/api/v1/auth/approve", body);
+    return (await this.http.post("/api/v1/auth/approve", body)).data;
+  }
+
+  async authReject(payload: OperationPayload) {
+    const body = { authId: stringValue(payload, "authId") };
+    recordOperationCall("auth.reject", "POST", "/api/v1/auth/reject", body);
+    return (await this.http.post("/api/v1/auth/reject", body)).data;
+  }
+
   async debugCreateNode(payload: OperationPayload) {
     const body = {
       user: stringValue(payload, "user"),
@@ -163,7 +184,7 @@ export class RestHeadscaleClient implements HeadscaleClient {
   async expireNode(payload: OperationPayload) {
     const url = withQuery(
       `/api/v1/node/${stringValue(payload, "nodeId")}/expire`,
-      paramsFrom(payload, ["expiry"]),
+      paramsFrom(payload, ["expiry", "disableExpiry"]),
     );
     recordOperationCall("node.expire", "POST", url, payload);
     return (await this.http.post(url)).data;

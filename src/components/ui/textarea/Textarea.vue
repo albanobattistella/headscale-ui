@@ -1,31 +1,26 @@
 <script setup lang="ts">
+import { useVModel } from "@vueuse/core";
+import type { HTMLAttributes } from "vue";
 import { cn } from "@/lib/utils";
 
-defineProps<{
-  class?: string;
-  modelValue?: string;
-  placeholder?: string;
-  rows?: number;
-  disabled?: boolean;
+const props = defineProps<{
+  class?: HTMLAttributes["class"];
+  defaultValue?: string | number;
+  modelValue?: string | number;
 }>();
 
-defineEmits<{
-  "update:modelValue": [value: string];
-}>();
+const emits = defineEmits<(e: "update:modelValue", payload: string | number) => void>();
+
+const modelValue = useVModel(props, "modelValue", emits, {
+  passive: true,
+  defaultValue: props.defaultValue,
+});
 </script>
 
 <template>
   <textarea
-    :value="modelValue"
-    :placeholder="placeholder"
-    :rows="rows ?? 4"
-    :disabled="disabled"
-    :class="
-      cn(
-        'min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
-        $props.class
-      )
-    "
-    @input="$emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
+    v-model="modelValue"
+    data-slot="textarea"
+    :class="cn('border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm', props.class)"
   />
 </template>

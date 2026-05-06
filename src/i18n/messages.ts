@@ -1,5 +1,6 @@
 import type { OperationGroup, OperationId } from "@/domain/headscale-operations";
 import type { Locale } from "./locales";
+import { toTraditionalChineseValue } from "./traditional";
 
 export const messageKeys = {
   appTitle: "Headscale UI",
@@ -11,14 +12,43 @@ export const messageKeys = {
   connectTitle: "Connect to Headscale",
   connectSubtitle:
     "Enter the server address and authorization token before opening the control surface.",
+  profileSelectorTitle: "Choose a server profile",
+  profileSelectorDescription:
+    "Pick a saved profile like an operating system login, or add another Headscale server.",
   profile: "Profile",
   newProfile: "New profile",
   profileName: "Profile name",
+  addServerProfile: "Add server",
+  connectAsProfile: "Connect as",
+  updatedProfile: "Updated",
   saveProfile: "Save profile",
+  addProfile: "Add",
+  addingProfile: "Adding",
+  checkingCredentials: "Checking credentials",
+  continueAddProfileTitle: "Add this server anyway?",
+  continueAddProfileDescription:
+    "The UI could not verify the server URL or API key. You can keep editing the details, or add the profile and fix it later.",
+  reviewProfileConnection: "Review details",
+  continueAddProfile: "Continue adding",
   savedProfiles: "Saved profiles",
   useProfile: "Use",
+  editProfile: "Edit profile",
   deleteProfile: "Delete profile",
+  confirmDeleteProfileTitle: "Delete this profile?",
+  confirmDeleteProfileDescription:
+    "This removes the saved server URL and API key from this browser.",
+  apiKeyGuideTitle: "How to get an API key",
+  apiKeyGuideDescription:
+    "Headscale API keys are created from the server CLI before the UI can connect.",
+  apiKeyGuideCommandLabel: "Run on the Headscale server",
+  apiKeyGuideStepServer: "SSH into the server that runs Headscale.",
+  apiKeyGuideStepCreate: "Create a short-lived API key with the Headscale CLI.",
+  apiKeyGuideStepCopy: "Copy the full key immediately; Headscale only shows it once.",
+  apiKeyGuideStepPaste: "Paste the key here with your HTTPS Headscale URL.",
+  apiKeyGuideHint: "If a key is lost or expired, expire it and create a new one on the server.",
+  headscaleDocs: "Headscale docs",
   rememberConnection: "Remember this connection in this browser",
+  cancel: "Cancel",
   connect: "Connect",
   logout: "Log out",
   mode: "Mode",
@@ -78,8 +108,9 @@ export const messageKeys = {
 } as const;
 
 export type MessageKey = keyof typeof messageKeys;
+type SourceLocale = Exclude<Locale, "zh-Hant">;
 
-export const commonMessages: Record<Locale, Record<MessageKey, string>> = {
+const commonMessagesBase = {
   en: messageKeys,
   zh: {
     appTitle: "Headscale UI",
@@ -90,14 +121,41 @@ export const commonMessages: Record<Locale, Record<MessageKey, string>> = {
     apiKeyPlaceholder: "由 headscale apikeys create 创建的 Bearer token",
     connectTitle: "连接到 Headscale",
     connectSubtitle: "先输入服务器地址和授权 token，再进入控制台。",
+    profileSelectorTitle: "选择服务器 Profile",
+    profileSelectorDescription:
+      "像系统登录一样选择已保存的服务器 Profile，或添加新的 Headscale 服务器。",
     profile: "Profile",
     newProfile: "新 Profile",
     profileName: "Profile 名称",
+    addServerProfile: "添加服务器",
+    connectAsProfile: "连接为",
+    updatedProfile: "更新于",
     saveProfile: "保存 Profile",
+    addProfile: "添加",
+    addingProfile: "添加中",
+    checkingCredentials: "正在校验凭证",
+    continueAddProfileTitle: "仍然添加这个服务器？",
+    continueAddProfileDescription:
+      "UI 无法校验服务器 URL 或 API Key。你可以继续修改信息，也可以先添加这个 Profile，稍后再修正。",
+    reviewProfileConnection: "返回修改",
+    continueAddProfile: "继续添加",
     savedProfiles: "已保存 Profile",
     useProfile: "使用",
+    editProfile: "编辑 Profile",
     deleteProfile: "删除 Profile",
+    confirmDeleteProfileTitle: "删除这个 Profile？",
+    confirmDeleteProfileDescription: "这会从当前浏览器移除保存的服务器 URL 和 API Key。",
+    apiKeyGuideTitle: "如何获取 API Key",
+    apiKeyGuideDescription: "Headscale API Key 需要先在服务端 CLI 创建，UI 才能连接。",
+    apiKeyGuideCommandLabel: "在 Headscale 服务器执行",
+    apiKeyGuideStepServer: "SSH 登录运行 Headscale 的服务器。",
+    apiKeyGuideStepCreate: "使用 Headscale CLI 创建一个短期 API Key。",
+    apiKeyGuideStepCopy: "立即复制完整 key；Headscale 只会显示一次。",
+    apiKeyGuideStepPaste: "把 key 和 HTTPS Headscale URL 粘贴到这里。",
+    apiKeyGuideHint: "如果 key 丢失或过期，请在服务器上过期旧 key 并创建新的 key。",
+    headscaleDocs: "Headscale 文档",
     rememberConnection: "在此浏览器长期记住这次连接",
+    cancel: "取消",
     connect: "连接",
     logout: "退出",
     mode: "模式",
@@ -160,14 +218,45 @@ export const commonMessages: Record<Locale, Record<MessageKey, string>> = {
     connectTitle: "Se connecter à Headscale",
     connectSubtitle:
       "Saisissez l'adresse du serveur et le jeton d'autorisation avant d'ouvrir la console.",
+    profileSelectorTitle: "Choisissez un profil serveur",
+    profileSelectorDescription:
+      "Choisissez un profil enregistré comme une connexion système, ou ajoutez un autre serveur Headscale.",
     profile: "Profil",
     newProfile: "Nouveau profil",
     profileName: "Nom du profil",
+    addServerProfile: "Ajouter un serveur",
+    connectAsProfile: "Se connecter avec",
+    updatedProfile: "Mis à jour",
     saveProfile: "Enregistrer le profil",
+    addProfile: "Ajouter",
+    addingProfile: "Ajout",
+    checkingCredentials: "Vérification des identifiants",
+    continueAddProfileTitle: "Ajouter ce serveur quand même ?",
+    continueAddProfileDescription:
+      "L'UI n'a pas pu vérifier l'URL du serveur ou la clé API. Vous pouvez corriger les détails ou ajouter le profil et le modifier plus tard.",
+    reviewProfileConnection: "Vérifier les détails",
+    continueAddProfile: "Continuer l'ajout",
     savedProfiles: "Profils enregistrés",
     useProfile: "Utiliser",
+    editProfile: "Modifier le profil",
     deleteProfile: "Supprimer le profil",
+    confirmDeleteProfileTitle: "Supprimer ce profil ?",
+    confirmDeleteProfileDescription:
+      "Cela supprime l'URL du serveur et la clé API enregistrées dans ce navigateur.",
+    apiKeyGuideTitle: "Comment obtenir une clé API",
+    apiKeyGuideDescription:
+      "Les clés API Headscale sont créées depuis la CLI du serveur avant que l'UI puisse se connecter.",
+    apiKeyGuideCommandLabel: "À exécuter sur le serveur Headscale",
+    apiKeyGuideStepServer: "Connectez-vous en SSH au serveur qui exécute Headscale.",
+    apiKeyGuideStepCreate: "Créez une clé API courte durée avec la CLI Headscale.",
+    apiKeyGuideStepCopy:
+      "Copiez immédiatement la clé complète; Headscale ne l'affiche qu'une fois.",
+    apiKeyGuideStepPaste: "Collez la clé ici avec l'URL HTTPS de Headscale.",
+    apiKeyGuideHint:
+      "Si une clé est perdue ou expirée, expirez-la puis créez-en une nouvelle sur le serveur.",
+    headscaleDocs: "Documentation Headscale",
     rememberConnection: "Mémoriser cette connexion dans ce navigateur",
+    cancel: "Annuler",
     connect: "Se connecter",
     logout: "Déconnexion",
     mode: "Mode",
@@ -235,14 +324,43 @@ export const commonMessages: Record<Locale, Record<MessageKey, string>> = {
     apiKeyPlaceholder: "Bearer-токен, созданный headscale apikeys create",
     connectTitle: "Подключиться к Headscale",
     connectSubtitle: "Введите адрес сервера и токен авторизации перед открытием панели.",
+    profileSelectorTitle: "Выберите профиль сервера",
+    profileSelectorDescription:
+      "Выберите сохранённый профиль как при входе в систему или добавьте другой сервер Headscale.",
     profile: "Профиль",
     newProfile: "Новый профиль",
     profileName: "Имя профиля",
+    addServerProfile: "Добавить сервер",
+    connectAsProfile: "Подключиться как",
+    updatedProfile: "Обновлено",
     saveProfile: "Сохранить профиль",
+    addProfile: "Добавить",
+    addingProfile: "Добавление",
+    checkingCredentials: "Проверка учётных данных",
+    continueAddProfileTitle: "Всё равно добавить этот сервер?",
+    continueAddProfileDescription:
+      "UI не смог проверить URL сервера или API-ключ. Можно исправить данные или добавить профиль и поправить его позже.",
+    reviewProfileConnection: "Проверить данные",
+    continueAddProfile: "Продолжить добавление",
     savedProfiles: "Сохранённые профили",
     useProfile: "Использовать",
+    editProfile: "Редактировать профиль",
     deleteProfile: "Удалить профиль",
+    confirmDeleteProfileTitle: "Удалить этот профиль?",
+    confirmDeleteProfileDescription:
+      "Это удалит сохранённый URL сервера и API-ключ из этого браузера.",
+    apiKeyGuideTitle: "Как получить API-ключ",
+    apiKeyGuideDescription: "API-ключи Headscale создаются через CLI на сервере до подключения UI.",
+    apiKeyGuideCommandLabel: "Выполните на сервере Headscale",
+    apiKeyGuideStepServer: "Подключитесь по SSH к серверу, где запущен Headscale.",
+    apiKeyGuideStepCreate: "Создайте краткосрочный API-ключ с помощью CLI Headscale.",
+    apiKeyGuideStepCopy: "Сразу скопируйте полный ключ; Headscale показывает его только один раз.",
+    apiKeyGuideStepPaste: "Вставьте ключ здесь вместе с HTTPS URL Headscale.",
+    apiKeyGuideHint:
+      "Если ключ потерян или истёк, завершите его действие и создайте новый на сервере.",
+    headscaleDocs: "Документация Headscale",
     rememberConnection: "Запомнить это подключение в браузере",
+    cancel: "Отмена",
     connect: "Подключиться",
     logout: "Выйти",
     mode: "Режим",
@@ -309,14 +427,43 @@ export const commonMessages: Record<Locale, Record<MessageKey, string>> = {
     apiKeyPlaceholder: "Token Bearer creado por headscale apikeys create",
     connectTitle: "Conectar a Headscale",
     connectSubtitle: "Introduce la dirección del servidor y el token antes de abrir la consola.",
+    profileSelectorTitle: "Elige un perfil de servidor",
+    profileSelectorDescription:
+      "Elige un perfil guardado como un inicio de sesión del sistema, o añade otro servidor Headscale.",
     profile: "Perfil",
     newProfile: "Nuevo perfil",
     profileName: "Nombre del perfil",
+    addServerProfile: "Añadir servidor",
+    connectAsProfile: "Conectar como",
+    updatedProfile: "Actualizado",
     saveProfile: "Guardar perfil",
+    addProfile: "Añadir",
+    addingProfile: "Añadiendo",
+    checkingCredentials: "Verificando credenciales",
+    continueAddProfileTitle: "¿Añadir este servidor de todos modos?",
+    continueAddProfileDescription:
+      "La UI no pudo verificar la URL del servidor o la clave API. Puedes revisar los datos o añadir el perfil y corregirlo después.",
+    reviewProfileConnection: "Revisar datos",
+    continueAddProfile: "Continuar añadiendo",
     savedProfiles: "Perfiles guardados",
     useProfile: "Usar",
+    editProfile: "Editar perfil",
     deleteProfile: "Eliminar perfil",
+    confirmDeleteProfileTitle: "¿Eliminar este perfil?",
+    confirmDeleteProfileDescription:
+      "Esto elimina la URL del servidor y la clave API guardadas en este navegador.",
+    apiKeyGuideTitle: "Cómo obtener una clave API",
+    apiKeyGuideDescription:
+      "Las claves API de Headscale se crean desde la CLI del servidor antes de que la UI pueda conectar.",
+    apiKeyGuideCommandLabel: "Ejecutar en el servidor Headscale",
+    apiKeyGuideStepServer: "Entra por SSH al servidor donde se ejecuta Headscale.",
+    apiKeyGuideStepCreate: "Crea una clave API de corta duración con la CLI de Headscale.",
+    apiKeyGuideStepCopy: "Copia la clave completa de inmediato; Headscale solo la muestra una vez.",
+    apiKeyGuideStepPaste: "Pega la clave aquí junto con la URL HTTPS de Headscale.",
+    apiKeyGuideHint: "Si una clave se pierde o caduca, expírala y crea una nueva en el servidor.",
+    headscaleDocs: "Documentación de Headscale",
     rememberConnection: "Recordar esta conexión en este navegador",
+    cancel: "Cancelar",
     connect: "Conectar",
     logout: "Salir",
     mode: "Modo",
@@ -383,14 +530,43 @@ export const commonMessages: Record<Locale, Record<MessageKey, string>> = {
     apiKeyPlaceholder: "رمز Bearer أنشأه headscale apikeys create",
     connectTitle: "الاتصال بـ Headscale",
     connectSubtitle: "أدخل عنوان الخادم ورمز التفويض قبل فتح لوحة التحكم.",
+    profileSelectorTitle: "اختر ملف خادم",
+    profileSelectorDescription:
+      "اختر ملفا محفوظا مثل تسجيل دخول النظام، أو أضف خادم Headscale آخر.",
     profile: "الملف الشخصي",
     newProfile: "ملف جديد",
     profileName: "اسم الملف",
+    addServerProfile: "إضافة خادم",
+    connectAsProfile: "الاتصال باسم",
+    updatedProfile: "تم التحديث",
     saveProfile: "حفظ الملف",
+    addProfile: "إضافة",
+    addingProfile: "جار الإضافة",
+    checkingCredentials: "جار التحقق من بيانات الاعتماد",
+    continueAddProfileTitle: "إضافة هذا الخادم على أي حال؟",
+    continueAddProfileDescription:
+      "تعذر على الواجهة التحقق من عنوان الخادم أو مفتاح API. يمكنك مراجعة التفاصيل أو إضافة الملف وتعديله لاحقا.",
+    reviewProfileConnection: "مراجعة التفاصيل",
+    continueAddProfile: "متابعة الإضافة",
     savedProfiles: "الملفات المحفوظة",
     useProfile: "استخدام",
+    editProfile: "تعديل الملف",
     deleteProfile: "حذف الملف",
+    confirmDeleteProfileTitle: "حذف هذا الملف؟",
+    confirmDeleteProfileDescription:
+      "سيؤدي هذا إلى إزالة عنوان الخادم ومفتاح API المحفوظين من هذا المتصفح.",
+    apiKeyGuideTitle: "كيفية الحصول على مفتاح API",
+    apiKeyGuideDescription:
+      "يتم إنشاء مفاتيح API الخاصة بـ Headscale من CLI على الخادم قبل أن تتمكن الواجهة من الاتصال.",
+    apiKeyGuideCommandLabel: "نفذ على خادم Headscale",
+    apiKeyGuideStepServer: "سجل الدخول عبر SSH إلى الخادم الذي يشغل Headscale.",
+    apiKeyGuideStepCreate: "أنشئ مفتاح API قصير المدة باستخدام CLI الخاص بـ Headscale.",
+    apiKeyGuideStepCopy: "انسخ المفتاح الكامل فورا؛ يعرضه Headscale مرة واحدة فقط.",
+    apiKeyGuideStepPaste: "الصق المفتاح هنا مع عنوان HTTPS الخاص بـ Headscale.",
+    apiKeyGuideHint: "إذا فقد المفتاح أو انتهت صلاحيته، قم بإنهائه وأنشئ مفتاحا جديدا على الخادم.",
+    headscaleDocs: "وثائق Headscale",
     rememberConnection: "تذكر هذا الاتصال في هذا المتصفح",
+    cancel: "إلغاء",
     connect: "اتصال",
     logout: "تسجيل الخروج",
     mode: "الوضع",
@@ -447,14 +623,20 @@ export const commonMessages: Record<Locale, Record<MessageKey, string>> = {
     serveDescription:
       "Serve و Funnel ميزتان في عميل Tailscale؛ Taildrop إعداد في Headscale وليس API إدارة.",
   },
+} satisfies Record<SourceLocale, Record<MessageKey, string>>;
+
+export const commonMessages: Record<Locale, Record<MessageKey, string>> = {
+  ...commonMessagesBase,
+  "zh-Hant": toTraditionalChineseValue(commonMessagesBase.zh),
 };
 
-export const groupLabels: Record<Locale, Record<OperationGroup, string>> = {
+const groupLabelsBase = {
   en: {
     connection: "Connection",
     users: "Users",
     preauthkeys: "Pre-auth keys",
     nodes: "Nodes",
+    auth: "Auth requests",
     routes: "Routes",
     apikeys: "API keys",
     policy: "Policy",
@@ -464,6 +646,7 @@ export const groupLabels: Record<Locale, Record<OperationGroup, string>> = {
     users: "用户",
     preauthkeys: "预授权密钥",
     nodes: "节点",
+    auth: "认证请求",
     routes: "路由",
     apikeys: "API Keys",
     policy: "Policy",
@@ -473,6 +656,7 @@ export const groupLabels: Record<Locale, Record<OperationGroup, string>> = {
     users: "Utilisateurs",
     preauthkeys: "Clés pré-auth",
     nodes: "Nœuds",
+    auth: "Demandes auth",
     routes: "Routes",
     apikeys: "Clés API",
     policy: "Policy",
@@ -482,6 +666,7 @@ export const groupLabels: Record<Locale, Record<OperationGroup, string>> = {
     users: "Пользователи",
     preauthkeys: "Pre-auth ключи",
     nodes: "Узлы",
+    auth: "Auth-запросы",
     routes: "Маршруты",
     apikeys: "API-ключи",
     policy: "Policy",
@@ -491,6 +676,7 @@ export const groupLabels: Record<Locale, Record<OperationGroup, string>> = {
     users: "Usuarios",
     preauthkeys: "Claves pre-auth",
     nodes: "Nodos",
+    auth: "Solicitudes auth",
     routes: "Rutas",
     apikeys: "Claves API",
     policy: "Policy",
@@ -500,10 +686,16 @@ export const groupLabels: Record<Locale, Record<OperationGroup, string>> = {
     users: "المستخدمون",
     preauthkeys: "مفاتيح ما قبل التفويض",
     nodes: "العقد",
+    auth: "طلبات التفويض",
     routes: "المسارات",
     apikeys: "مفاتيح API",
     policy: "السياسة",
   },
+} satisfies Record<SourceLocale, Record<OperationGroup, string>>;
+
+export const groupLabels: Record<Locale, Record<OperationGroup, string>> = {
+  ...groupLabelsBase,
+  "zh-Hant": toTraditionalChineseValue(groupLabelsBase.zh),
 };
 
 type OperationText = Record<OperationId, { title: string; description: string }>;
@@ -561,6 +753,18 @@ const enOperations: OperationText = {
     title: "Register pending node",
     description: "Approve and register a node with a registration key.",
   },
+  "auth.register": {
+    title: "Register auth request",
+    description: "Assign a browser-auth registration request to a user.",
+  },
+  "auth.approve": {
+    title: "Approve auth request",
+    description: "Approve a browser-auth registration request by auth ID.",
+  },
+  "auth.reject": {
+    title: "Reject auth request",
+    description: "Reject a browser-auth registration request by auth ID.",
+  },
   "node.debugCreate": {
     title: "Debug create node",
     description: "Create a test node through Headscale's debug endpoint.",
@@ -571,7 +775,7 @@ const enOperations: OperationText = {
   },
   "node.expire": {
     title: "Expire node",
-    description: "Expire a node now or at a specified time.",
+    description: "Expire a node now, at a specified time, or clear its expiry on newer servers.",
   },
   "node.delete": {
     title: "Delete node",
@@ -627,7 +831,7 @@ function prefixed(localeName: string): OperationText {
   ) as OperationText;
 }
 
-export const operationMessages: Record<Locale, OperationText> = {
+const operationMessagesBase = {
   en: enOperations,
   zh: {
     "health.check": {
@@ -667,12 +871,27 @@ export const operationMessages: Record<Locale, OperationText> = {
       title: "注册待审批节点",
       description: "用 registration key 批准并注册节点。",
     },
+    "auth.register": {
+      title: "注册认证请求",
+      description: "把浏览器认证注册请求分配给用户。",
+    },
+    "auth.approve": {
+      title: "批准认证请求",
+      description: "通过 auth ID 批准浏览器认证注册请求。",
+    },
+    "auth.reject": {
+      title: "拒绝认证请求",
+      description: "通过 auth ID 拒绝浏览器认证注册请求。",
+    },
     "node.debugCreate": {
       title: "调试创建节点",
       description: "通过 Headscale debug endpoint 创建测试节点。",
     },
     "node.rename": { title: "重命名节点", description: "修改节点给定名称。" },
-    "node.expire": { title: "设置节点过期", description: "让节点立即或在指定时间过期。" },
+    "node.expire": {
+      title: "设置节点过期",
+      description: "让节点立即、在指定时间过期，或在新版服务端清除过期时间。",
+    },
     "node.delete": { title: "删除节点", description: "从 tailnet 中移除节点。" },
     "node.setTags": { title: "设置节点标签", description: "覆盖节点当前 tags。" },
     "node.setApprovedRoutes": {
@@ -697,6 +916,11 @@ export const operationMessages: Record<Locale, OperationText> = {
   ru: prefixed("RU"),
   es: prefixed("ES"),
   ar: prefixed("AR"),
+} satisfies Record<SourceLocale, OperationText>;
+
+export const operationMessages: Record<Locale, OperationText> = {
+  ...operationMessagesBase,
+  "zh-Hant": toTraditionalChineseValue(operationMessagesBase.zh),
 };
 
 export function getMessage(locale: Locale, key: MessageKey) {

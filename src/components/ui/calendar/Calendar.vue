@@ -78,11 +78,11 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
   <DefineMonthTemplate v-slot="{ date }">
     <div class="**:data-[slot=native-select-icon]:end-1">
       <div class="relative">
-        <div class="absolute inset-0 flex h-full items-center text-sm ps-2 pointer-events-none">
+        <div class="pointer-events-none absolute inset-0 flex h-full items-center ps-2 text-sm">
           {{ formatter.custom(toDate(date), { month: 'short' }) }}
         </div>
         <NativeSelect
-          class="text-xs h-8 pe-6 ps-2 text-transparent relative"
+          class="relative h-8 pe-6 ps-2 text-transparent text-xs"
           :model-value="date.month"
           @change="(e: Event) => {
             placeholder = placeholder.set({
@@ -101,11 +101,11 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
   <DefineYearTemplate v-slot="{ date }">
     <div class="**:data-[slot=native-select-icon]:end-1">
       <div class="relative">
-        <div class="absolute inset-0 flex h-full items-center text-sm ps-2 pointer-events-none">
+        <div class="pointer-events-none absolute inset-0 flex h-full items-center ps-2 text-sm">
           {{ formatter.custom(toDate(date), { year: 'numeric' }) }}
         </div>
         <NativeSelect
-          class="text-xs h-8 pe-6 ps-2 text-transparent relative"
+          class="relative h-8 pe-6 ps-2 text-transparent text-xs"
           :model-value="date.year"
           @change="(e: Event) => {
             placeholder = placeholder.set({

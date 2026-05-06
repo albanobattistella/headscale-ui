@@ -3,6 +3,7 @@ export type OperationGroup =
   | "users"
   | "preauthkeys"
   | "nodes"
+  | "auth"
   | "routes"
   | "apikeys"
   | "policy";
@@ -198,6 +199,39 @@ export const HEADSCALE_OPERATIONS = [
     ],
   },
   {
+    id: "auth.register",
+    group: "auth",
+    title: "Register auth request",
+    description: "Assign a browser-auth registration request to a user.",
+    method: "POST",
+    path: "/api/v1/auth/register",
+    coverage: "rest-api",
+    fields: [
+      { name: "user", label: "User ID/name", type: "text", defaultValue: "1" },
+      { name: "authId", label: "Auth ID", type: "text", defaultValue: "auth-demo" },
+    ],
+  },
+  {
+    id: "auth.approve",
+    group: "auth",
+    title: "Approve auth request",
+    description: "Approve a browser-auth registration request by auth ID.",
+    method: "POST",
+    path: "/api/v1/auth/approve",
+    coverage: "rest-api",
+    fields: [{ name: "authId", label: "Auth ID", type: "text", defaultValue: "auth-demo" }],
+  },
+  {
+    id: "auth.reject",
+    group: "auth",
+    title: "Reject auth request",
+    description: "Reject a browser-auth registration request by auth ID.",
+    method: "POST",
+    path: "/api/v1/auth/reject",
+    coverage: "rest-api",
+    fields: [{ name: "authId", label: "Auth ID", type: "text", defaultValue: "auth-demo" }],
+  },
+  {
     id: "node.debugCreate",
     group: "nodes",
     title: "Debug create node",
@@ -240,6 +274,13 @@ export const HEADSCALE_OPERATIONS = [
         label: "Expiration",
         type: "datetime",
         defaultValue: "2026-12-31T23:59:00Z",
+      },
+      {
+        name: "disableExpiry",
+        label: "Disable expiry",
+        type: "checkbox",
+        defaultValue: false,
+        helper: "Latest Headscale can clear node expiry with this flag.",
       },
     ],
   },
