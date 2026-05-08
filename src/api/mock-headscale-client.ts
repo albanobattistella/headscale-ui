@@ -237,9 +237,15 @@ export class MockHeadscaleClient implements HeadscaleClient {
 
   async deleteUser(payload: OperationPayload) {
     recordOperationCall("user.delete", "DELETE", "/api/v1/user/{id}", payload);
-    this.snapshot.users = this.snapshot.users.filter(
-      (user) => user.id !== stringValue(payload, "id"),
-    );
+    const userId = stringValue(payload, "id");
+    const ownsNodes = this.snapshot.nodes.some((node) => node.user?.id === userId);
+    const ownsAuthKeys = this.snapshot.preAuthKeys.some((key) => key.user?.id === userId);
+    if (ownsNodes || ownsAuthKeys) {
+      await new Promise((resolve) => setTimeout(resolve, 160));
+      throw new Error("User still owns machines or auth keys. Remove them before deleting.");
+    }
+
+    this.snapshot.users = this.snapshot.users.filter((user) => user.id !== userId);
     return {};
   }
 

@@ -937,14 +937,20 @@ test("refreshes data on every section change and repeated dialog open", async ()
   await page.getByTestId("section-devices").click();
   await expect.poll(() => operationCount("node.list")).toBeGreaterThan(0);
   const afterDevices = operationCount("node.list");
+  await page.getByTestId("refresh-machines").click();
+  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterDevices);
+  const afterMachineRefresh = operationCount("node.list");
 
   await page.getByTestId("section-members").click();
-  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterDevices);
+  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterMachineRefresh);
   const afterMembers = operationCount("node.list");
+  await page.getByTestId("refresh-users").click();
+  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterMembers);
+  const afterUserRefresh = operationCount("node.list");
 
   await page.getByTestId("member-detail-link-alice").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toBeVisible();
-  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterMembers);
+  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterUserRefresh);
   const afterFirstUserDialog = operationCount("node.list");
   await closeLayerWithEscape("user-detail-dialog");
 
@@ -957,16 +963,27 @@ test("refreshes data on every section change and repeated dialog open", async ()
   await page.getByTestId("section-invites").click();
   await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterSecondUserDialog);
   const afterInvites = operationCount("node.list");
+  await page.getByTestId("refresh-auth-keys").click();
+  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterInvites);
+  const afterInviteRefresh = operationCount("node.list");
 
   await page.getByTestId("open-create-invite").click();
   await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
-  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterInvites);
+  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterInviteRefresh);
   const afterFirstInviteDialog = operationCount("node.list");
   await page.getByTestId("cancel-create-invite").click();
 
   await page.getByTestId("open-create-invite").click();
   await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
   await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterFirstInviteDialog);
+  const afterSecondInviteDialog = operationCount("node.list");
+  await page.getByTestId("cancel-create-invite").click();
+
+  await page.getByTestId("section-routes").click();
+  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterSecondInviteDialog);
+  const afterRoutes = operationCount("node.list");
+  await page.getByTestId("refresh-routes").click();
+  await expect.poll(() => operationCount("node.list")).toBeGreaterThan(afterRoutes);
 });
 
 test("supports language and theme selectors before login", async () => {
@@ -1376,6 +1393,27 @@ test("covers dashboard refresh, machine filters, exports and machine lifecycle a
     .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "node.delete"))
     .toBe(true);
   expect(document.querySelector('[data-testid="device-3"]')).toBeNull();
+});
+
+test("keeps failed destructive member actions busy and error-visible", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+
+  await page.getByTestId("section-members").click();
+  await expect.element(page.getByTestId("user-table")).toBeVisible();
+  await page.getByTestId("member-actions-trigger-alice").click();
+  await page.getByTestId("delete-member-alice").click();
+  await expect.element(page.getByTestId("delete-member-dialog")).toBeVisible();
+  await page.getByTestId("confirm-delete-member").click();
+
+  const confirmButton = document.querySelector<HTMLButtonElement>(
+    '[data-testid="confirm-delete-member"]',
+  );
+  expect(confirmButton?.disabled).toBe(true);
+  expect(confirmButton?.querySelector(".animate-spin")).toBeTruthy();
+  await expect.element(page.getByTestId("delete-member-error")).toHaveTextContent("auth keys");
+  await expect.element(page.getByTestId("delete-member-dialog")).toBeVisible();
+  await expect.element(page.getByTestId("member-alice")).toBeVisible();
 });
 
 test("covers the empty machine state and add-first-device flow", async () => {
@@ -1835,6 +1873,11 @@ test("covers server settings API keys and maintenance actions", async () => {
     await expect.element(page.getByTestId("server-settings-dialog")).toBeVisible();
     await page.getByTestId("server-tab-api-keys").click();
     await expect.element(page.getByTestId("api-key-table")).toBeVisible();
+    const apiKeyListsBeforeRefresh = operationCount("apikey.list");
+    await page.getByTestId("refresh-api-keys").click();
+    await expect
+      .poll(() => operationCount("apikey.list"))
+      .toBeGreaterThan(apiKeyListsBeforeRefresh);
     await page.getByTestId("api-key-expiration").click();
     await userEvent.keyboard("{Escape}");
     await page.getByTestId("create-api-key-confirm").click();

@@ -159,6 +159,26 @@ type PolicyRemovalTarget = {
   id: string;
   label: string;
 };
+type ActionFeedbackKey =
+  | "api-key-action"
+  | "api-key-create"
+  | "approve-auth-request"
+  | "approve-route"
+  | "approve-routes"
+  | "backfill-node-ips"
+  | "create-invite"
+  | "create-member"
+  | "delete-member"
+  | "expire-node"
+  | "invite-action"
+  | "node-tags"
+  | "register-auth-request"
+  | "register-pending-node"
+  | "reject-auth-request"
+  | "remove-node"
+  | "rename-member"
+  | "rename-node"
+  | "save-policy";
 type PolicyChoice = {
   id: string;
   slot: PolicyBuilderSlot;
@@ -539,6 +559,7 @@ const englishCopy = {
   backfillResult: "Backfill result",
   refreshData: "Refresh data",
   lastUpdated: "Last updated",
+  operationInProgress: "Working...",
 } as const;
 
 type ProductCopy = typeof englishCopy;
@@ -877,6 +898,7 @@ const productCopyBase = {
     backfillResult: "回填结果",
     refreshData: "刷新数据",
     lastUpdated: "最后更新",
+    operationInProgress: "执行中...",
   },
   fr: {
     ...englishCopy,
@@ -1220,6 +1242,9 @@ const serverSettingsDialogOpen = ref(false);
 const serverSettingsTab = ref<ServerSettingsTab>("apiKeys");
 const activeSection = ref<ProductSection>("home");
 const lastError = ref("");
+const refreshSnapshotInFlight = ref(0);
+const actionPending = reactive<Partial<Record<ActionFeedbackKey, boolean>>>({});
+const actionErrors = reactive<Partial<Record<ActionFeedbackKey, string>>>({});
 const copiedKey = ref("");
 const lastCreatedInvite = ref("");
 const policyDraft = ref("");
@@ -1239,7 +1264,7 @@ const renameDrafts = reactive<Record<string, string>>({});
 const renameDialogOpen = ref(false);
 const memberDialogOpen = ref(false);
 const inviteDialogOpen = ref(false);
-const isCreatingInvite = ref(false);
+const isCreatingInvite = computed(() => isActionPending("create-invite"));
 const returnToDeviceSetupAfterInvite = ref(false);
 const expireDialogOpen = ref(false);
 const removeDialogOpen = ref(false);
@@ -1334,6 +1359,7 @@ const sectionIcons = {
 };
 
 const copy = computed(() => productCopy[locale.value]);
+const isRefreshingSnapshot = computed(() => refreshSnapshotInFlight.value > 0);
 const onlineNodes = computed(() => snapshot.value.nodes.filter((node) => node.online));
 const openInvites = computed(() =>
   snapshot.value.preAuthKeys.filter((key) => !key.used && !isExpired(key.expiration)),
@@ -2015,12 +2041,15 @@ async function refreshSnapshot() {
     return;
   }
 
+  refreshSnapshotInFlight.value += 1;
   try {
     applySnapshot(await fetchSnapshot(createClient()));
     lastError.value = "";
   } catch (error) {
     applyOfflineHealth();
     lastError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    refreshSnapshotInFlight.value = Math.max(0, refreshSnapshotInFlight.value - 1);
   }
 }
 
@@ -2480,6 +2509,7 @@ function selectSection(section: ProductSection) {
 }
 
 function openInviteDialog() {
+  clearActionFeedback("create-invite");
   inviteDialogRefreshGeneration += 1;
   const generation = inviteDialogRefreshGeneration;
   inviteDialogOpen.value = true;
@@ -2494,8 +2524,12 @@ function openInviteDialogFromDeviceSetup() {
 }
 
 function handleInviteDialogOpen(open: boolean) {
+  if (!open && isActionPending("create-invite")) {
+    return;
+  }
   inviteDialogOpen.value = open;
   if (!open) {
+    clearActionFeedback("create-invite");
     inviteDialogRefreshGeneration += 1;
     if (returnToDeviceSetupAfterInvite.value) {
       returnToDeviceSetupAfterInvite.value = false;
@@ -2505,6 +2539,7 @@ function handleInviteDialogOpen(open: boolean) {
 }
 
 function openMemberDialog() {
+  clearActionFeedback("create-member");
   memberDialogRefreshGeneration += 1;
   const generation = memberDialogRefreshGeneration;
   memberDialogOpen.value = true;
@@ -2512,8 +2547,12 @@ function openMemberDialog() {
 }
 
 function handleMemberDialogOpen(open: boolean) {
+  if (!open && isActionPending("create-member")) {
+    return;
+  }
   memberDialogOpen.value = open;
   if (!open) {
+    clearActionFeedback("create-member");
     memberDialogRefreshGeneration += 1;
   }
 }
@@ -2537,13 +2576,21 @@ function openServerSettings() {
   serverSettingsTab.value = "apiKeys";
   serverSettingsDialogOpen.value = true;
   createdApiKey.value = "";
+  clearActionFeedback("api-key-create");
+  clearActionFeedback("api-key-action");
+  clearActionFeedback("backfill-node-ips");
 }
 
 function handleServerSettingsOpen(open: boolean) {
+  if (!open && (isActionPending("api-key-create") || isActionPending("api-key-action"))) {
+    return;
+  }
   serverSettingsDialogOpen.value = open;
   if (!open) {
     createdApiKey.value = "";
     backfillNodeIpsResult.value = "";
+    clearActionFeedback("api-key-create");
+    clearActionFeedback("api-key-action");
   }
 }
 
@@ -3198,6 +3245,10 @@ function prepareDeviceInvite(task: AddDeviceTask) {
 }
 
 function preparePendingRegistration() {
+  clearActionFeedback("register-pending-node");
+  clearActionFeedback("register-auth-request");
+  clearActionFeedback("approve-auth-request");
+  clearActionFeedback("reject-auth-request");
   deviceSetupTask.value = "pending";
   addDeviceStep.value = "pending";
   deviceSetupDialogOpen.value = true;
@@ -3209,6 +3260,15 @@ function preparePendingRegistration() {
 }
 
 function handleDeviceSetupDialogOpen(open: boolean) {
+  if (
+    !open &&
+    (isActionPending("register-pending-node") ||
+      isActionPending("register-auth-request") ||
+      isActionPending("approve-auth-request") ||
+      isActionPending("reject-auth-request"))
+  ) {
+    return;
+  }
   deviceSetupDialogOpen.value = open;
   if (!open) {
     returnToDeviceSetupAfterInvite.value = false;
@@ -3217,6 +3277,10 @@ function handleDeviceSetupDialogOpen(open: boolean) {
     lastCreatedInvite.value = "";
     lastRegisteredNode.value = null;
     authRequestResult.value = "";
+    clearActionFeedback("register-pending-node");
+    clearActionFeedback("register-auth-request");
+    clearActionFeedback("approve-auth-request");
+    clearActionFeedback("reject-auth-request");
   }
 }
 
@@ -3371,54 +3435,91 @@ function confirmRemovePolicyItem() {
   policyRemovalDialogOpen.value = false;
 }
 
-async function mutate(action: (client: HeadscaleClient) => Promise<unknown>) {
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isActionPending(key: ActionFeedbackKey) {
+  return actionPending[key] === true;
+}
+
+function actionError(key: ActionFeedbackKey) {
+  return actionErrors[key] ?? "";
+}
+
+function clearActionFeedback(key: ActionFeedbackKey) {
+  delete actionErrors[key];
+}
+
+async function runAction<T>(key: ActionFeedbackKey, action: () => Promise<T>) {
+  if (isActionPending(key)) {
+    return { ok: false as const };
+  }
+
+  actionPending[key] = true;
+  clearActionFeedback(key);
   lastError.value = "";
+
   try {
-    await action(createClient());
-    await refreshSnapshot();
-    return true;
+    const result = await action();
+    return { ok: true as const, result };
   } catch (error) {
-    lastError.value = error instanceof Error ? error.message : String(error);
-    return false;
+    const message = errorMessage(error);
+    actionErrors[key] = message;
+    lastError.value = message;
+    return { ok: false as const };
+  } finally {
+    actionPending[key] = false;
   }
 }
 
+async function mutate(
+  key: ActionFeedbackKey,
+  action: (client: HeadscaleClient) => Promise<unknown>,
+) {
+  const completed = await runAction(key, async () => {
+    await action(createClient());
+    await refreshSnapshot();
+  });
+  return completed.ok;
+}
+
 async function registerPendingNode() {
-  lastError.value = "";
   lastRegisteredNode.value = null;
   authRequestResult.value = "";
-  try {
+  const registered = await runAction("register-pending-node", async () => {
     const response = await createClient().registerNode({
       user: pendingRegistrationForm.user,
       key: pendingRegistrationForm.key,
     });
-    lastRegisteredNode.value = response.node;
-    addDeviceStep.value = "result";
     await refreshSnapshot();
-  } catch (error) {
-    lastError.value = error instanceof Error ? error.message : String(error);
+    return response;
+  });
+  if (registered.ok) {
+    lastRegisteredNode.value = registered.result.node;
+    addDeviceStep.value = "result";
   }
 }
 
 async function registerAuthRequest() {
-  lastError.value = "";
   authRequestResult.value = "";
-  try {
+  const registered = await runAction("register-auth-request", async () => {
     const response = await createClient().authRegister({
       user: pendingRegistrationForm.user,
       authId: pendingRegistrationForm.authId,
     });
-    lastRegisteredNode.value = response.node;
+    await refreshSnapshot();
+    return response;
+  });
+  if (registered.ok) {
+    lastRegisteredNode.value = registered.result.node;
     authRequestResult.value = copy.value.registerAuthRequest;
     addDeviceStep.value = "result";
-    await refreshSnapshot();
-  } catch (error) {
-    lastError.value = error instanceof Error ? error.message : String(error);
   }
 }
 
 async function approveAuthRequest() {
-  const approved = await mutate((client) =>
+  const approved = await mutate("approve-auth-request", (client) =>
     client.authApprove({ authId: pendingRegistrationForm.authId }),
   );
   if (approved) {
@@ -3428,7 +3529,7 @@ async function approveAuthRequest() {
 }
 
 async function rejectAuthRequest() {
-  const rejected = await mutate((client) =>
+  const rejected = await mutate("reject-auth-request", (client) =>
     client.authReject({ authId: pendingRegistrationForm.authId }),
   );
   if (rejected) {
@@ -3438,14 +3539,19 @@ async function rejectAuthRequest() {
 }
 
 function openTagsDialog(node: HeadscaleNode) {
+  clearActionFeedback("node-tags");
   selectedTagsNode.value = node;
   tagsForm.tags = node.tags.join(", ");
 }
 
 function handleTagsDialogOpen(open: boolean) {
+  if (!open && isActionPending("node-tags")) {
+    return;
+  }
   if (!open) {
     selectedTagsNode.value = null;
     tagsForm.tags = "";
+    clearActionFeedback("node-tags");
   }
 }
 
@@ -3455,7 +3561,7 @@ async function confirmSetNodeTags() {
     return;
   }
 
-  const updated = await mutate((client) =>
+  const updated = await mutate("node-tags", (client) =>
     client.setTags({
       nodeId: node.id,
       tags: tagsForm.tags,
@@ -3467,14 +3573,19 @@ async function confirmSetNodeTags() {
 }
 
 function openRenameMemberDialog(user: HeadscaleUser) {
+  clearActionFeedback("rename-member");
   selectedRenameUser.value = user;
   renameMemberForm.name = user.name;
 }
 
 function handleRenameMemberDialogOpen(open: boolean) {
+  if (!open && isActionPending("rename-member")) {
+    return;
+  }
   if (!open) {
     selectedRenameUser.value = null;
     renameMemberForm.name = "";
+    clearActionFeedback("rename-member");
   }
 }
 
@@ -3484,7 +3595,7 @@ async function confirmRenameMember() {
     return;
   }
 
-  const renamed = await mutate((client) =>
+  const renamed = await mutate("rename-member", (client) =>
     client.renameUser({
       id: user.id,
       newName: renameMemberForm.name,
@@ -3496,12 +3607,17 @@ async function confirmRenameMember() {
 }
 
 function requestDeleteMember(user: HeadscaleUser) {
+  clearActionFeedback("delete-member");
   pendingDeleteUser.value = user;
 }
 
 function handleDeleteMemberDialogOpen(open: boolean) {
+  if (!open && isActionPending("delete-member")) {
+    return;
+  }
   if (!open) {
     pendingDeleteUser.value = null;
+    clearActionFeedback("delete-member");
   }
 }
 
@@ -3511,19 +3627,24 @@ async function confirmDeleteMember() {
     return;
   }
 
-  const deleted = await mutate((client) => client.deleteUser({ id: user.id }));
+  const deleted = await mutate("delete-member", (client) => client.deleteUser({ id: user.id }));
   if (deleted) {
     handleDeleteMemberDialogOpen(false);
   }
 }
 
 function requestInviteAction(kind: InviteActionTarget["kind"], key: PreAuthKey) {
+  clearActionFeedback("invite-action");
   pendingInviteAction.value = { kind, key };
 }
 
 function handleInviteActionDialogOpen(open: boolean) {
+  if (!open && isActionPending("invite-action")) {
+    return;
+  }
   if (!open) {
     pendingInviteAction.value = null;
+    clearActionFeedback("invite-action");
   }
 }
 
@@ -3533,7 +3654,7 @@ async function confirmInviteAction() {
     return;
   }
 
-  const completed = await mutate((client) =>
+  const completed = await mutate("invite-action", (client) =>
     target.kind === "expire"
       ? client.expirePreAuthKey({ id: target.key.id })
       : client.deletePreAuthKey({ id: target.key.id }),
@@ -3544,26 +3665,31 @@ async function confirmInviteAction() {
 }
 
 function requestApiKeyAction(kind: ApiKeyActionTarget["kind"], key: ApiKey) {
+  clearActionFeedback("api-key-action");
   pendingApiKeyAction.value = { kind, key };
 }
 
 function handleApiKeyActionDialogOpen(open: boolean) {
+  if (!open && isActionPending("api-key-action")) {
+    return;
+  }
   if (!open) {
     pendingApiKeyAction.value = null;
+    clearActionFeedback("api-key-action");
   }
 }
 
 async function createServerApiKey() {
-  lastError.value = "";
   createdApiKey.value = "";
-  try {
+  const created = await runAction("api-key-create", async () => {
     const response = await createClient().createApiKey({
       expiration: apiKeyForm.expiration,
     });
-    createdApiKey.value = response.apiKey;
     await refreshSnapshot();
-  } catch (error) {
-    lastError.value = error instanceof Error ? error.message : String(error);
+    return response;
+  });
+  if (created.ok) {
+    createdApiKey.value = created.result.apiKey;
   }
 }
 
@@ -3573,7 +3699,7 @@ async function confirmApiKeyAction() {
     return;
   }
 
-  const completed = await mutate((client) =>
+  const completed = await mutate("api-key-action", (client) =>
     target.kind === "expire"
       ? client.expireApiKey({ prefix: target.key.prefix, id: target.key.id })
       : client.deleteApiKey({ prefix: target.key.prefix, id: target.key.id }),
@@ -3584,38 +3710,48 @@ async function confirmApiKeyAction() {
 }
 
 function openBackfillNodeIpsDialog() {
+  clearActionFeedback("backfill-node-ips");
   backfillNodeIpsConfirmed.value = false;
   backfillNodeIpsResult.value = "";
   backfillNodeIpsDialogOpen.value = true;
 }
 
 function handleBackfillNodeIpsDialogOpen(open: boolean) {
+  if (!open && isActionPending("backfill-node-ips")) {
+    return;
+  }
   backfillNodeIpsDialogOpen.value = open;
   if (!open) {
     backfillNodeIpsConfirmed.value = false;
+    clearActionFeedback("backfill-node-ips");
   }
 }
 
 async function confirmBackfillNodeIps() {
-  lastError.value = "";
   backfillNodeIpsResult.value = "";
-  try {
+  const backfilled = await runAction("backfill-node-ips", async () => {
     const response = await createClient().backfillNodeIps({ confirmed: true });
-    backfillNodeIpsResult.value = response.changes.join(", ") || copy.value.readyToSave;
     await refreshSnapshot();
+    return response;
+  });
+  if (backfilled.ok) {
+    backfillNodeIpsResult.value = backfilled.result.changes.join(", ") || copy.value.readyToSave;
     handleBackfillNodeIpsDialogOpen(false);
-  } catch (error) {
-    lastError.value = error instanceof Error ? error.message : String(error);
   }
 }
 
 function requestApproveRoutes(node: HeadscaleNode) {
+  clearActionFeedback("approve-routes");
   selectedRoutesApprovalNode.value = node;
 }
 
 function handleApproveRoutesDialogOpen(open: boolean) {
+  if (!open && isActionPending("approve-routes")) {
+    return;
+  }
   if (!open) {
     selectedRoutesApprovalNode.value = null;
+    clearActionFeedback("approve-routes");
   }
 }
 
@@ -3625,12 +3761,14 @@ async function confirmApproveRoutes() {
     return;
   }
 
-  await approveRoutes(node);
-  handleApproveRoutesDialogOpen(false);
+  const approved = await approveRoutes(node);
+  if (approved) {
+    handleApproveRoutesDialogOpen(false);
+  }
 }
 
 async function createMember() {
-  const created = await mutate((client) =>
+  const created = await mutate("create-member", (client) =>
     client.createUser({
       name: memberForm.name,
       displayName: memberForm.displayName,
@@ -3654,9 +3792,7 @@ async function createInvite(payload: AuthKeyDialogPayload) {
   inviteForm.expiration = payload.expiration;
   inviteForm.aclTags = payload.aclTags;
   lastCreatedInvite.value = "";
-  lastError.value = "";
-  isCreatingInvite.value = true;
-  try {
+  const created = await runAction("create-invite", async () => {
     const response = await createClient().createPreAuthKey({
       user: payload.user,
       reusable: payload.reusable,
@@ -3664,19 +3800,18 @@ async function createInvite(payload: AuthKeyDialogPayload) {
       expiration: payload.expiration,
       aclTags: payload.aclTags,
     });
-    lastCreatedInvite.value = response.preAuthKey.key;
-    addDeviceStep.value = "generate";
     await refreshSnapshot();
+    return response;
+  });
+  if (created.ok) {
+    lastCreatedInvite.value = created.result.preAuthKey.key;
+    addDeviceStep.value = "generate";
     handleInviteDialogOpen(false);
-  } catch (error) {
-    lastError.value = error instanceof Error ? error.message : String(error);
-  } finally {
-    isCreatingInvite.value = false;
   }
 }
 
 async function renameNode(node: HeadscaleNode) {
-  await mutate((client) =>
+  return mutate("rename-node", (client) =>
     client.renameNode({
       nodeId: node.id,
       newName: renameDrafts[node.id] || node.name,
@@ -3685,48 +3820,65 @@ async function renameNode(node: HeadscaleNode) {
 }
 
 async function expireNode(node: HeadscaleNode) {
-  await mutate((client) =>
+  return mutate("expire-node", (client) =>
     client.expireNode({ nodeId: node.id, expiry: new Date().toISOString() }),
   );
 }
 
 async function deleteNode(node: HeadscaleNode) {
-  await mutate((client) => client.deleteNode({ nodeId: node.id }));
+  return mutate("remove-node", (client) => client.deleteNode({ nodeId: node.id }));
 }
 
 function handleRenameDialogOpen(open: boolean) {
+  if (!open && isActionPending("rename-node")) {
+    return;
+  }
   renameDialogOpen.value = open;
   if (!open) {
     renameDialogRefreshGeneration += 1;
     selectedRenameNode.value = null;
+    clearActionFeedback("rename-node");
   }
 }
 
 function handleExpireDialogOpen(open: boolean) {
+  if (!open && isActionPending("expire-node")) {
+    return;
+  }
   expireDialogOpen.value = open;
   if (!open) {
     expireDialogRefreshGeneration += 1;
     selectedExpireNode.value = null;
+    clearActionFeedback("expire-node");
   }
 }
 
 function handleRemoveDialogOpen(open: boolean) {
+  if (!open && isActionPending("remove-node")) {
+    return;
+  }
   removeDialogOpen.value = open;
   if (!open) {
     removeDialogRefreshGeneration += 1;
     selectedRemoveNode.value = null;
+    clearActionFeedback("remove-node");
   }
 }
 
 function handleRouteApprovalDialogOpen(open: boolean) {
+  if (!open && isActionPending("approve-route")) {
+    return;
+  }
   routeApprovalDialogOpen.value = open;
   if (!open) {
     routeApprovalRefreshGeneration += 1;
     selectedRouteApproval.value = null;
+    clearActionFeedback("approve-route");
   }
 }
 
 function openRenameDialog(node: HeadscaleNode) {
+  clearActionFeedback("rename-node");
   renameDialogRefreshGeneration += 1;
   const generation = renameDialogRefreshGeneration;
   const draftAtOpen = node.givenName || node.name;
@@ -3737,6 +3889,7 @@ function openRenameDialog(node: HeadscaleNode) {
 }
 
 function openExpireDialog(node: HeadscaleNode) {
+  clearActionFeedback("expire-node");
   expireDialogRefreshGeneration += 1;
   const generation = expireDialogRefreshGeneration;
   selectedExpireNode.value = node;
@@ -3745,6 +3898,7 @@ function openExpireDialog(node: HeadscaleNode) {
 }
 
 function openRemoveDialog(node: HeadscaleNode) {
+  clearActionFeedback("remove-node");
   removeDialogRefreshGeneration += 1;
   const generation = removeDialogRefreshGeneration;
   selectedRemoveNode.value = node;
@@ -3753,6 +3907,7 @@ function openRemoveDialog(node: HeadscaleNode) {
 }
 
 function openRouteApprovalDialog(node: HeadscaleNode, route: string) {
+  clearActionFeedback("approve-route");
   routeApprovalRefreshGeneration += 1;
   const generation = routeApprovalRefreshGeneration;
   selectedRouteApproval.value = { node, route };
@@ -3770,8 +3925,10 @@ async function confirmRenameNode() {
     return;
   }
 
-  await renameNode(node);
-  handleRenameDialogOpen(false);
+  const renamed = await renameNode(node);
+  if (renamed) {
+    handleRenameDialogOpen(false);
+  }
 }
 
 async function confirmExpireNode() {
@@ -3780,8 +3937,10 @@ async function confirmExpireNode() {
     return;
   }
 
-  await expireNode(node);
-  handleExpireDialogOpen(false);
+  const expired = await expireNode(node);
+  if (expired) {
+    handleExpireDialogOpen(false);
+  }
 }
 
 async function confirmRemoveNode() {
@@ -3790,8 +3949,10 @@ async function confirmRemoveNode() {
     return;
   }
 
-  await deleteNode(node);
-  handleRemoveDialogOpen(false);
+  const removed = await deleteNode(node);
+  if (removed) {
+    handleRemoveDialogOpen(false);
+  }
 }
 
 async function confirmApproveRoute() {
@@ -3800,17 +3961,19 @@ async function confirmApproveRoute() {
     return;
   }
 
-  await mutate((client) =>
+  const approved = await mutate("approve-route", (client) =>
     client.setApprovedRoutes({
       nodeId: target.node.id,
       routes: approvedRoutesWith(target.node, target.route).join(","),
     }),
   );
-  handleRouteApprovalDialogOpen(false);
+  if (approved) {
+    handleRouteApprovalDialogOpen(false);
+  }
 }
 
 async function approveRoutes(node: HeadscaleNode) {
-  await mutate((client) =>
+  return mutate("approve-routes", (client) =>
     client.setApprovedRoutes({
       nodeId: node.id,
       routes: node.availableRoutes.join(","),
@@ -3820,7 +3983,7 @@ async function approveRoutes(node: HeadscaleNode) {
 
 async function savePolicy() {
   policyDraft.value = JSON.stringify(policyPayload.value, null, 2);
-  await mutate((client) => client.setPolicy({ policy: policyDraft.value }));
+  await mutate("save-policy", (client) => client.setPolicy({ policy: policyDraft.value }));
 }
 
 async function copyInviteKey(value: string) {
@@ -4399,6 +4562,7 @@ onBeforeUnmount(stopHealthProbe);
           :defaults="authKeyDialogDefaults"
           :labels="authKeyDialogLabels"
           :is-submitting="isCreatingInvite"
+          :error="actionError('create-invite')"
           @update:open="handleInviteDialogOpen"
           @submit="createInvite"
         />
@@ -4428,9 +4592,24 @@ onBeforeUnmount(stopHealthProbe);
               </TabsList>
 
               <TabsContent value="apiKeys" class="grid gap-4" data-testid="api-key-settings">
-                <div class="grid gap-2">
-                  <h3 class="text-sm font-semibold">{{ copy.apiKeysTitle }}</h3>
-                  <p class="text-sm text-muted-foreground">{{ copy.apiKeysDescription }}</p>
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div class="grid gap-2">
+                    <h3 class="text-sm font-semibold">{{ copy.apiKeysTitle }}</h3>
+                    <p class="text-sm text-muted-foreground">{{ copy.apiKeysDescription }}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    data-testid="refresh-api-keys"
+                    :aria-label="copy.refreshData"
+                    :title="copy.refreshData"
+                    :disabled="isRefreshingSnapshot"
+                    @click="refreshSnapshot"
+                  >
+                    <LoaderCircle v-if="isRefreshingSnapshot" class="h-4 w-4 animate-spin" aria-hidden="true" />
+                    <Activity v-else class="h-4 w-4" aria-hidden="true" />
+                  </Button>
                 </div>
                 <div class="grid gap-3 rounded-md border bg-background p-3">
                   <div class="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
@@ -4446,10 +4625,19 @@ onBeforeUnmount(stopHealthProbe);
                         data-testid="api-key-expiration"
                       />
                     </div>
-                    <Button type="button" data-testid="create-api-key-confirm" @click="createServerApiKey">
-                      <Plus class="h-4 w-4" aria-hidden="true" />
+                    <Button type="button" data-testid="create-api-key-confirm" :disabled="isActionPending('api-key-create')" @click="createServerApiKey">
+                      <LoaderCircle v-if="isActionPending('api-key-create')" class="h-4 w-4 animate-spin" aria-hidden="true" />
+                      <Plus v-else class="h-4 w-4" aria-hidden="true" />
                       {{ copy.createApiKeyTitle }}
                     </Button>
+                    <p
+                      v-if="actionError('api-key-create')"
+                      role="alert"
+                      class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                      data-testid="api-key-create-error"
+                    >
+                      {{ actionError("api-key-create") }}
+                    </p>
                   </div>
                   <div v-if="createdApiKey" class="grid gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300" data-testid="created-api-key">
                     <p class="text-sm font-semibold">{{ copy.createdApiKey }}</p>
@@ -4529,16 +4717,26 @@ onBeforeUnmount(stopHealthProbe);
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel data-testid="cancel-api-key-action">{{ copy.cancel }}</AlertDialogCancel>
+              <AlertDialogCancel data-testid="cancel-api-key-action" :disabled="isActionPending('api-key-action')">{{ copy.cancel }}</AlertDialogCancel>
               <Button
                 type="button"
                 variant="destructive"
                 data-testid="confirm-api-key-action"
+                :disabled="isActionPending('api-key-action')"
                 @click="confirmApiKeyAction"
               >
+                <LoaderCircle v-if="isActionPending('api-key-action')" class="h-4 w-4 animate-spin" aria-hidden="true" />
                 {{ pendingApiKeyAction.kind === "expire" ? copy.confirmExpireApiKey : copy.confirmDeleteApiKey }}
               </Button>
             </AlertDialogFooter>
+            <p
+              v-if="actionError('api-key-action')"
+              role="alert"
+              class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              data-testid="api-key-action-error"
+            >
+              {{ actionError("api-key-action") }}
+            </p>
           </AlertDialogContent>
         </AlertDialog>
 
@@ -4553,17 +4751,26 @@ onBeforeUnmount(stopHealthProbe);
               <span>{{ copy.maintenanceDescription }}</span>
             </label>
             <AlertDialogFooter>
-              <AlertDialogCancel data-testid="cancel-backfill-node-ips">{{ copy.cancel }}</AlertDialogCancel>
+              <AlertDialogCancel data-testid="cancel-backfill-node-ips" :disabled="isActionPending('backfill-node-ips')">{{ copy.cancel }}</AlertDialogCancel>
               <Button
                 type="button"
                 variant="destructive"
                 data-testid="confirm-backfill-node-ips"
-                :disabled="!backfillNodeIpsConfirmed"
+                :disabled="!backfillNodeIpsConfirmed || isActionPending('backfill-node-ips')"
                 @click="confirmBackfillNodeIps"
               >
+                <LoaderCircle v-if="isActionPending('backfill-node-ips')" class="h-4 w-4 animate-spin" aria-hidden="true" />
                 {{ copy.confirmBackfillNodeIps }}
               </Button>
             </AlertDialogFooter>
+            <p
+              v-if="actionError('backfill-node-ips')"
+              role="alert"
+              class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              data-testid="backfill-node-ips-error"
+            >
+              {{ actionError("backfill-node-ips") }}
+            </p>
           </AlertDialogContent>
         </AlertDialog>
 
@@ -4826,13 +5033,22 @@ onBeforeUnmount(stopHealthProbe);
               />
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" data-testid="rename-member-cancel" @click="handleRenameMemberDialogOpen(false)">
+              <Button type="button" variant="outline" data-testid="rename-member-cancel" :disabled="isActionPending('rename-member')" @click="handleRenameMemberDialogOpen(false)">
                 {{ copy.cancel }}
               </Button>
-              <Button type="button" data-testid="confirm-rename-member" @click="confirmRenameMember">
+              <Button type="button" data-testid="confirm-rename-member" :disabled="isActionPending('rename-member')" @click="confirmRenameMember">
+                <LoaderCircle v-if="isActionPending('rename-member')" class="h-4 w-4 animate-spin" aria-hidden="true" />
                 {{ copy.saveMemberName }}
               </Button>
             </DialogFooter>
+            <p
+              v-if="actionError('rename-member')"
+              role="alert"
+              class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              data-testid="rename-member-error"
+            >
+              {{ actionError("rename-member") }}
+            </p>
           </DialogContent>
         </Dialog>
 
@@ -4846,11 +5062,20 @@ onBeforeUnmount(stopHealthProbe);
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel data-testid="cancel-delete-member">{{ copy.cancel }}</AlertDialogCancel>
-              <Button type="button" variant="destructive" data-testid="confirm-delete-member" @click="confirmDeleteMember">
+              <AlertDialogCancel data-testid="cancel-delete-member" :disabled="isActionPending('delete-member')">{{ copy.cancel }}</AlertDialogCancel>
+              <Button type="button" variant="destructive" data-testid="confirm-delete-member" :disabled="isActionPending('delete-member')" @click="confirmDeleteMember">
+                <LoaderCircle v-if="isActionPending('delete-member')" class="h-4 w-4 animate-spin" aria-hidden="true" />
                 {{ copy.confirmDeleteMember }}
               </Button>
             </AlertDialogFooter>
+            <p
+              v-if="actionError('delete-member')"
+              role="alert"
+              class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              data-testid="delete-member-error"
+            >
+              {{ actionError("delete-member") }}
+            </p>
           </AlertDialogContent>
         </AlertDialog>
 
@@ -4866,16 +5091,26 @@ onBeforeUnmount(stopHealthProbe);
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel data-testid="cancel-invite-action">{{ copy.cancel }}</AlertDialogCancel>
+              <AlertDialogCancel data-testid="cancel-invite-action" :disabled="isActionPending('invite-action')">{{ copy.cancel }}</AlertDialogCancel>
               <Button
                 type="button"
                 variant="destructive"
                 data-testid="confirm-invite-action"
+                :disabled="isActionPending('invite-action')"
                 @click="confirmInviteAction"
               >
+                <LoaderCircle v-if="isActionPending('invite-action')" class="h-4 w-4 animate-spin" aria-hidden="true" />
                 {{ pendingInviteAction.kind === "expire" ? copy.confirmExpireInvite : copy.confirmDeleteInvite }}
               </Button>
             </AlertDialogFooter>
+            <p
+              v-if="actionError('invite-action')"
+              role="alert"
+              class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              data-testid="invite-action-error"
+            >
+              {{ actionError("invite-action") }}
+            </p>
           </AlertDialogContent>
         </AlertDialog>
 
@@ -4897,13 +5132,22 @@ onBeforeUnmount(stopHealthProbe);
               />
             </div>
             <DialogFooter>
-              <Button variant="outline" data-testid="rename-node-cancel" @click="handleRenameDialogOpen(false)">
+              <Button variant="outline" data-testid="rename-node-cancel" :disabled="isActionPending('rename-node')" @click="handleRenameDialogOpen(false)">
                 {{ copy.cancel }}
               </Button>
-              <Button data-testid="rename-node-confirm" @click="confirmRenameNode">
+              <Button data-testid="rename-node-confirm" :disabled="isActionPending('rename-node')" @click="confirmRenameNode">
+                <LoaderCircle v-if="isActionPending('rename-node')" class="h-4 w-4 animate-spin" aria-hidden="true" />
                 {{ copy.saveName }}
               </Button>
             </DialogFooter>
+            <p
+              v-if="actionError('rename-node')"
+              role="alert"
+              class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              data-testid="rename-node-error"
+            >
+              {{ actionError("rename-node") }}
+            </p>
           </DialogContent>
         </Dialog>
 
@@ -4928,13 +5172,22 @@ onBeforeUnmount(stopHealthProbe);
               </p>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" data-testid="node-tags-cancel" @click="handleTagsDialogOpen(false)">
+              <Button type="button" variant="outline" data-testid="node-tags-cancel" :disabled="isActionPending('node-tags')" @click="handleTagsDialogOpen(false)">
                 {{ copy.cancel }}
               </Button>
-              <Button type="button" data-testid="node-tags-confirm" @click="confirmSetNodeTags">
+              <Button type="button" data-testid="node-tags-confirm" :disabled="isActionPending('node-tags')" @click="confirmSetNodeTags">
+                <LoaderCircle v-if="isActionPending('node-tags')" class="h-4 w-4 animate-spin" aria-hidden="true" />
                 {{ copy.saveTags }}
               </Button>
             </DialogFooter>
+            <p
+              v-if="actionError('node-tags')"
+              role="alert"
+              class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              data-testid="node-tags-error"
+            >
+              {{ actionError("node-tags") }}
+            </p>
           </DialogContent>
         </Dialog>
 
@@ -4948,11 +5201,20 @@ onBeforeUnmount(stopHealthProbe);
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel data-testid="expire-node-cancel">{{ copy.cancel }}</AlertDialogCancel>
-              <Button variant="destructive" data-testid="expire-node-confirm" @click="confirmExpireNode">
+              <AlertDialogCancel data-testid="expire-node-cancel" :disabled="isActionPending('expire-node')">{{ copy.cancel }}</AlertDialogCancel>
+              <Button variant="destructive" data-testid="expire-node-confirm" :disabled="isActionPending('expire-node')" @click="confirmExpireNode">
+                <LoaderCircle v-if="isActionPending('expire-node')" class="h-4 w-4 animate-spin" aria-hidden="true" />
                 {{ copy.confirmExpire }}
               </Button>
             </AlertDialogFooter>
+            <p
+              v-if="actionError('expire-node')"
+              role="alert"
+              class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              data-testid="expire-node-error"
+            >
+              {{ actionError("expire-node") }}
+            </p>
           </AlertDialogContent>
         </AlertDialog>
 
@@ -4966,11 +5228,20 @@ onBeforeUnmount(stopHealthProbe);
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel data-testid="remove-node-cancel">{{ copy.cancel }}</AlertDialogCancel>
-              <Button variant="destructive" data-testid="remove-node-confirm" @click="confirmRemoveNode">
+              <AlertDialogCancel data-testid="remove-node-cancel" :disabled="isActionPending('remove-node')">{{ copy.cancel }}</AlertDialogCancel>
+              <Button variant="destructive" data-testid="remove-node-confirm" :disabled="isActionPending('remove-node')" @click="confirmRemoveNode">
+                <LoaderCircle v-if="isActionPending('remove-node')" class="h-4 w-4 animate-spin" aria-hidden="true" />
                 {{ copy.confirmRemove }}
               </Button>
             </AlertDialogFooter>
+            <p
+              v-if="actionError('remove-node')"
+              role="alert"
+              class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              data-testid="remove-node-error"
+            >
+              {{ actionError("remove-node") }}
+            </p>
           </AlertDialogContent>
         </AlertDialog>
 
@@ -4987,9 +5258,11 @@ onBeforeUnmount(stopHealthProbe);
               :aria-label="copy.refreshData"
               :title="copy.refreshData"
               class="sm:h-9 sm:w-fit sm:px-3"
+              :disabled="isRefreshingSnapshot"
               @click="refreshSnapshot"
             >
-              <Activity class="h-4 w-4" aria-hidden="true" />
+              <LoaderCircle v-if="isRefreshingSnapshot" class="h-4 w-4 animate-spin" aria-hidden="true" />
+              <Activity v-else class="h-4 w-4" aria-hidden="true" />
               <span class="sr-only sm:not-sr-only">{{ copy.refreshData }}</span>
             </Button>
           </div>
@@ -5181,10 +5454,19 @@ onBeforeUnmount(stopHealthProbe);
                               :placeholder="copy.nodeRegistrationKeyPlaceholder"
                             />
                           </div>
-                          <Button type="button" class="w-fit" data-testid="register-pending-node" @click="registerPendingNode">
-                            <ShieldCheck class="h-4 w-4" aria-hidden="true" />
+                          <Button type="button" class="w-fit" data-testid="register-pending-node" :disabled="isActionPending('register-pending-node')" @click="registerPendingNode">
+                            <LoaderCircle v-if="isActionPending('register-pending-node')" class="h-4 w-4 animate-spin" aria-hidden="true" />
+                            <ShieldCheck v-else class="h-4 w-4" aria-hidden="true" />
                             {{ copy.registerPendingNode }}
                           </Button>
+                          <p
+                            v-if="actionError('register-pending-node')"
+                            role="alert"
+                            class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                            data-testid="register-pending-node-error"
+                          >
+                            {{ actionError("register-pending-node") }}
+                          </p>
                         </section>
 
                         <section class="grid gap-3 rounded-md border bg-background p-4">
@@ -5202,16 +5484,43 @@ onBeforeUnmount(stopHealthProbe);
                             />
                           </div>
                           <div class="flex flex-wrap gap-2">
-                            <Button type="button" data-testid="auth-register" @click="registerAuthRequest">
+                            <Button type="button" data-testid="auth-register" :disabled="isActionPending('register-auth-request')" @click="registerAuthRequest">
+                              <LoaderCircle v-if="isActionPending('register-auth-request')" class="h-4 w-4 animate-spin" aria-hidden="true" />
                               {{ copy.registerAuthRequest }}
                             </Button>
-                            <Button type="button" variant="outline" data-testid="auth-approve" @click="approveAuthRequest">
+                            <Button type="button" variant="outline" data-testid="auth-approve" :disabled="isActionPending('approve-auth-request')" @click="approveAuthRequest">
+                              <LoaderCircle v-if="isActionPending('approve-auth-request')" class="h-4 w-4 animate-spin" aria-hidden="true" />
                               {{ copy.approveAuthRequest }}
                             </Button>
-                            <Button type="button" variant="destructive" data-testid="auth-reject" @click="rejectAuthRequest">
+                            <Button type="button" variant="destructive" data-testid="auth-reject" :disabled="isActionPending('reject-auth-request')" @click="rejectAuthRequest">
+                              <LoaderCircle v-if="isActionPending('reject-auth-request')" class="h-4 w-4 animate-spin" aria-hidden="true" />
                               {{ copy.rejectAuthRequest }}
                             </Button>
                           </div>
+                          <p
+                            v-if="actionError('register-auth-request')"
+                            role="alert"
+                            class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                            data-testid="auth-register-error"
+                          >
+                            {{ actionError("register-auth-request") }}
+                          </p>
+                          <p
+                            v-if="actionError('approve-auth-request')"
+                            role="alert"
+                            class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                            data-testid="auth-approve-error"
+                          >
+                            {{ actionError("approve-auth-request") }}
+                          </p>
+                          <p
+                            v-if="actionError('reject-auth-request')"
+                            role="alert"
+                            class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                            data-testid="auth-reject-error"
+                          >
+                            {{ actionError("reject-auth-request") }}
+                          </p>
                         </section>
                       </div>
                     </div>
@@ -5455,6 +5764,19 @@ onBeforeUnmount(stopHealthProbe);
                   </div>
                 </div>
                 <p class="whitespace-nowrap text-xs text-muted-foreground sm:ms-auto">{{ filteredNodes.length }} / {{ snapshot.nodes.length }}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  data-testid="refresh-machines"
+                  :aria-label="copy.refreshData"
+                  :title="copy.refreshData"
+                  :disabled="isRefreshingSnapshot"
+                  @click="refreshSnapshot"
+                >
+                  <LoaderCircle v-if="isRefreshingSnapshot" class="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <Activity v-else class="h-4 w-4" aria-hidden="true" />
+                </Button>
                 <Button type="button" variant="outline" size="icon" data-testid="export-machines" :aria-label="copy.exportData" @click="exportMachines">
                   <Download class="h-4 w-4" aria-hidden="true" />
                 </Button>
@@ -5706,14 +6028,23 @@ onBeforeUnmount(stopHealthProbe);
                   <Input id="member-email" v-model="memberForm.email" data-testid="member-email" class="mt-2" />
                 </div>
                 <DialogFooter>
-                  <Button type="button" variant="outline" data-testid="cancel-create-member" @click="handleMemberDialogOpen(false)">
+                  <Button type="button" variant="outline" data-testid="cancel-create-member" :disabled="isActionPending('create-member')" @click="handleMemberDialogOpen(false)">
                     {{ copy.cancel }}
                   </Button>
-                  <Button type="submit" data-testid="create-member">
-                    <Plus class="h-4 w-4" aria-hidden="true" />
+                  <Button type="submit" data-testid="create-member" :disabled="isActionPending('create-member')">
+                    <LoaderCircle v-if="isActionPending('create-member')" class="h-4 w-4 animate-spin" aria-hidden="true" />
+                    <Plus v-else class="h-4 w-4" aria-hidden="true" />
                     {{ copy.createMember }}
                   </Button>
                 </DialogFooter>
+                <p
+                  v-if="actionError('create-member')"
+                  role="alert"
+                  class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  data-testid="create-member-error"
+                >
+                  {{ actionError("create-member") }}
+                </p>
               </form>
             </DialogContent>
           </Dialog>
@@ -5740,6 +6071,19 @@ onBeforeUnmount(stopHealthProbe);
                 </div>
               </div>
               <p class="whitespace-nowrap text-xs text-muted-foreground sm:ms-auto">{{ filteredUsers.length }} / {{ visibleUsers.length }}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                data-testid="refresh-users"
+                :aria-label="copy.refreshData"
+                :title="copy.refreshData"
+                :disabled="isRefreshingSnapshot"
+                @click="refreshSnapshot"
+              >
+                <LoaderCircle v-if="isRefreshingSnapshot" class="h-4 w-4 animate-spin" aria-hidden="true" />
+                <Activity v-else class="h-4 w-4" aria-hidden="true" />
+              </Button>
               <Button type="button" variant="outline" size="icon" data-testid="export-users" :aria-label="copy.exportData" @click="exportUsers">
                 <Download class="h-4 w-4" aria-hidden="true" />
               </Button>
@@ -5923,6 +6267,19 @@ onBeforeUnmount(stopHealthProbe);
                 </div>
               </div>
               <p class="whitespace-nowrap text-xs text-muted-foreground sm:ms-auto">{{ filteredPreAuthKeys.length }} / {{ snapshot.preAuthKeys.length }}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                data-testid="refresh-auth-keys"
+                :aria-label="copy.refreshData"
+                :title="copy.refreshData"
+                :disabled="isRefreshingSnapshot"
+                @click="refreshSnapshot"
+              >
+                <LoaderCircle v-if="isRefreshingSnapshot" class="h-4 w-4 animate-spin" aria-hidden="true" />
+                <Activity v-else class="h-4 w-4" aria-hidden="true" />
+              </Button>
               <Button data-testid="open-create-invite" @click="openInviteDialog">
                 <Plus class="h-4 w-4" aria-hidden="true" />
                 {{ copy.createInvite }}
@@ -6022,9 +6379,24 @@ onBeforeUnmount(stopHealthProbe);
         </section>
 
         <section v-else-if="activeSection === 'routes'" class="space-y-3 sm:space-y-4">
-          <div>
-            <h1 class="text-xl font-semibold">{{ copy.routesTitle }}</h1>
-            <p class="mt-1 text-sm text-muted-foreground">{{ copy.routesSubtitle }}</p>
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 class="text-xl font-semibold">{{ copy.routesTitle }}</h1>
+              <p class="mt-1 text-sm text-muted-foreground">{{ copy.routesSubtitle }}</p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              data-testid="refresh-routes"
+              :aria-label="copy.refreshData"
+              :title="copy.refreshData"
+              :disabled="isRefreshingSnapshot"
+              @click="refreshSnapshot"
+            >
+              <LoaderCircle v-if="isRefreshingSnapshot" class="h-4 w-4 animate-spin" aria-hidden="true" />
+              <Activity v-else class="h-4 w-4" aria-hidden="true" />
+            </Button>
           </div>
 
           <div class="grid gap-2">
@@ -6170,16 +6542,26 @@ onBeforeUnmount(stopHealthProbe);
                 </div>
               </div>
               <AlertDialogFooter>
-                <AlertDialogCancel data-testid="approve-route-cancel">{{ copy.cancel }}</AlertDialogCancel>
+                <AlertDialogCancel data-testid="approve-route-cancel" :disabled="isActionPending('approve-route')">{{ copy.cancel }}</AlertDialogCancel>
                 <Button
                   :variant="isExitRoute(selectedRouteApproval.route) ? 'destructive' : 'default'"
                   data-testid="approve-route-confirm"
+                  :disabled="isActionPending('approve-route')"
                   @click="confirmApproveRoute"
                 >
-                  <Router class="h-4 w-4" aria-hidden="true" />
+                  <LoaderCircle v-if="isActionPending('approve-route')" class="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <Router v-else class="h-4 w-4" aria-hidden="true" />
                   {{ copy.approveRoute }}
                 </Button>
               </AlertDialogFooter>
+              <p
+                v-if="actionError('approve-route')"
+                role="alert"
+                class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                data-testid="approve-route-error"
+              >
+                {{ actionError("approve-route") }}
+              </p>
             </AlertDialogContent>
           </AlertDialog>
 
@@ -6207,17 +6589,27 @@ onBeforeUnmount(stopHealthProbe);
                 </Badge>
               </div>
               <AlertDialogFooter>
-                <AlertDialogCancel data-testid="approve-routes-cancel">{{ copy.cancel }}</AlertDialogCancel>
+                <AlertDialogCancel data-testid="approve-routes-cancel" :disabled="isActionPending('approve-routes')">{{ copy.cancel }}</AlertDialogCancel>
                 <Button
                   type="button"
                   :variant="selectedRoutesApprovalHasExitRoute ? 'destructive' : 'default'"
                   data-testid="approve-routes-confirm"
+                  :disabled="isActionPending('approve-routes')"
                   @click="confirmApproveRoutes"
                 >
-                  <Router class="h-4 w-4" aria-hidden="true" />
+                  <LoaderCircle v-if="isActionPending('approve-routes')" class="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <Router v-else class="h-4 w-4" aria-hidden="true" />
                   {{ copy.confirmApproveRoutes }}
                 </Button>
               </AlertDialogFooter>
+              <p
+                v-if="actionError('approve-routes')"
+                role="alert"
+                class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                data-testid="approve-routes-error"
+              >
+                {{ actionError("approve-routes") }}
+              </p>
             </AlertDialogContent>
           </AlertDialog>
         </section>
@@ -6228,11 +6620,20 @@ onBeforeUnmount(stopHealthProbe);
               <h1 class="text-2xl font-semibold">{{ copy.accessTitle }}</h1>
               <p class="mt-1 text-sm text-muted-foreground">{{ copy.accessSubtitle }}</p>
             </div>
-            <Button size="sm" data-testid="save-policy" @click="savePolicy">
-              <FileCheck2 class="h-4 w-4" aria-hidden="true" />
+            <Button size="sm" data-testid="save-policy" :disabled="isActionPending('save-policy')" @click="savePolicy">
+              <LoaderCircle v-if="isActionPending('save-policy')" class="h-4 w-4 animate-spin" aria-hidden="true" />
+              <FileCheck2 v-else class="h-4 w-4" aria-hidden="true" />
               {{ copy.savePolicy }}
             </Button>
           </div>
+          <p
+            v-if="actionError('save-policy')"
+            role="alert"
+            class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            data-testid="save-policy-error"
+          >
+            {{ actionError("save-policy") }}
+          </p>
 
           <Card class="p-3" data-testid="policy-editor">
             <div class="grid gap-3">
@@ -6705,8 +7106,9 @@ onBeforeUnmount(stopHealthProbe);
           </AlertDialog>
 
           <div class="flex justify-end sm:hidden">
-            <Button data-testid="save-policy-sticky" class="shadow-lg" @click="savePolicy">
-              <FileCheck2 class="h-4 w-4" aria-hidden="true" />
+            <Button data-testid="save-policy-sticky" class="shadow-lg" :disabled="isActionPending('save-policy')" @click="savePolicy">
+              <LoaderCircle v-if="isActionPending('save-policy')" class="h-4 w-4 animate-spin" aria-hidden="true" />
+              <FileCheck2 v-else class="h-4 w-4" aria-hidden="true" />
               {{ copy.savePolicy }}
             </Button>
           </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { KeyRound } from "lucide-vue-next";
+import { KeyRound, LoaderCircle } from "lucide-vue-next";
 import { reactive, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -32,8 +32,10 @@ const props = withDefaults(
     defaults: AuthKeyDialogDefaults;
     labels: AuthKeyDialogLabels;
     isSubmitting?: boolean;
+    error?: string;
   }>(),
   {
+    error: "",
     isSubmitting: false,
   },
 );
@@ -115,7 +117,7 @@ watch(
         <div class="grid gap-3">
           <div>
             <Label for="invite-user">{{ labels.owner }}</Label>
-            <NativeSelect id="invite-user" v-model="form.user" data-testid="invite-user" class="mt-2" :disabled="users.length === 0">
+            <NativeSelect id="invite-user" v-model="form.user" data-testid="invite-user" class="mt-2" :disabled="isSubmitting || users.length === 0">
               <NativeSelectOption v-if="users.length === 0" value="">{{ labels.noUsers }}</NativeSelectOption>
               <NativeSelectOption v-for="user in users" :key="user.id" :value="user.id">{{ user.label }}</NativeSelectOption>
             </NativeSelect>
@@ -137,22 +139,31 @@ watch(
         </div>
         <div>
           <Label for="invite-tags">{{ labels.aclTags }}</Label>
-          <Input id="invite-tags" v-model="form.aclTags" data-testid="invite-tags" class="mt-2" placeholder="tag:server" />
+          <Input id="invite-tags" v-model="form.aclTags" data-testid="invite-tags" class="mt-2" placeholder="tag:server" :disabled="isSubmitting" />
         </div>
         <div class="grid gap-2">
           <div class="flex min-h-9 items-center gap-2">
-            <Checkbox id="invite-reusable" v-model="form.reusable" data-testid="invite-reusable" />
+            <Checkbox id="invite-reusable" v-model="form.reusable" data-testid="invite-reusable" :disabled="isSubmitting" />
             <Label for="invite-reusable" class="font-normal">{{ labels.reusable }}</Label>
           </div>
           <div class="flex min-h-9 items-center gap-2">
-            <Checkbox id="invite-ephemeral" v-model="form.ephemeral" data-testid="invite-ephemeral" />
+            <Checkbox id="invite-ephemeral" v-model="form.ephemeral" data-testid="invite-ephemeral" :disabled="isSubmitting" />
             <Label for="invite-ephemeral" class="font-normal">{{ labels.ephemeral }}</Label>
           </div>
         </div>
+        <p
+          v-if="error"
+          role="alert"
+          class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          data-testid="create-invite-error"
+        >
+          {{ error }}
+        </p>
         <DialogFooter>
-          <Button type="button" variant="outline" data-testid="cancel-create-invite" @click="closeDialog">{{ labels.cancel }}</Button>
+          <Button type="button" variant="outline" data-testid="cancel-create-invite" :disabled="isSubmitting" @click="closeDialog">{{ labels.cancel }}</Button>
           <Button type="submit" data-testid="create-invite" :disabled="isSubmitting || users.length === 0">
-            <KeyRound class="h-4 w-4" aria-hidden="true" />
+            <LoaderCircle v-if="isSubmitting" class="h-4 w-4 animate-spin" aria-hidden="true" />
+            <KeyRound v-else class="h-4 w-4" aria-hidden="true" />
             {{ labels.submit }}
           </Button>
         </DialogFooter>
