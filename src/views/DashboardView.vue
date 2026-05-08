@@ -18,6 +18,7 @@ import {
   Network,
   Pencil,
   Plus,
+  RefreshCw,
   Router,
   Search,
   Server,
@@ -4608,7 +4609,7 @@ onBeforeUnmount(stopHealthProbe);
                     @click="refreshSnapshot"
                   >
                     <LoaderCircle v-if="isRefreshingSnapshot" class="h-4 w-4 animate-spin" aria-hidden="true" />
-                    <Activity v-else class="h-4 w-4" aria-hidden="true" />
+                    <RefreshCw v-else class="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </div>
                 <div class="grid gap-3 rounded-md border bg-background p-3">
@@ -5262,7 +5263,7 @@ onBeforeUnmount(stopHealthProbe);
               @click="refreshSnapshot"
             >
               <LoaderCircle v-if="isRefreshingSnapshot" class="h-4 w-4 animate-spin" aria-hidden="true" />
-              <Activity v-else class="h-4 w-4" aria-hidden="true" />
+              <RefreshCw v-else class="h-4 w-4" aria-hidden="true" />
               <span class="sr-only sm:not-sr-only">{{ copy.refreshData }}</span>
             </Button>
           </div>
@@ -5775,7 +5776,7 @@ onBeforeUnmount(stopHealthProbe);
                   @click="refreshSnapshot"
                 >
                   <LoaderCircle v-if="isRefreshingSnapshot" class="h-4 w-4 animate-spin" aria-hidden="true" />
-                  <Activity v-else class="h-4 w-4" aria-hidden="true" />
+                  <RefreshCw v-else class="h-4 w-4" aria-hidden="true" />
                 </Button>
                 <Button type="button" variant="outline" size="icon" data-testid="export-machines" :aria-label="copy.exportData" @click="exportMachines">
                   <Download class="h-4 w-4" aria-hidden="true" />
@@ -6082,7 +6083,7 @@ onBeforeUnmount(stopHealthProbe);
                 @click="refreshSnapshot"
               >
                 <LoaderCircle v-if="isRefreshingSnapshot" class="h-4 w-4 animate-spin" aria-hidden="true" />
-                <Activity v-else class="h-4 w-4" aria-hidden="true" />
+                <RefreshCw v-else class="h-4 w-4" aria-hidden="true" />
               </Button>
               <Button type="button" variant="outline" size="icon" data-testid="export-users" :aria-label="copy.exportData" @click="exportUsers">
                 <Download class="h-4 w-4" aria-hidden="true" />
@@ -6278,7 +6279,7 @@ onBeforeUnmount(stopHealthProbe);
                 @click="refreshSnapshot"
               >
                 <LoaderCircle v-if="isRefreshingSnapshot" class="h-4 w-4 animate-spin" aria-hidden="true" />
-                <Activity v-else class="h-4 w-4" aria-hidden="true" />
+                <RefreshCw v-else class="h-4 w-4" aria-hidden="true" />
               </Button>
               <Button data-testid="open-create-invite" @click="openInviteDialog">
                 <Plus class="h-4 w-4" aria-hidden="true" />
@@ -6395,7 +6396,7 @@ onBeforeUnmount(stopHealthProbe);
               @click="refreshSnapshot"
             >
               <LoaderCircle v-if="isRefreshingSnapshot" class="h-4 w-4 animate-spin" aria-hidden="true" />
-              <Activity v-else class="h-4 w-4" aria-hidden="true" />
+              <RefreshCw v-else class="h-4 w-4" aria-hidden="true" />
             </Button>
           </div>
 
