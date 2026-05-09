@@ -9,6 +9,7 @@ import {
   EllipsisVertical,
   FileCheck2,
   Filter,
+  Github,
   KeyRound,
   Languages,
   LoaderCircle,
@@ -28,12 +29,9 @@ import {
   Trash2,
   Users,
   Wifi,
-  WifiHigh,
-  WifiLow,
   WifiOff,
-  WifiZero,
 } from "lucide-vue-next";
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch, watchEffect } from "vue";
+import { computed, nextTick, reactive, ref, watch, watchEffect } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { RestHeadscaleClient } from "@/api/headscale-client";
 import type { ConnectionSettings } from "@/api/http";
@@ -123,7 +121,6 @@ type AddDeviceTask = "server" | "client" | "pending";
 type AddDeviceStep = "type" | "preferences" | "authKey" | "generate" | "pending" | "result";
 type ProfileSubmenu = "language" | "theme";
 type ServerSettingsTab = "apiKeys" | "maintenance";
-type ServerSignalStrength = "strong" | "good" | "weak" | "poor" | "offline";
 type RouteApprovalTarget = {
   node: HeadscaleNode;
   route: string;
@@ -196,6 +193,7 @@ type PolicyListChoice = {
 const themeModes: ThemeMode[] = ["light", "dark", "auto"];
 const apiKeyCommand = "headscale apikeys create --expiration 90d";
 const headscaleRemoteCliDocsUrl = "https://docs.headscale.org/ref/remote-cli/";
+const githubRepositoryUrl = "https://github.com/MunMunMiao/headscale-ui";
 const profileLoginMinimumMs = 300;
 const productSections: ProductSection[] = [
   "home",
@@ -561,6 +559,15 @@ const englishCopy = {
   refreshData: "Refresh data",
   lastUpdated: "Last updated",
   operationInProgress: "Working...",
+  never: "Never",
+  profileNotFound: "Profile not found.",
+  roleOwner: "Owner",
+  roleMember: "Member",
+  roleServiceAccount: "Service account",
+  errorUserNotFound: "User not found",
+  errorUserStillOwns: "User still owns machines or auth keys. Remove them before deleting.",
+  errorNodeNotFound: "Node not found",
+  errorRequestFailed: "Headscale request failed. Check server URL and API key.",
 } as const;
 
 type ProductCopy = typeof englishCopy;
@@ -900,6 +907,15 @@ const productCopyBase = {
     refreshData: "刷新数据",
     lastUpdated: "最后更新",
     operationInProgress: "执行中...",
+    never: "从不",
+    profileNotFound: "未找到 Profile。",
+    roleOwner: "所有者",
+    roleMember: "成员",
+    roleServiceAccount: "服务账号",
+    errorUserNotFound: "未找到用户。",
+    errorUserStillOwns: "该用户仍然拥有机器或认证密钥。删除前请先移除它们。",
+    errorNodeNotFound: "未找到节点。",
+    errorRequestFailed: "Headscale 请求失败。请检查服务器 URL 和 API Key。",
   },
   fr: {
     ...englishCopy,
@@ -923,6 +939,17 @@ const productCopyBase = {
     invitesTitle: "Clés auth",
     routesTitle: "Routes",
     accessTitle: "Contrôles d'accès",
+    refreshData: "Actualiser les données",
+    never: "Jamais",
+    profileNotFound: "Profil introuvable.",
+    roleOwner: "Propriétaire",
+    roleMember: "Membre",
+    roleServiceAccount: "Compte de service",
+    errorUserNotFound: "Utilisateur introuvable.",
+    errorUserStillOwns:
+      "Cet utilisateur possède encore des machines ou des clés d'authentification. Supprimez-les avant de continuer.",
+    errorNodeNotFound: "Nœud introuvable.",
+    errorRequestFailed: "La requête Headscale a échoué. Vérifiez l'URL du serveur et la clé API.",
   },
   ru: {
     ...englishCopy,
@@ -946,6 +973,17 @@ const productCopyBase = {
     invitesTitle: "Ключи авторизации",
     routesTitle: "Маршруты",
     accessTitle: "Контроль доступа",
+    refreshData: "Обновить данные",
+    never: "Никогда",
+    profileNotFound: "Профиль не найден.",
+    roleOwner: "Владелец",
+    roleMember: "Участник",
+    roleServiceAccount: "Сервисная учётная запись",
+    errorUserNotFound: "Пользователь не найден.",
+    errorUserStillOwns:
+      "У пользователя ещё есть машины или ключи авторизации. Удалите их перед удалением пользователя.",
+    errorNodeNotFound: "Узел не найден.",
+    errorRequestFailed: "Запрос Headscale не выполнен. Проверьте URL сервера и API-ключ.",
   },
   es: {
     ...englishCopy,
@@ -969,6 +1007,18 @@ const productCopyBase = {
     invitesTitle: "Claves de autenticación",
     routesTitle: "Rutas",
     accessTitle: "Controles de acceso",
+    refreshData: "Actualizar datos",
+    never: "Nunca",
+    profileNotFound: "Perfil no encontrado.",
+    roleOwner: "Propietario",
+    roleMember: "Miembro",
+    roleServiceAccount: "Cuenta de servicio",
+    errorUserNotFound: "Usuario no encontrado.",
+    errorUserStillOwns:
+      "Este usuario aún tiene máquinas o claves de autenticación. Elimínalas antes de borrarlo.",
+    errorNodeNotFound: "Nodo no encontrado.",
+    errorRequestFailed:
+      "La solicitud a Headscale falló. Revisa la URL del servidor y la clave API.",
   },
   ar: {
     ...englishCopy,
@@ -992,6 +1042,7 @@ const productCopyBase = {
     invitesTitle: "مفاتيح الدخول",
     routesTitle: "المسارات",
     accessTitle: "التحكم بالوصول",
+    refreshData: "تحديث البيانات",
     accessSubtitle: "صمم قوائم ACL والمجموعات وملكية الوسوم من دون تعديل JSON الخام.",
     policyDesigner: "مصمم السياسة",
     ruleBuilder: "منشئ قواعد الوصول",
@@ -1085,6 +1136,15 @@ const productCopyBase = {
     policyRulesTableService: "الخدمة",
     policyRulesTableRisk: "المخاطرة",
     policyRulesTableActions: "الإجراءات",
+    never: "أبدا",
+    profileNotFound: "لم يتم العثور على الملف.",
+    roleOwner: "المالك",
+    roleMember: "عضو",
+    roleServiceAccount: "حساب خدمة",
+    errorUserNotFound: "لم يتم العثور على المستخدم.",
+    errorUserStillOwns: "لا يزال هذا المستخدم يملك أجهزة أو مفاتيح دخول. أزلها قبل حذف المستخدم.",
+    errorNodeNotFound: "لم يتم العثور على العقدة.",
+    errorRequestFailed: "فشل طلب Headscale. تحقق من عنوان الخادم ومفتاح API.",
   },
 } satisfies Record<SourceLocale, ProductCopy>;
 
@@ -1337,10 +1397,8 @@ const policyTagOwnerForm = reactive({
   tag: "tag:server",
   owners: "group:ops",
 });
-let healthProbeTimer: ReturnType<typeof window.setInterval> | null = null;
-let isHealthProbeRunning = false;
-let healthProbeGeneration = 0;
 let profileRouteSyncGeneration = 0;
+let suppressNextSameProfileRouteRefresh = false;
 let nodeDetailRefreshGeneration = 0;
 let userDetailRefreshGeneration = 0;
 let inviteDialogRefreshGeneration = 0;
@@ -1412,7 +1470,8 @@ const hasMachineFilters = computed(
 const filteredUsers = computed(() => {
   const query = userSearch.value.trim().toLowerCase();
   return visibleUsers.value.filter((user) => {
-    const role = userRole(user).toLowerCase();
+    const role = userRoleKind(user);
+    const roleLabel = userRole(user);
     const searchable = [
       user.name,
       user.displayName,
@@ -1422,6 +1481,7 @@ const filteredUsers = computed(() => {
       user.providerId,
       userAuthSource(user),
       role,
+      roleLabel,
     ]
       .filter(Boolean)
       .join(" ")
@@ -1431,7 +1491,7 @@ const filteredUsers = computed(() => {
       userFilter.value === "all" ||
       (userFilter.value === "owner" && role === "owner") ||
       (userFilter.value === "member" && role === "member") ||
-      (userFilter.value === "service" && role === "service account");
+      (userFilter.value === "service" && role === "service");
 
     return matchesSearch && matchesFilter;
   });
@@ -1775,13 +1835,26 @@ const policyWarnings = computed(() => {
 });
 const policyRiskCount = computed(() => policyWarnings.value.length);
 const policyExtraSectionKeys = computed(() => Object.keys(policyExtraSections.value).sort());
-const policyWorkspaceSummary = computed(() =>
-  locale.value === "zh"
-    ? `${policyRules.value.length} 条规则，${policyGroups.value.length} 个用户组，${policyTagOwners.value.length} 个标签授权，${policyRiskCount.value} 个风险。`
-    : locale.value === "ar"
-      ? `${policyRules.value.length} قاعدة، ${policyGroups.value.length} مجموعة، ${policyTagOwners.value.length} منح وسوم و ${policyRiskCount.value} تحذيرات.`
-      : `${policyRules.value.length} rules, ${policyGroups.value.length} groups, ${policyTagOwners.value.length} tag grants and ${policyRiskCount.value} warnings.`,
-);
+const policyWorkspaceSummary = computed(() => {
+  if (locale.value === "zh" || locale.value === "zh-Hant") {
+    return localizeChineseText(
+      `${policyRules.value.length} 条规则，${policyGroups.value.length} 个用户组，${policyTagOwners.value.length} 个标签授权，${policyRiskCount.value} 个风险。`,
+    );
+  }
+  if (locale.value === "fr") {
+    return `${policyRules.value.length} règles, ${policyGroups.value.length} groupes, ${policyTagOwners.value.length} accès aux tags et ${policyRiskCount.value} avertissements.`;
+  }
+  if (locale.value === "ru") {
+    return `${policyRules.value.length} правил, ${policyGroups.value.length} групп, ${policyTagOwners.value.length} прав на теги и ${policyRiskCount.value} предупреждений.`;
+  }
+  if (locale.value === "es") {
+    return `${policyRules.value.length} reglas, ${policyGroups.value.length} grupos, ${policyTagOwners.value.length} permisos de etiquetas y ${policyRiskCount.value} advertencias.`;
+  }
+  if (locale.value === "ar") {
+    return `${policyRules.value.length} قاعدة، ${policyGroups.value.length} مجموعة، ${policyTagOwners.value.length} منح وسوم و ${policyRiskCount.value} تحذيرات.`;
+  }
+  return `${policyRules.value.length} rules, ${policyGroups.value.length} groups, ${policyTagOwners.value.length} tag grants and ${policyRiskCount.value} warnings.`;
+});
 const filteredPolicyRules = computed(() => {
   const query = policyRuleSearch.value.trim().toLowerCase();
   if (!query) {
@@ -1829,62 +1902,6 @@ const selectedProfile = computed(() =>
 const restoringProfile = computed(() => {
   const profileId = routeProfileId();
   return profileId ? profiles.value.find((profile) => profile.id === profileId) : null;
-});
-const serverSignalStrength = computed<ServerSignalStrength>(() => {
-  const health = snapshot.value.health;
-  if (!health?.serverReachable) {
-    return "offline";
-  }
-
-  const latencyMs = health.latencyMs ?? Number.POSITIVE_INFINITY;
-  if (latencyMs <= 150) {
-    return "strong";
-  }
-  if (latencyMs <= 400) {
-    return "good";
-  }
-  if (latencyMs <= 900) {
-    return "weak";
-  }
-  return "poor";
-});
-const serverSignalIcon = computed(() => {
-  if (serverSignalStrength.value === "strong") {
-    return WifiHigh;
-  }
-  if (serverSignalStrength.value === "good") {
-    return Wifi;
-  }
-  if (serverSignalStrength.value === "weak") {
-    return WifiLow;
-  }
-  if (serverSignalStrength.value === "poor") {
-    return WifiZero;
-  }
-  return WifiOff;
-});
-const serverSignalClass = computed(() => {
-  if (serverSignalStrength.value === "strong") {
-    return "border-background bg-emerald-500 text-white";
-  }
-  if (serverSignalStrength.value === "good") {
-    return "border-background bg-lime-500 text-white";
-  }
-  if (serverSignalStrength.value === "weak") {
-    return "border-background bg-amber-500 text-white";
-  }
-  if (serverSignalStrength.value === "poor") {
-    return "border-background bg-orange-500 text-white";
-  }
-  return "border-background bg-destructive text-destructive-foreground";
-});
-const serverSignalLabel = computed(() => {
-  const health = snapshot.value.health;
-  if (!health?.serverReachable) {
-    return `${copy.value.serverIssue}`;
-  }
-  const latency = typeof health.latencyMs === "number" ? `, ${health.latencyMs} ms` : "";
-  return `${copy.value.serverReady}${latency}`;
 });
 
 function themeModeLabel(mode: ThemeMode) {
@@ -1987,54 +2004,6 @@ function applyOfflineHealth() {
       serverReachable: false,
     },
   };
-}
-
-async function probeServerConnection() {
-  if (!isAuthorized.value || isHealthProbeRunning) {
-    return;
-  }
-
-  const generation = healthProbeGeneration;
-  isHealthProbeRunning = true;
-  try {
-    const health = await createClient().health();
-    if (generation !== healthProbeGeneration || !isAuthorized.value) {
-      return;
-    }
-    snapshot.value = {
-      ...snapshot.value,
-      health,
-    };
-  } catch {
-    if (generation !== healthProbeGeneration || !isAuthorized.value) {
-      return;
-    }
-    applyOfflineHealth();
-  } finally {
-    if (generation === healthProbeGeneration) {
-      isHealthProbeRunning = false;
-    }
-  }
-}
-
-function stopHealthProbe() {
-  healthProbeGeneration += 1;
-  if (healthProbeTimer !== null) {
-    window.clearInterval(healthProbeTimer);
-    healthProbeTimer = null;
-  }
-  isHealthProbeRunning = false;
-}
-
-function restartHealthProbe() {
-  stopHealthProbe();
-  if (!isAuthorized.value) {
-    return;
-  }
-
-  healthProbeTimer = window.setInterval(() => {
-    void probeServerConnection();
-  }, 5000);
 }
 
 async function refreshSnapshot() {
@@ -2376,6 +2345,10 @@ async function syncProfileRoute() {
     setActiveSection(section);
 
     if (isAuthorized.value && connectionForm.profileId === profileId) {
+      if (suppressNextSameProfileRouteRefresh) {
+        suppressNextSameProfileRouteRefresh = false;
+        return;
+      }
       await refreshSnapshot();
       return;
     }
@@ -2383,7 +2356,7 @@ async function syncProfileRoute() {
     const profile = profiles.value.find((item) => item.id === profileId);
     if (!profile) {
       isAuthorized.value = false;
-      lastError.value = "Profile not found.";
+      lastError.value = copy.value.profileNotFound;
       profileStorage.clearActiveProfile();
       loadProfile(newProfileId);
       await router.replace({ name: "login" });
@@ -2439,7 +2412,6 @@ function continueAddingProfile() {
 function logout() {
   profileStorage.clearActiveProfile();
 
-  stopHealthProbe();
   isAuthorized.value = false;
   connectionDialogOpen.value = false;
   lastError.value = "";
@@ -2497,7 +2469,11 @@ function deleteProfile(profileId: string) {
 async function switchAuthorizedProfile(profile: ConnectionProfile) {
   await authorizeProfile(profile, activeSection.value);
   if (isAuthorized.value) {
+    suppressNextSameProfileRouteRefresh = true;
     await pushProfileRoute(profile.id, activeSection.value);
+    window.setTimeout(() => {
+      suppressNextSameProfileRouteRefresh = false;
+    }, 0);
   }
 }
 
@@ -2642,7 +2618,7 @@ function logoutFromMenu() {
 
 function formatDate(value?: string) {
   if (!value) {
-    return "never";
+    return copy.value.never;
   }
 
   const time = Date.parse(value);
@@ -2701,14 +2677,30 @@ function policyChoiceLabel(slot: PolicyBuilderSlot, value: string) {
   return policyChoicesForSlot(slot).find((choice) => choice.value === value)?.label || value;
 }
 
+function localizeChineseText(value: string) {
+  return locale.value === "zh-Hant" ? toTraditionalChineseValue(value) : value;
+}
+
 function policyRuleSentence(source: string, destination: string, ports: string) {
   const sourceLabel = policyChoiceLabel("source", source);
   const destinationLabel = policyChoiceLabel("destination", destination);
   const serviceLabel = policyChoiceLabel("ports", ports);
 
   if (source === "*" && destination === "*" && ports === "*") {
-    if (locale.value === "zh") {
-      return "高风险：所有来源可以访问所有设备的所有服务。";
+    if (locale.value === "zh" || locale.value === "zh-Hant") {
+      return localizeChineseText("高风险：所有来源可以访问所有设备的所有服务。");
+    }
+
+    if (locale.value === "fr") {
+      return "Risque élevé : tout le monde peut atteindre chaque appareil sur chaque service.";
+    }
+
+    if (locale.value === "ru") {
+      return "Высокий риск: все могут обращаться к каждому устройству через любой сервис.";
+    }
+
+    if (locale.value === "es") {
+      return "Alto riesgo: todos pueden acceder a cada dispositivo en todos los servicios.";
     }
 
     if (locale.value === "ar") {
@@ -2718,8 +2710,20 @@ function policyRuleSentence(source: string, destination: string, ports: string) 
     return "High risk: everyone can reach every device on every service.";
   }
 
-  if (locale.value === "zh") {
-    return `允许 ${sourceLabel} 访问 ${destinationLabel} 的 ${serviceLabel}。`;
+  if (locale.value === "zh" || locale.value === "zh-Hant") {
+    return localizeChineseText(`允许 ${sourceLabel} 访问 ${destinationLabel} 的 ${serviceLabel}。`);
+  }
+
+  if (locale.value === "fr") {
+    return `Autoriser ${sourceLabel} à atteindre ${destinationLabel} via ${serviceLabel}.`;
+  }
+
+  if (locale.value === "ru") {
+    return `Разрешить ${sourceLabel} доступ к ${destinationLabel} через ${serviceLabel}.`;
+  }
+
+  if (locale.value === "es") {
+    return `Permitir que ${sourceLabel} acceda a ${destinationLabel} mediante ${serviceLabel}.`;
   }
 
   if (locale.value === "ar") {
@@ -2847,14 +2851,25 @@ function userDeviceCount(user: HeadscaleUser) {
   return snapshot.value.nodes.filter((node) => node.user?.id === user.id).length;
 }
 
-function userRole(user: HeadscaleUser) {
+function userRoleKind(user: HeadscaleUser): Exclude<UserFilter, "all"> {
   if (userAuthSource(user).toLowerCase() === "system" || user.name.includes("tagged")) {
-    return "Service account";
+    return "service";
   }
   if (user.id === "1") {
-    return "Owner";
+    return "owner";
   }
-  return "Member";
+  return "member";
+}
+
+function userRole(user: HeadscaleUser) {
+  const role = userRoleKind(user);
+  if (role === "service") {
+    return copy.value.roleServiceAccount;
+  }
+  if (role === "owner") {
+    return copy.value.roleOwner;
+  }
+  return copy.value.roleMember;
 }
 
 function userAuthSource(user: HeadscaleUser) {
@@ -2862,7 +2877,7 @@ function userAuthSource(user: HeadscaleUser) {
 }
 
 function userLabel(user?: HeadscaleUser) {
-  return user?.displayName || user?.name || user?.email || "Unknown";
+  return user?.displayName || user?.name || user?.email || copy.value.unknown;
 }
 
 function hasVisibleUser(user?: HeadscaleUser): user is HeadscaleUser {
@@ -3437,7 +3452,20 @@ function confirmRemovePolicyItem() {
 }
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+  const message = error instanceof Error ? error.message : String(error);
+  if (message === englishCopy.errorUserNotFound) {
+    return copy.value.errorUserNotFound;
+  }
+  if (message === englishCopy.errorUserStillOwns) {
+    return copy.value.errorUserStillOwns;
+  }
+  if (message === englishCopy.errorNodeNotFound) {
+    return copy.value.errorNodeNotFound;
+  }
+  if (message === englishCopy.errorRequestFailed) {
+    return copy.value.errorRequestFailed;
+  }
+  return message;
 }
 
 function isActionPending(key: ActionFeedbackKey) {
@@ -4032,15 +4060,7 @@ watch(
   { immediate: true },
 );
 
-watch(
-  () => [isAuthorized.value, settings.mode, settings.baseUrl, settings.apiKey],
-  restartHealthProbe,
-  { immediate: true },
-);
-
 watch(activeSection, scrollActiveTabIntoView, { immediate: true });
-
-onBeforeUnmount(stopHealthProbe);
 </script>
 
 <template>
@@ -4067,6 +4087,20 @@ onBeforeUnmount(stopHealthProbe);
           </div>
 
           <div class="ms-auto flex items-center gap-1">
+            <Button
+              as="a"
+              :href="githubRepositoryUrl"
+              target="_blank"
+              rel="noreferrer"
+              variant="ghost"
+              size="icon"
+              title="GitHub"
+              aria-label="GitHub"
+              data-testid="github-repository-link"
+            >
+              <Github class="h-5 w-5" aria-hidden="true" />
+            </Button>
+
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
                 <Button
@@ -4431,6 +4465,20 @@ onBeforeUnmount(stopHealthProbe);
             </div>
 
             <div class="ms-auto flex shrink-0 items-center gap-1">
+              <Button
+                as="a"
+                :href="githubRepositoryUrl"
+                target="_blank"
+                rel="noreferrer"
+                variant="ghost"
+                size="icon"
+                title="GitHub"
+                aria-label="GitHub"
+                data-testid="github-repository-link"
+              >
+                <Github class="h-5 w-5" aria-hidden="true" />
+              </Button>
+
               <DropdownMenu v-model:open="profileMenuOpen">
                 <DropdownMenuTrigger as-child>
                   <Button
@@ -4441,15 +4489,6 @@ onBeforeUnmount(stopHealthProbe);
                     :aria-label="t('profile')"
                   >
                     <CircleUserRound class="h-5 w-5" aria-hidden="true" />
-                    <span
-                      class="absolute -bottom-0.5 -end-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border"
-                      :class="serverSignalClass"
-                      :aria-label="serverSignalLabel"
-                      :title="serverSignalLabel"
-                      data-testid="header-server-signal"
-                    >
-                      <component :is="serverSignalIcon" class="h-2.5 w-2.5" aria-hidden="true" />
-                    </span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" class="w-64" data-testid="profile-menu">

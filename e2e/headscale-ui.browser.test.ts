@@ -210,6 +210,12 @@ function expectPointerCursor(testId: string) {
   expect(getComputedStyle(element as HTMLElement).cursor).toBe("pointer");
 }
 
+function preventNextClickDefault(testId: string) {
+  document
+    .querySelector<HTMLElement>(`[data-testid="${testId}"]`)
+    ?.addEventListener("click", (event) => event.preventDefault(), { once: true });
+}
+
 const interactiveCursorSelectors = [
   "a[href]",
   "button:not(:disabled):not([aria-disabled='true'])",
@@ -406,7 +412,16 @@ function expectAppHeader() {
     "Headscale UI",
   );
   expect(document.querySelector<SVGElement>('[data-testid="app-logo"] svg')).toBeTruthy();
-  expect(document.querySelector<HTMLElement>('[data-testid="profile-menu-trigger"]')).toBeTruthy();
+  const githubLink = document.querySelector<HTMLElement>('[data-testid="github-repository-link"]');
+  const profileTrigger = document.querySelector<HTMLElement>(
+    '[data-testid="profile-menu-trigger"]',
+  );
+  expect(githubLink).toBeTruthy();
+  expect(profileTrigger).toBeTruthy();
+  expect(githubLink?.getAttribute("href")).toBe("https://github.com/MunMunMiao/headscale-ui");
+  expect(githubLink?.compareDocumentPosition(profileTrigger as HTMLElement)).toBe(
+    Node.DOCUMENT_POSITION_FOLLOWING,
+  );
   expect(document.querySelector<HTMLElement>('[data-testid="current-server"]')).toBeNull();
   expect(navigation?.getAttribute("dir")).toBe(document.documentElement.dir);
 
@@ -989,6 +1004,13 @@ test("refreshes data on every section change and repeated dialog open", async ()
 test("supports language and theme selectors before login", async () => {
   await renderLogin();
 
+  await expect
+    .element(page.getByTestId("github-repository-link"))
+    .toHaveAttribute("href", "https://github.com/MunMunMiao/headscale-ui");
+  expectPointerCursor("github-repository-link");
+  preventNextClickDefault("github-repository-link");
+  await page.getByTestId("github-repository-link").click();
+
   await page.getByTestId("profile-option-new").click();
   expectConnectionFormGridLayout();
   const connectionHeader = document.querySelector<HTMLElement>(
@@ -1153,6 +1175,9 @@ test("uses pointer cursors for buttons, links, menus and tabs", async () => {
   expectVisibleInteractiveElementsUsePointer();
 
   await connectWithDefaults();
+  expectPointerCursor("github-repository-link");
+  preventNextClickDefault("github-repository-link");
+  await page.getByTestId("github-repository-link").click();
   expectPointerCursor("profile-menu-trigger");
   expectPointerCursor("section-devices");
   expectVisibleInteractiveElementsUsePointer();
@@ -1315,24 +1340,22 @@ test("covers dashboard refresh, machine filters, exports and machine lifecycle a
   await expect
     .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "health.check"))
     .toBe(true);
-  await expect.element(page.getByTestId("header-server-signal")).toBeVisible();
-  expect(
-    document.querySelector('[data-testid="header-server-signal"]')?.getAttribute("title"),
-  ).toContain("Server ready");
+  expect(document.querySelector('[data-testid="header-server-signal"]')).toBeNull();
   expect(document.querySelector('[data-testid="overview-health-metrics"]')).toBeNull();
   expect(document.querySelector('[data-testid="overview-server-health"]')).toBeNull();
   expect(document.querySelector('[data-testid="overview-server-reachability"]')).toBeNull();
   expect(document.querySelector('[data-testid="overview-database-health"]')).toBeNull();
-  const healthCallsAfterRefresh =
-    window.__headscaleUiOperationCalls?.filter((call) => call.id === "health.check").length ?? 0;
   await expect
     .poll(
       () =>
-        (window.__headscaleUiOperationCalls?.filter((call) => call.id === "health.check").length ??
-          0) > healthCallsAfterRefresh,
-      { timeout: 6000 },
+        document.querySelector<HTMLButtonElement>('[data-testid="refresh-data"]')?.disabled ?? true,
     )
-    .toBe(true);
+    .toBe(false);
+  window.__headscaleUiOperationCalls = [];
+  await new Promise((resolve) => window.setTimeout(resolve, 5200));
+  expect(
+    window.__headscaleUiOperationCalls?.filter((call) => call.id === "health.check").length ?? 0,
+  ).toBe(0);
 
   await page.getByTestId("section-devices").click();
   expectMachinesWorkbench();
@@ -1493,16 +1516,16 @@ test("covers user filters, user export and member deletion", async () => {
   await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
   await expect.element(page.getByTestId("invite-user")).toHaveValue("3");
   await page.getByTestId("cancel-create-invite").click();
-  await page.getByTestId("member-actions-trigger-charlie").click();
+  clickDomTestId("member-actions-trigger-charlie");
   await page.getByTestId("view-member-details-charlie").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Charlie");
   await closeLayerWithEscape("user-detail-dialog");
-  await page.getByTestId("member-actions-trigger-charlie").click();
+  clickDomTestId("member-actions-trigger-charlie");
   await page.getByTestId("create-invite-for-member-charlie").click();
   await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
   await expect.element(page.getByTestId("invite-user")).toHaveValue("3");
   await page.getByTestId("cancel-create-invite").click();
-  await page.getByTestId("member-actions-trigger-charlie").click();
+  clickDomTestId("member-actions-trigger-charlie");
   await page.getByTestId("view-member-machines-charlie").click();
   await expect.element(page.getByTestId("device-search")).toHaveValue("charlie@example.com");
   await expect.element(page.getByTestId("device-3")).toBeVisible();
@@ -2115,32 +2138,32 @@ test("keeps every core function usable on mobile", async () => {
   await expect.element(page.getByTestId("device-1")).toBeVisible();
   expectMachinesWorkbench();
   await page.getByTestId("device-search").fill("alice");
-  await page.getByTestId("machine-actions-trigger-mobile-1").click();
+  clickDomTestId("machine-actions-trigger-mobile-1");
   await page.getByTestId("view-node-details-action-mobile-1").click();
   await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("alice-laptop");
   await closeLayerWithEscape("device-detail-dialog");
   await page.getByTestId("device-search").fill("edge");
-  await page.getByTestId("machine-actions-trigger-mobile-2").click();
+  clickDomTestId("machine-actions-trigger-mobile-2");
   await page.getByTestId("view-node-routes-action-mobile-2").click();
   await expect.element(page.getByTestId("route-node-2")).toBeVisible();
   await selectSectionTab("devices");
   await page.getByTestId("device-search").fill("alice");
-  await page.getByTestId("machine-actions-trigger-mobile-1").click();
+  clickDomTestId("machine-actions-trigger-mobile-1");
   await page.getByTestId("expire-node-action-mobile-1").click();
   await expect.element(page.getByTestId("expire-node-dialog")).toBeVisible();
   await page.getByTestId("expire-node-cancel").click();
-  await page.getByTestId("machine-actions-trigger-mobile-1").click();
+  clickDomTestId("machine-actions-trigger-mobile-1");
   await page.getByTestId("remove-node-action-mobile-1").click();
   await expect.element(page.getByTestId("remove-node-dialog")).toBeVisible();
   await page.getByTestId("remove-node-cancel").click();
-  await page.getByTestId("machine-actions-trigger-mobile-1").click();
+  clickDomTestId("machine-actions-trigger-mobile-1");
   await expect.element(page.getByTestId("machine-actions-menu-mobile-1")).toBeVisible();
   await page.getByTestId("rename-node-action-mobile-1").click();
   await expect.element(page.getByTestId("rename-node-dialog")).toBeVisible();
   await page.getByTestId("rename-node-dialog-input").fill("alice-phone");
-  await page.getByTestId("rename-node-confirm").click();
+  clickDomTestId("rename-node-confirm");
   await expect.element(page.getByTestId("device-1")).toHaveTextContent("alice-phone");
-  await page.getByTestId("machine-actions-trigger-mobile-1").click();
+  clickDomTestId("machine-actions-trigger-mobile-1");
   await expect.element(page.getByTestId("machine-actions-menu-mobile-1")).toBeVisible();
   await page.getByTestId("edit-node-tags-action-mobile-1").click();
   await expect.element(page.getByTestId("node-tags-dialog")).toBeVisible();
@@ -2210,9 +2233,22 @@ test("defaults to English and supports the United Nations official languages plu
     .element(page.getByTestId("user-table"))
     .toHaveTextContent("沒有匹配篩選條件的使用者");
 
+  const refreshLabels = {
+    fr: "Actualiser les données",
+    ru: "Обновить данные",
+    es: "Actualizar datos",
+    ar: "تحديث البيانات",
+  } as const;
+
   for (const code of ["fr", "ru", "es", "ar"] as const) {
     await chooseProfileMenuOption(`locale-option-${code}`);
     expect(document.documentElement.lang).toBe(code);
+    expect(document.querySelector('[data-testid="refresh-users"]')?.getAttribute("title")).toBe(
+      refreshLabels[code],
+    );
+    expect(
+      document.querySelector('[data-testid="refresh-users"]')?.getAttribute("aria-label"),
+    ).toBe(refreshLabels[code]);
   }
 
   await expect.element(page.getByTestId("section-devices")).toHaveTextContent("الأجهزة");
@@ -2265,6 +2301,9 @@ test("adapts every main page and shared controls for Arabic RTL", async () => {
 
   await selectSectionTab("home");
   await expect.element(page.getByTestId("refresh-data")).toBeVisible();
+  expect(document.querySelector('[data-testid="refresh-data"]')?.getAttribute("title")).toBe(
+    "تحديث البيانات",
+  );
   await expect.element(page.getByTestId("section-home")).toHaveTextContent("نظرة عامة");
   expectNoHorizontalOverflow();
 

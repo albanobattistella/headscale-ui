@@ -854,18 +854,6 @@ const enOperations: OperationText = {
   },
 };
 
-function prefixed(localeName: string): OperationText {
-  return Object.fromEntries(
-    Object.entries(enOperations).map(([id, text]) => [
-      id,
-      {
-        title: `${localeName}: ${text.title}`,
-        description: text.description,
-      },
-    ]),
-  ) as OperationText;
-}
-
 const operationMessagesBase = {
   en: enOperations,
   zh: {
@@ -947,10 +935,452 @@ const operationMessagesBase = {
       description: "保存由可视化 ACL、用户组和标签归属设计器生成的 policy。",
     },
   },
-  fr: prefixed("FR"),
-  ru: prefixed("RU"),
-  es: prefixed("ES"),
-  ar: prefixed("AR"),
+  fr: {
+    "health.check": {
+      title: "Vérifier la santé",
+      description:
+        "Lire la connectivité de la base de données Headscale depuis l'endpoint de santé du serveur.",
+    },
+    "version.get": {
+      title: "Lire la version",
+      description: "Lire la version du serveur Headscale.",
+    },
+    "user.list": {
+      title: "Rechercher les utilisateurs",
+      description: "Filtrer par id, nom ou e-mail; laisser vide pour tout lister.",
+    },
+    "user.create": {
+      title: "Créer un utilisateur",
+      description: "Créer un utilisateur tailnet avec nom affiché, e-mail et avatar facultatifs.",
+    },
+    "user.rename": {
+      title: "Renommer l'utilisateur",
+      description: "Renommer un utilisateur par ID numérique.",
+    },
+    "user.delete": {
+      title: "Supprimer l'utilisateur",
+      description: "Supprimer l'utilisateur sélectionné.",
+    },
+    "preauthkey.list": {
+      title: "Lister les clés pré-auth",
+      description: "Lister toutes les clés de pré-authentification.",
+    },
+    "preauthkey.create": {
+      title: "Créer une clé pré-auth",
+      description: "Créer une clé d'authentification pour appareils personnels ou tagués.",
+    },
+    "preauthkey.expire": {
+      title: "Expirer une clé pré-auth",
+      description: "Expirer une clé de pré-authentification par ID.",
+    },
+    "preauthkey.delete": {
+      title: "Supprimer une clé pré-auth",
+      description: "Supprimer une clé de pré-authentification par ID.",
+    },
+    "node.list": {
+      title: "Lister les nœuds",
+      description: "Lister tous les nœuds, avec filtre utilisateur facultatif.",
+    },
+    "node.get": {
+      title: "Lire les détails du nœud",
+      description: "Récupérer l'enregistrement complet d'un nœud par ID.",
+    },
+    "node.register": {
+      title: "Enregistrer un nœud en attente",
+      description: "Approuver et enregistrer un nœud avec une clé d'enregistrement.",
+    },
+    "auth.register": {
+      title: "Enregistrer une demande auth",
+      description: "Assigner une demande d'enregistrement par navigateur à un utilisateur.",
+    },
+    "auth.approve": {
+      title: "Approuver une demande auth",
+      description: "Approuver une demande d'enregistrement par navigateur via l'auth ID.",
+    },
+    "auth.reject": {
+      title: "Rejeter une demande auth",
+      description: "Rejeter une demande d'enregistrement par navigateur via l'auth ID.",
+    },
+    "node.debugCreate": {
+      title: "Créer un nœud de test",
+      description: "Créer un nœud de test via l'endpoint debug de Headscale.",
+    },
+    "node.rename": { title: "Renommer le nœud", description: "Modifier le nom affiché du nœud." },
+    "node.expire": {
+      title: "Expirer le nœud",
+      description:
+        "Expirer un nœud maintenant, à une heure donnée, ou effacer son expiration sur les serveurs récents.",
+    },
+    "node.delete": { title: "Supprimer le nœud", description: "Retirer un nœud du tailnet." },
+    "node.setTags": {
+      title: "Définir les tags du nœud",
+      description: "Remplacer les tags actuels du nœud.",
+    },
+    "node.setApprovedRoutes": {
+      title: "Approuver les routes du nœud",
+      description: "Remplacer les routes approuvées, y compris les routes subnet et exit-node.",
+    },
+    "node.backfillIps": {
+      title: "Renseigner les IP des nœuds",
+      description: "Exécuter l'action de maintenance Headscale de remplissage des IP de nœuds.",
+    },
+    "apikey.list": {
+      title: "Lister les clés API",
+      description: "Lister les métadonnées des clés API serveur.",
+    },
+    "apikey.create": {
+      title: "Créer une clé API",
+      description: "Créer une clé API; la valeur complète n'est renvoyée qu'une fois.",
+    },
+    "apikey.expire": {
+      title: "Expirer une clé API",
+      description: "Expirer une clé API par préfixe ou ID.",
+    },
+    "apikey.delete": {
+      title: "Supprimer une clé API",
+      description: "Supprimer une clé API par préfixe et ID facultatif.",
+    },
+    "policy.get": {
+      title: "Lire la policy",
+      description: "Lire le contenu de la policy Headscale et son horodatage de mise à jour.",
+    },
+    "policy.set": {
+      title: "Enregistrer la policy",
+      description:
+        "Enregistrer la policy générée par le concepteur visuel d'ACL, de groupes et de propriétaires de tags.",
+    },
+  },
+  ru: {
+    "health.check": {
+      title: "Проверить состояние",
+      description: "Прочитать подключение базы данных Headscale через серверный health endpoint.",
+    },
+    "version.get": {
+      title: "Прочитать версию",
+      description: "Прочитать версию сервера Headscale.",
+    },
+    "user.list": {
+      title: "Найти пользователей",
+      description: "Фильтровать по id, имени или e-mail; оставить пустым, чтобы вывести всех.",
+    },
+    "user.create": {
+      title: "Создать пользователя",
+      description: "Создать пользователя tailnet с необязательными именем, e-mail и аватаром.",
+    },
+    "user.rename": {
+      title: "Переименовать пользователя",
+      description: "Переименовать пользователя по числовому ID.",
+    },
+    "user.delete": {
+      title: "Удалить пользователя",
+      description: "Удалить выбранного пользователя.",
+    },
+    "preauthkey.list": {
+      title: "Список pre-auth ключей",
+      description: "Показать все ключи предварительной авторизации.",
+    },
+    "preauthkey.create": {
+      title: "Создать pre-auth ключ",
+      description: "Создать ключ авторизации для личных или тегированных устройств.",
+    },
+    "preauthkey.expire": {
+      title: "Завершить pre-auth ключ",
+      description: "Завершить ключ предварительной авторизации по ID.",
+    },
+    "preauthkey.delete": {
+      title: "Удалить pre-auth ключ",
+      description: "Удалить ключ предварительной авторизации по ID.",
+    },
+    "node.list": {
+      title: "Список узлов",
+      description: "Показать все узлы, при необходимости с фильтром по пользователю.",
+    },
+    "node.get": {
+      title: "Прочитать детали узла",
+      description: "Получить полную запись узла по ID.",
+    },
+    "node.register": {
+      title: "Зарегистрировать ожидающий узел",
+      description: "Одобрить и зарегистрировать узел с регистрационным ключом.",
+    },
+    "auth.register": {
+      title: "Зарегистрировать auth-запрос",
+      description: "Назначить браузерный запрос регистрации пользователю.",
+    },
+    "auth.approve": {
+      title: "Одобрить auth-запрос",
+      description: "Одобрить браузерный запрос регистрации по auth ID.",
+    },
+    "auth.reject": {
+      title: "Отклонить auth-запрос",
+      description: "Отклонить браузерный запрос регистрации по auth ID.",
+    },
+    "node.debugCreate": {
+      title: "Создать тестовый узел",
+      description: "Создать тестовый узел через debug endpoint Headscale.",
+    },
+    "node.rename": { title: "Переименовать узел", description: "Изменить заданное имя узла." },
+    "node.expire": {
+      title: "Завершить узел",
+      description:
+        "Завершить узел сейчас, в заданное время или очистить срок действия на новых серверах.",
+    },
+    "node.delete": { title: "Удалить узел", description: "Удалить узел из tailnet." },
+    "node.setTags": {
+      title: "Задать теги узла",
+      description: "Заменить текущие теги узла.",
+    },
+    "node.setApprovedRoutes": {
+      title: "Одобрить маршруты узла",
+      description: "Заменить одобренные маршруты, включая subnet и exit-node маршруты.",
+    },
+    "node.backfillIps": {
+      title: "Заполнить IP узлов",
+      description: "Запустить действие обслуживания Headscale для заполнения IP узлов.",
+    },
+    "apikey.list": {
+      title: "Список API-ключей",
+      description: "Показать метаданные серверных API-ключей.",
+    },
+    "apikey.create": {
+      title: "Создать API-ключ",
+      description: "Создать API-ключ; полное значение возвращается только один раз.",
+    },
+    "apikey.expire": {
+      title: "Завершить API-ключ",
+      description: "Завершить API-ключ по префиксу или ID.",
+    },
+    "apikey.delete": {
+      title: "Удалить API-ключ",
+      description: "Удалить API-ключ по префиксу и необязательному ID.",
+    },
+    "policy.get": {
+      title: "Прочитать policy",
+      description: "Прочитать содержимое policy Headscale и время обновления.",
+    },
+    "policy.set": {
+      title: "Сохранить policy",
+      description:
+        "Сохранить policy, созданную визуальным дизайнером ACL, групп и владельцев тегов.",
+    },
+  },
+  es: {
+    "health.check": {
+      title: "Comprobar salud",
+      description: "Leer la conectividad de la base de datos Headscale desde el endpoint de salud.",
+    },
+    "version.get": {
+      title: "Leer versión",
+      description: "Leer la versión del servidor Headscale.",
+    },
+    "user.list": {
+      title: "Consultar usuarios",
+      description: "Filtra por id, nombre o e-mail; deja vacío para listar todos.",
+    },
+    "user.create": {
+      title: "Crear usuario",
+      description: "Crear un usuario del tailnet con nombre visible, e-mail y avatar opcionales.",
+    },
+    "user.rename": {
+      title: "Renombrar usuario",
+      description: "Renombrar un usuario por ID numérico.",
+    },
+    "user.delete": { title: "Eliminar usuario", description: "Eliminar el usuario seleccionado." },
+    "preauthkey.list": {
+      title: "Listar claves pre-auth",
+      description: "Listar todas las claves de preautenticación.",
+    },
+    "preauthkey.create": {
+      title: "Crear clave pre-auth",
+      description: "Crear una clave de autenticación para dispositivos personales o etiquetados.",
+    },
+    "preauthkey.expire": {
+      title: "Caducar clave pre-auth",
+      description: "Caducar una clave de preautenticación por ID.",
+    },
+    "preauthkey.delete": {
+      title: "Eliminar clave pre-auth",
+      description: "Eliminar una clave de preautenticación por ID.",
+    },
+    "node.list": {
+      title: "Listar nodos",
+      description: "Listar todos los nodos, opcionalmente filtrados por usuario.",
+    },
+    "node.get": {
+      title: "Leer detalles del nodo",
+      description: "Obtener el registro completo de un nodo por ID.",
+    },
+    "node.register": {
+      title: "Registrar nodo pendiente",
+      description: "Aprobar y registrar un nodo con una clave de registro.",
+    },
+    "auth.register": {
+      title: "Registrar solicitud auth",
+      description: "Asignar una solicitud de registro por navegador a un usuario.",
+    },
+    "auth.approve": {
+      title: "Aprobar solicitud auth",
+      description: "Aprobar una solicitud de registro por navegador mediante auth ID.",
+    },
+    "auth.reject": {
+      title: "Rechazar solicitud auth",
+      description: "Rechazar una solicitud de registro por navegador mediante auth ID.",
+    },
+    "node.debugCreate": {
+      title: "Crear nodo de prueba",
+      description: "Crear un nodo de prueba mediante el endpoint debug de Headscale.",
+    },
+    "node.rename": { title: "Renombrar nodo", description: "Cambiar el nombre asignado del nodo." },
+    "node.expire": {
+      title: "Caducar nodo",
+      description:
+        "Caducar un nodo ahora, en una hora concreta, o limpiar su caducidad en servidores nuevos.",
+    },
+    "node.delete": { title: "Eliminar nodo", description: "Quitar un nodo del tailnet." },
+    "node.setTags": {
+      title: "Definir etiquetas del nodo",
+      description: "Reemplazar las etiquetas actuales del nodo.",
+    },
+    "node.setApprovedRoutes": {
+      title: "Aprobar rutas del nodo",
+      description: "Reemplazar rutas aprobadas, incluidas rutas de subred y exit-node.",
+    },
+    "node.backfillIps": {
+      title: "Rellenar IP de nodos",
+      description: "Ejecutar la acción de mantenimiento de Headscale para rellenar IP de nodos.",
+    },
+    "apikey.list": {
+      title: "Listar claves API",
+      description: "Listar metadatos de claves API del servidor.",
+    },
+    "apikey.create": {
+      title: "Crear clave API",
+      description: "Crear una clave API; el valor completo solo se devuelve una vez.",
+    },
+    "apikey.expire": {
+      title: "Caducar clave API",
+      description: "Caducar una clave API por prefijo o ID.",
+    },
+    "apikey.delete": {
+      title: "Eliminar clave API",
+      description: "Eliminar una clave API por prefijo e ID opcional.",
+    },
+    "policy.get": {
+      title: "Leer policy",
+      description: "Leer el contenido de la policy de Headscale y su hora de actualización.",
+    },
+    "policy.set": {
+      title: "Guardar policy",
+      description:
+        "Guardar la policy generada por el diseñador visual de ACL, grupos y propietarios de etiquetas.",
+    },
+  },
+  ar: {
+    "health.check": {
+      title: "فحص الصحة",
+      description: "قراءة اتصال قاعدة بيانات Headscale من نقطة فحص صحة الخادم.",
+    },
+    "version.get": { title: "قراءة الإصدار", description: "قراءة إصدار خادم Headscale." },
+    "user.list": {
+      title: "استعلام المستخدمين",
+      description: "صف حسب id أو الاسم أو البريد؛ اتركه فارغا لعرض كل المستخدمين.",
+    },
+    "user.create": {
+      title: "إنشاء مستخدم",
+      description: "إنشاء مستخدم tailnet مع اسم عرض وبريد وصورة اختيارية.",
+    },
+    "user.rename": {
+      title: "إعادة تسمية المستخدم",
+      description: "إعادة تسمية مستخدم باستخدام ID الرقمي.",
+    },
+    "user.delete": { title: "حذف المستخدم", description: "حذف المستخدم المحدد." },
+    "preauthkey.list": {
+      title: "عرض مفاتيح ما قبل التفويض",
+      description: "عرض كل مفاتيح ما قبل المصادقة.",
+    },
+    "preauthkey.create": {
+      title: "إنشاء مفتاح ما قبل التفويض",
+      description: "إنشاء مفتاح دخول للأجهزة الشخصية أو الموسومة.",
+    },
+    "preauthkey.expire": {
+      title: "إنهاء مفتاح ما قبل التفويض",
+      description: "إنهاء مفتاح ما قبل المصادقة حسب ID.",
+    },
+    "preauthkey.delete": {
+      title: "حذف مفتاح ما قبل التفويض",
+      description: "حذف مفتاح ما قبل المصادقة حسب ID.",
+    },
+    "node.list": {
+      title: "عرض العقد",
+      description: "عرض كل العقد مع إمكانية التصفية حسب المستخدم.",
+    },
+    "node.get": {
+      title: "قراءة تفاصيل العقدة",
+      description: "جلب سجل العقدة الكامل حسب ID.",
+    },
+    "node.register": {
+      title: "تسجيل عقدة معلقة",
+      description: "الموافقة على عقدة وتسجيلها باستخدام مفتاح التسجيل.",
+    },
+    "auth.register": {
+      title: "تسجيل طلب مصادقة",
+      description: "إسناد طلب تسجيل مصادقة المتصفح إلى مستخدم.",
+    },
+    "auth.approve": {
+      title: "الموافقة على طلب مصادقة",
+      description: "الموافقة على طلب تسجيل مصادقة المتصفح حسب auth ID.",
+    },
+    "auth.reject": {
+      title: "رفض طلب مصادقة",
+      description: "رفض طلب تسجيل مصادقة المتصفح حسب auth ID.",
+    },
+    "node.debugCreate": {
+      title: "إنشاء عقدة اختبار",
+      description: "إنشاء عقدة اختبار من خلال نقطة debug في Headscale.",
+    },
+    "node.rename": { title: "إعادة تسمية العقدة", description: "تغيير الاسم المعطى للعقدة." },
+    "node.expire": {
+      title: "إنهاء العقدة",
+      description: "إنهاء العقدة الآن أو في وقت محدد أو مسح انتهاء صلاحيتها على الخوادم الأحدث.",
+    },
+    "node.delete": { title: "حذف العقدة", description: "إزالة عقدة من tailnet." },
+    "node.setTags": {
+      title: "تعيين وسوم العقدة",
+      description: "استبدال الوسوم الحالية للعقدة.",
+    },
+    "node.setApprovedRoutes": {
+      title: "الموافقة على مسارات العقدة",
+      description: "استبدال المسارات الموافق عليها، بما في ذلك مسارات subnet و exit-node.",
+    },
+    "node.backfillIps": {
+      title: "استكمال عناوين IP للعقد",
+      description: "تشغيل إجراء صيانة Headscale لاستكمال عناوين IP للعقد.",
+    },
+    "apikey.list": {
+      title: "عرض مفاتيح API",
+      description: "عرض بيانات مفاتيح API الخاصة بالخادم.",
+    },
+    "apikey.create": {
+      title: "إنشاء مفتاح API",
+      description: "إنشاء مفتاح API جديد؛ تعرض القيمة الكاملة مرة واحدة فقط.",
+    },
+    "apikey.expire": {
+      title: "إنهاء مفتاح API",
+      description: "إنهاء مفتاح API حسب البادئة أو ID.",
+    },
+    "apikey.delete": {
+      title: "حذف مفتاح API",
+      description: "حذف مفتاح API حسب البادئة و ID اختياري.",
+    },
+    "policy.get": {
+      title: "قراءة السياسة",
+      description: "قراءة محتوى سياسة Headscale ووقت تحديثها.",
+    },
+    "policy.set": {
+      title: "حفظ السياسة",
+      description: "حفظ السياسة التي أنشأها مصمم ACL والمجموعات ومالكي الوسوم المرئي.",
+    },
+  },
 } satisfies Record<SourceLocale, OperationText>;
 
 export const operationMessages: Record<Locale, OperationText> = {
