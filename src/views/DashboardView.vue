@@ -44,6 +44,7 @@ import type {
   HeadscaleUser,
   PreAuthKey,
 } from "@/api/types";
+import AssignMemberDialog, { type AssignMemberOption } from "@/components/AssignMemberDialog.vue";
 import CreateAuthKeyDialog from "@/components/CreateAuthKeyDialog.vue";
 import type {
   AuthKeyDialogDefaults,
@@ -99,6 +100,30 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isTimestampExpired as isExpired, nodeConnectionStatus } from "@/domain/node-status";
+import {
+  addMemberToGroup,
+  addOwnerToTag,
+  createGroup as createPolicyGroup,
+  createTagOwner as createPolicyTagOwner,
+  findOrphanReferences,
+  findReferencesToValues,
+  type PolicyDesignerState,
+  type PolicyGroup,
+  type PolicyMemberRef,
+  type PolicyRule,
+  type PolicyTagOwner,
+  parsePolicy,
+  removeGroupById,
+  removeMemberFromGroup,
+  removeOwnerFromTag,
+  removeReferencesToValues,
+  removeRuleById,
+  removeTagOwnerById,
+  serializePolicy,
+  toMemberRef,
+  upsertGroup,
+  upsertTagOwner,
+} from "@/domain/policy-designer";
 import { LOCALE_META, type Locale, SUPPORTED_LOCALES, useHeadscaleI18n } from "@/i18n";
 import { toTraditionalChineseValue } from "@/i18n/traditional";
 import {
@@ -135,23 +160,6 @@ type InviteActionTarget = {
 };
 type PolicyBuilderSlot = "source" | "destination" | "ports";
 type PolicyWorkspaceTab = "rules" | "groups" | "tags" | "review";
-type PolicyRule = {
-  id: string;
-  action: "accept";
-  source: string;
-  destination: string;
-  ports: string;
-};
-type PolicyGroup = {
-  id: string;
-  name: string;
-  members: string;
-};
-type PolicyTagOwner = {
-  id: string;
-  tag: string;
-  owners: string;
-};
 type PolicyRemovalTarget = {
   kind: "rule" | "group" | "tagOwner";
   id: string;
@@ -176,7 +184,9 @@ type ActionFeedbackKey =
   | "remove-node"
   | "rename-member"
   | "rename-node"
-  | "save-policy";
+  | "save-policy"
+  | "assign-user-groups"
+  | "assign-user-tags";
 type PolicyChoice = {
   id: string;
   slot: PolicyBuilderSlot;
@@ -519,6 +529,28 @@ const englishCopy = {
   noPolicyRules: "No access rules yet.",
   noPolicyGroups: "No groups match.",
   noPolicyTagOwners: "No tag access entries match.",
+  noPolicyGroupMembers: "No members yet.",
+  noPolicyTagOwnerEntries: "No owners yet.",
+  addUserToGroup: "Add to groups",
+  grantTagToUser: "Grant tag ownership",
+  assignMembershipsTitle: "Add user to groups",
+  assignMembershipsDescription:
+    "Pick the groups this user should belong to. Changes are saved to the Policy when you apply.",
+  assignTagOwnershipsTitle: "Grant tag ownership",
+  assignTagOwnershipsDescription:
+    "Pick the tags this user should be able to own. Changes are saved to the Policy when you apply.",
+  noGroupsAvailable: "No groups yet. Add one in Access controls first.",
+  noTagsAvailable: "No tag access entries yet. Add one in Access controls first.",
+  applyAssignment: "Apply",
+  cancelAssignment: "Cancel",
+  editPolicyGroup: "Edit group",
+  editPolicyTagOwner: "Edit tag access",
+  editItem: "Edit",
+  saveChanges: "Save changes",
+  removeFromReference: "Remove from reference",
+  orphanReferenceWarning: "Some Policy references no longer match known users or groups:",
+  userImpactOnDeleteHeading: "This user appears in the following Policy entries:",
+  cleanupReferencesOption: "Also remove this user from those Policy references",
   highRisk: "High risk",
   reviewNeeded: "Review needed",
   noPolicyWarnings: "No blocking issues found.",
@@ -870,6 +902,26 @@ const productCopyBase = {
     noPolicyRules: "还没有访问规则。",
     noPolicyGroups: "没有匹配的用户组。",
     noPolicyTagOwners: "没有匹配的标签授权。",
+    noPolicyGroupMembers: "暂无成员。",
+    noPolicyTagOwnerEntries: "暂无拥有者。",
+    addUserToGroup: "加入用户组",
+    grantTagToUser: "授予标签",
+    assignMembershipsTitle: "为该用户分配用户组",
+    assignMembershipsDescription: "勾选该用户应隶属的用户组。点击应用后即写入策略。",
+    assignTagOwnershipsTitle: "授予标签拥有权",
+    assignTagOwnershipsDescription: "勾选该用户可拥有的标签。点击应用后即写入策略。",
+    noGroupsAvailable: "尚无用户组。请先在访问控制中创建。",
+    noTagsAvailable: "尚无标签授权。请先在访问控制中创建。",
+    applyAssignment: "应用",
+    cancelAssignment: "取消",
+    editPolicyGroup: "编辑用户组",
+    editPolicyTagOwner: "编辑标签授权",
+    editItem: "编辑",
+    saveChanges: "保存更改",
+    removeFromReference: "从引用中移除",
+    orphanReferenceWarning: "策略中存在已不再匹配任何用户或用户组的引用：",
+    userImpactOnDeleteHeading: "该用户出现在以下策略条目中：",
+    cleanupReferencesOption: "同时从这些策略引用中移除该用户",
     highRisk: "高风险",
     reviewNeeded: "需要检查",
     noPolicyWarnings: "未发现阻塞问题。",
@@ -1123,6 +1175,28 @@ const productCopyBase = {
     noPolicyRules: "لا توجد قواعد وصول بعد.",
     noPolicyGroups: "لا توجد مجموعات مطابقة.",
     noPolicyTagOwners: "لا توجد إدخالات وصول وسم مطابقة.",
+    noPolicyGroupMembers: "لا يوجد أعضاء بعد.",
+    noPolicyTagOwnerEntries: "لا يوجد مالكون بعد.",
+    addUserToGroup: "إضافة إلى المجموعات",
+    grantTagToUser: "منح ملكية وسم",
+    assignMembershipsTitle: "إضافة المستخدم إلى مجموعات",
+    assignMembershipsDescription:
+      "اختر المجموعات التي يجب أن ينتمي إليها هذا المستخدم. تُحفظ التغييرات إلى السياسة عند الضغط على تطبيق.",
+    assignTagOwnershipsTitle: "منح ملكية وسم",
+    assignTagOwnershipsDescription:
+      "اختر الوسوم التي يستطيع هذا المستخدم امتلاكها. تُحفظ التغييرات إلى السياسة عند الضغط على تطبيق.",
+    noGroupsAvailable: "لا توجد مجموعات بعد. أضف واحدة في عناصر التحكم بالوصول أولا.",
+    noTagsAvailable: "لا توجد إدخالات وصول الوسوم بعد. أضف واحدة في عناصر التحكم بالوصول أولا.",
+    applyAssignment: "تطبيق",
+    cancelAssignment: "إلغاء",
+    editPolicyGroup: "تعديل المجموعة",
+    editPolicyTagOwner: "تعديل وصول الوسم",
+    editItem: "تعديل",
+    saveChanges: "حفظ التغييرات",
+    removeFromReference: "إزالة من المرجع",
+    orphanReferenceWarning: "توجد مراجع في السياسة لم تعد تطابق مستخدمين أو مجموعات معروفة:",
+    userImpactOnDeleteHeading: "يظهر هذا المستخدم في إدخالات السياسة التالية:",
+    cleanupReferencesOption: "إزالة هذا المستخدم أيضا من تلك المراجع في السياسة",
     highRisk: "مخاطرة عالية",
     reviewNeeded: "تحتاج مراجعة",
     noPolicyWarnings: "لم يتم العثور على مشكلات مانعة.",
@@ -1337,6 +1411,7 @@ const selectedRouteApproval = ref<RouteApprovalTarget | null>(null);
 const selectedTagsNode = ref<HeadscaleNode | null>(null);
 const selectedRenameUser = ref<HeadscaleUser | null>(null);
 const pendingDeleteUser = ref<HeadscaleUser | null>(null);
+const cleanupPolicyOnDelete = ref(true);
 const pendingInviteAction = ref<InviteActionTarget | null>(null);
 const pendingApiKeyAction = ref<ApiKeyActionTarget | null>(null);
 const selectedRoutesApprovalNode = ref<HeadscaleNode | null>(null);
@@ -1389,14 +1464,26 @@ const policyRuleForm = reactive({
   destination: "*",
   ports: "*",
 });
-const policyGroupForm = reactive({
+const policyGroupForm = reactive<{
+  name: string;
+  members: PolicyMemberRef[];
+}>({
   name: "group:ops",
-  members: "alice@example.com",
+  members: [toMemberRef("alice@example.com")],
 });
-const policyTagOwnerForm = reactive({
+const policyTagOwnerForm = reactive<{
+  tag: string;
+  owners: PolicyMemberRef[];
+}>({
   tag: "tag:server",
-  owners: "group:ops",
+  owners: [toMemberRef("group:ops")],
 });
+const policyGroupEditing = ref<PolicyGroup | null>(null);
+const policyTagOwnerEditing = ref<PolicyTagOwner | null>(null);
+const assignMembershipsOpen = ref(false);
+const assignTagOwnershipsOpen = ref(false);
+const assignMembershipsTarget = ref<HeadscaleUser | null>(null);
+const assignTagOwnershipsTarget = ref<HeadscaleUser | null>(null);
 let profileRouteSyncGeneration = 0;
 let suppressNextSameProfileRouteRefresh = false;
 let nodeDetailRefreshGeneration = 0;
@@ -1534,9 +1621,38 @@ const selectedUserActiveKeys = computed(() =>
 const selectedUserPolicyReferences = computed(() =>
   selectedDetailUser.value ? userPolicyReferences(selectedDetailUser.value) : [],
 );
+const pendingDeleteUserReferences = computed(() =>
+  pendingDeleteUser.value ? userPolicyReferences(pendingDeleteUser.value) : [],
+);
 const selectedUserPendingRoutesCount = computed(() =>
   selectedUserDevices.value.reduce((total, node) => total + nodePendingRoutes(node).length, 0),
 );
+const assignMembershipsOptions = computed<AssignMemberOption[]>(() => {
+  const target = assignMembershipsTarget.value;
+  if (!target) return [];
+  const principals = userPolicyPrincipals(target);
+  return policyGroups.value.map((group) => ({
+    id: group.id,
+    name: group.name,
+    assigned: group.members.some((member) => principals.includes(member.value)),
+    hint: group.members.length
+      ? group.members.map((m) => m.value).join(", ")
+      : copy.value.noPolicyGroupMembers,
+  }));
+});
+const assignTagOwnershipsOptions = computed<AssignMemberOption[]>(() => {
+  const target = assignTagOwnershipsTarget.value;
+  if (!target) return [];
+  const principals = userPolicyPrincipals(target);
+  return policyTagOwners.value.map((tagOwner) => ({
+    id: tagOwner.id,
+    name: tagOwner.tag,
+    assigned: tagOwner.owners.some((owner) => principals.includes(owner.value)),
+    hint: tagOwner.owners.length
+      ? tagOwner.owners.map((o) => o.value).join(", ")
+      : copy.value.noPolicyTagOwnerEntries,
+  }));
+});
 const selectedRoutesApprovalPending = computed(() =>
   selectedRoutesApprovalNode.value ? nodePendingRoutes(selectedRoutesApprovalNode.value) : [],
 );
@@ -1794,30 +1910,24 @@ const policyServiceChoices = computed<PolicyChoice[]>(() => [
 const policyRulePreview = computed(() =>
   policyRuleSentence(policyRuleForm.source, policyRuleForm.destination, policyRuleForm.ports),
 );
-const policyPayload = computed(() => {
-  const groups = Object.fromEntries(
-    policyGroups.value
-      .filter((group) => group.name.trim())
-      .map((group) => [group.name.trim(), parseCommaList(group.members)]),
-  );
-  const tagOwners = Object.fromEntries(
-    policyTagOwners.value
-      .filter((tagOwner) => tagOwner.tag.trim())
-      .map((tagOwner) => [tagOwner.tag.trim(), parseCommaList(tagOwner.owners)]),
-  );
-  const acls = policyRules.value.map((rule) => ({
-    action: rule.action,
-    src: parseCommaList(rule.source),
-    dst: parsePolicyDestinations(rule.destination, rule.ports),
-  }));
-
-  return {
-    ...policyExtraSections.value,
-    groups,
-    tagOwners,
-    acls,
-  };
+const policyDesignerState = computed<PolicyDesignerState>(() => ({
+  rules: policyRules.value,
+  groups: policyGroups.value,
+  tagOwners: policyTagOwners.value,
+  extras: policyExtraSections.value,
+}));
+const policyPayload = computed(() => serializePolicy(policyDesignerState.value));
+const knownUserPrincipals = computed(() => {
+  const list: string[] = [];
+  for (const user of snapshot.value.users) {
+    if (user.email) list.push(user.email);
+    if (user.name) list.push(user.name);
+  }
+  return list;
 });
+const policyOrphanReferences = computed(() =>
+  findOrphanReferences(policyDesignerState.value, knownUserPrincipals.value),
+);
 const policyWarnings = computed(() => {
   const warnings: string[] = [];
   if (
@@ -1829,6 +1939,12 @@ const policyWarnings = computed(() => {
   }
   if (routeNodes.value.some((node) => node.availableRoutes.some((route) => isExitRoute(route)))) {
     warnings.push(copy.value.policyWarningExitRoute);
+  }
+  if (policyOrphanReferences.value.length > 0) {
+    const dangling = policyOrphanReferences.value
+      .map((ref) => `${ref.containerName} → ${ref.value}`)
+      .join("; ");
+    warnings.push(`${copy.value.orphanReferenceWarning} ${dangling}`);
   }
 
   return warnings;
@@ -1881,7 +1997,7 @@ const filteredPolicyGroups = computed(() => {
   }
 
   return policyGroups.value.filter((group) =>
-    [group.name, group.members].join(" ").toLowerCase().includes(query),
+    [group.name, ...group.members.map((m) => m.value)].join(" ").toLowerCase().includes(query),
   );
 });
 const filteredPolicyTagOwners = computed(() => {
@@ -1891,7 +2007,7 @@ const filteredPolicyTagOwners = computed(() => {
   }
 
   return policyTagOwners.value.filter((tagOwner) =>
-    [tagOwner.tag, tagOwner.owners].join(" ").toLowerCase().includes(query),
+    [tagOwner.tag, ...tagOwner.owners.map((o) => o.value)].join(" ").toLowerCase().includes(query),
   );
 });
 const themeLabel = computed(() => themeModeLabel(colorMode.value));
@@ -2641,16 +2757,6 @@ function parseCommaList(value: string) {
     .filter(Boolean);
 }
 
-function listToText(value: unknown) {
-  if (Array.isArray(value)) {
-    return value.map(String).join(", ");
-  }
-  if (typeof value === "string") {
-    return value;
-  }
-  return "";
-}
-
 function createPolicyId() {
   return crypto.randomUUID();
 }
@@ -2737,8 +2843,12 @@ function isPolicyRuleHighRisk(rule: Pick<PolicyRule, "source" | "destination" | 
   return rule.source.trim() === "*" && rule.destination.trim() === "*" && rule.ports.trim() === "*";
 }
 
-function addUniqueCommaValue(current: string, value: string) {
-  return Array.from(new Set([...parseCommaList(current), value])).join(", ");
+function addUniqueMemberRef(current: PolicyMemberRef[], value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || current.some((m) => m.value === trimmed)) {
+    return current;
+  }
+  return [...current, toMemberRef(trimmed)];
 }
 
 function addSelectedPolicyGroupMember() {
@@ -2747,7 +2857,7 @@ function addSelectedPolicyGroupMember() {
     return;
   }
 
-  policyGroupForm.members = addUniqueCommaValue(policyGroupForm.members, value);
+  policyGroupForm.members = addUniqueMemberRef(policyGroupForm.members, value);
   policyGroupMemberSelection.value = "";
 }
 
@@ -2757,86 +2867,35 @@ function addSelectedPolicyTagOwner() {
     return;
   }
 
-  policyTagOwnerForm.owners = addUniqueCommaValue(policyTagOwnerForm.owners, value);
+  policyTagOwnerForm.owners = addUniqueMemberRef(policyTagOwnerForm.owners, value);
   policyTagOwnerSelection.value = "";
 }
 
-function destinationParts(value: unknown) {
-  const destinations = Array.isArray(value)
-    ? value.map(String)
-    : typeof value === "string"
-      ? [value]
-      : ["*:*"];
-  const first = destinations[0] ?? "*:*";
-  const separator = first.lastIndexOf(":");
-
-  if (separator <= 0) {
-    return {
-      destination: first,
-      ports: "*",
-    };
-  }
-
-  return {
-    destination: first.slice(0, separator),
-    ports: first.slice(separator + 1) || "*",
-  };
+function removePolicyGroupFormMember(value: string) {
+  policyGroupForm.members = policyGroupForm.members.filter((m) => m.value !== value);
 }
 
-function parsePolicyDestinations(destination: string, ports: string) {
-  const resolvedPorts = ports.trim() || "*";
-  return parseCommaList(destination || "*").map((target) => `${target}:${resolvedPorts}`);
+function removePolicyTagOwnerFormOwner(value: string) {
+  policyTagOwnerForm.owners = policyTagOwnerForm.owners.filter((o) => o.value !== value);
+}
+
+function policyMemberDisplay(member: PolicyMemberRef) {
+  return member.value;
 }
 
 function loadPolicyDesigner(policy: string) {
-  try {
-    const parsed = JSON.parse(policy) as {
-      acls?: Array<{ action?: string; src?: unknown; dst?: unknown }>;
-      groups?: Record<string, unknown>;
-      tagOwners?: Record<string, unknown>;
-      [key: string]: unknown;
-    };
-    const { acls, groups, tagOwners, ...extraSections } = parsed;
+  const state = parsePolicy(policy);
+  policyRules.value = state.rules;
+  policyGroups.value = state.groups;
+  policyTagOwners.value = state.tagOwners;
+  policyExtraSections.value = state.extras;
+}
 
-    policyExtraSections.value = extraSections;
-    policyRules.value = (acls ?? []).map((rule) => {
-      const destination = destinationParts(rule.dst);
-      return {
-        id: createPolicyId(),
-        action: "accept",
-        source: listToText(rule.src) || "*",
-        destination: destination.destination || "*",
-        ports: destination.ports || "*",
-      };
-    });
-    policyGroups.value = Object.entries(groups ?? {}).map(([name, members]) => ({
-      id: createPolicyId(),
-      name,
-      members: listToText(members),
-    }));
-    policyTagOwners.value = Object.entries(tagOwners ?? {}).map(([tag, owners]) => ({
-      id: createPolicyId(),
-      tag,
-      owners: listToText(owners),
-    }));
-  } catch {
-    policyRules.value = [];
-    policyGroups.value = [];
-    policyTagOwners.value = [];
-    policyExtraSections.value = {};
-  }
-
-  if (policyRules.value.length === 0) {
-    policyRules.value = [
-      {
-        id: createPolicyId(),
-        action: "accept",
-        source: "*",
-        destination: "*",
-        ports: "*",
-      },
-    ];
-  }
+function commitPolicyState(next: PolicyDesignerState) {
+  policyRules.value = next.rules;
+  policyGroups.value = next.groups;
+  policyTagOwners.value = next.tagOwners;
+  policyExtraSections.value = next.extras;
 }
 
 function nodeOwner(node: HeadscaleNode) {
@@ -2908,18 +2967,68 @@ function userPolicyPrincipals(user: HeadscaleUser) {
   return [user.email, user.name].filter((value): value is string => Boolean(value));
 }
 
-function userPolicyReferences(user: HeadscaleUser) {
+interface UserPolicyReference {
+  kind: "group" | "tagOwner";
+  id: string;
+  label: string;
+  matchedValues: string[];
+}
+
+function userPolicyReferences(user: HeadscaleUser): UserPolicyReference[] {
   const principals = userPolicyPrincipals(user);
-  const groupReferences = policyGroups.value
-    .filter((group) => parseCommaList(group.members).some((member) => principals.includes(member)))
-    .map((group) => `${copy.value.groups}: ${group.name}`);
-  const tagOwnerReferences = policyTagOwners.value
-    .filter((tagOwner) =>
-      parseCommaList(tagOwner.owners).some((owner) => principals.includes(owner)),
-    )
-    .map((tagOwner) => `${copy.value.tagOwners}: ${tagOwner.tag}`);
+  const groupReferences: UserPolicyReference[] = policyGroups.value
+    .map((group) => {
+      const matched = group.members
+        .filter((member) => principals.includes(member.value))
+        .map((member) => member.value);
+      return matched.length > 0
+        ? {
+            kind: "group" as const,
+            id: group.id,
+            label: `${copy.value.groups}: ${group.name}`,
+            matchedValues: matched,
+          }
+        : null;
+    })
+    .filter((ref): ref is UserPolicyReference => Boolean(ref));
+  const tagOwnerReferences: UserPolicyReference[] = policyTagOwners.value
+    .map((tagOwner) => {
+      const matched = tagOwner.owners
+        .filter((owner) => principals.includes(owner.value))
+        .map((owner) => owner.value);
+      return matched.length > 0
+        ? {
+            kind: "tagOwner" as const,
+            id: tagOwner.id,
+            label: `${copy.value.tagOwners}: ${tagOwner.tag}`,
+            matchedValues: matched,
+          }
+        : null;
+    })
+    .filter((ref): ref is UserPolicyReference => Boolean(ref));
 
   return [...groupReferences, ...tagOwnerReferences];
+}
+
+async function removeUserFromPolicyReference(user: HeadscaleUser, reference: UserPolicyReference) {
+  let next = policyDesignerState.value;
+  if (reference.kind === "group") {
+    for (const value of reference.matchedValues) {
+      next = removeMemberFromGroup(next, reference.id, value);
+    }
+  } else {
+    for (const value of reference.matchedValues) {
+      next = removeOwnerFromTag(next, reference.id, value);
+    }
+  }
+  commitPolicyState(next);
+  const saved = await mutate("save-policy", (client) =>
+    client.setPolicy({ policy: JSON.stringify(serializePolicy(next), null, 2) }),
+  );
+  if (saved) {
+    policyDraft.value = saved.policy;
+  }
+  void user;
 }
 
 function shortSecret(value?: string) {
@@ -2943,6 +3052,94 @@ function jumpToMachinesForUser(user: HeadscaleUser) {
   machineFilter.value = "all";
   handleUserDetailsOpen(false);
   selectSection("devices");
+}
+
+function preferredPrincipalForUser(user: HeadscaleUser) {
+  return user.email || user.name || "";
+}
+
+function openAssignMembershipsDialog(user: HeadscaleUser) {
+  assignMembershipsTarget.value = user;
+  assignMembershipsOpen.value = true;
+}
+
+function handleAssignMembershipsDialogOpen(open: boolean) {
+  assignMembershipsOpen.value = open;
+  if (!open) {
+    assignMembershipsTarget.value = null;
+  }
+}
+
+function openAssignTagOwnershipsDialog(user: HeadscaleUser) {
+  assignTagOwnershipsTarget.value = user;
+  assignTagOwnershipsOpen.value = true;
+}
+
+function handleAssignTagOwnershipsDialogOpen(open: boolean) {
+  assignTagOwnershipsOpen.value = open;
+  if (!open) {
+    assignTagOwnershipsTarget.value = null;
+  }
+}
+
+async function applyAssignMemberships(selectedGroupIds: string[]) {
+  const target = assignMembershipsTarget.value;
+  if (!target) return;
+  const principal = preferredPrincipalForUser(target);
+  if (!principal) return;
+
+  const principals = userPolicyPrincipals(target);
+  const selectedSet = new Set(selectedGroupIds);
+  let next = policyDesignerState.value;
+  for (const group of next.groups) {
+    const isSelected = selectedSet.has(group.id);
+    const hasMember = group.members.some((m) => principals.includes(m.value));
+    if (isSelected && !hasMember) {
+      next = addMemberToGroup(next, group.id, toMemberRef(principal));
+    } else if (!isSelected && hasMember) {
+      for (const member of group.members.filter((m) => principals.includes(m.value))) {
+        next = removeMemberFromGroup(next, group.id, member.value);
+      }
+    }
+  }
+  commitPolicyState(next);
+  const saved = await mutate("assign-user-groups", (client) =>
+    client.setPolicy({ policy: JSON.stringify(serializePolicy(next), null, 2) }),
+  );
+  if (saved) {
+    policyDraft.value = saved.policy;
+    handleAssignMembershipsDialogOpen(false);
+  }
+}
+
+async function applyAssignTagOwnerships(selectedTagOwnerIds: string[]) {
+  const target = assignTagOwnershipsTarget.value;
+  if (!target) return;
+  const principal = preferredPrincipalForUser(target);
+  if (!principal) return;
+
+  const principals = userPolicyPrincipals(target);
+  const selectedSet = new Set(selectedTagOwnerIds);
+  let next = policyDesignerState.value;
+  for (const tagOwner of next.tagOwners) {
+    const isSelected = selectedSet.has(tagOwner.id);
+    const hasOwner = tagOwner.owners.some((o) => principals.includes(o.value));
+    if (isSelected && !hasOwner) {
+      next = addOwnerToTag(next, tagOwner.id, toMemberRef(principal));
+    } else if (!isSelected && hasOwner) {
+      for (const owner of tagOwner.owners.filter((o) => principals.includes(o.value))) {
+        next = removeOwnerFromTag(next, tagOwner.id, owner.value);
+      }
+    }
+  }
+  commitPolicyState(next);
+  const saved = await mutate("assign-user-tags", (client) =>
+    client.setPolicy({ policy: JSON.stringify(serializePolicy(next), null, 2) }),
+  );
+  if (saved) {
+    policyDraft.value = saved.policy;
+    handleAssignTagOwnershipsDialogOpen(false);
+  }
 }
 
 function jumpToUser(user?: HeadscaleUser) {
@@ -3314,19 +3511,49 @@ function handlePolicyRuleDialogOpen(open: boolean) {
 }
 
 function openPolicyGroupDialog() {
+  policyGroupEditing.value = null;
+  policyGroupForm.name = policyGroupNameChoices.value[0] ?? "group:ops";
+  policyGroupForm.members = [];
+  policyGroupMemberSelection.value = "";
+  policyGroupDialogOpen.value = true;
+}
+
+function openPolicyGroupEditor(group: PolicyGroup) {
+  policyGroupEditing.value = group;
+  policyGroupForm.name = group.name;
+  policyGroupForm.members = group.members.map((member) => ({ ...member }));
+  policyGroupMemberSelection.value = "";
   policyGroupDialogOpen.value = true;
 }
 
 function handlePolicyGroupDialogOpen(open: boolean) {
   policyGroupDialogOpen.value = open;
+  if (!open) {
+    policyGroupEditing.value = null;
+  }
 }
 
 function openPolicyTagOwnerDialog() {
+  policyTagOwnerEditing.value = null;
+  policyTagOwnerForm.tag = policyTagNameChoices.value[0] ?? "tag:server";
+  policyTagOwnerForm.owners = [];
+  policyTagOwnerSelection.value = "";
+  policyTagOwnerDialogOpen.value = true;
+}
+
+function openPolicyTagOwnerEditor(tagOwner: PolicyTagOwner) {
+  policyTagOwnerEditing.value = tagOwner;
+  policyTagOwnerForm.tag = tagOwner.tag;
+  policyTagOwnerForm.owners = tagOwner.owners.map((owner) => ({ ...owner }));
+  policyTagOwnerSelection.value = "";
   policyTagOwnerDialogOpen.value = true;
 }
 
 function handlePolicyTagOwnerDialogOpen(open: boolean) {
   policyTagOwnerDialogOpen.value = open;
+  if (!open) {
+    policyTagOwnerEditing.value = null;
+  }
 }
 
 function addPolicyRule() {
@@ -3334,7 +3561,7 @@ function addPolicyRule() {
     ...policyRules.value,
     {
       id: createPolicyId(),
-      action: "accept",
+      action: "accept" as const,
       source: policyRuleForm.source || "*",
       destination: policyRuleForm.destination || "*",
       ports: policyRuleForm.ports || "*",
@@ -3353,7 +3580,7 @@ function requestRemovePolicyRule(rule: PolicyRule) {
 }
 
 function removePolicyRule(id: string) {
-  policyRules.value = policyRules.value.filter((rule) => rule.id !== id);
+  commitPolicyState(removeRuleById(policyDesignerState.value, id));
 }
 
 function addPolicyGroup() {
@@ -3362,14 +3589,12 @@ function addPolicyGroup() {
     return;
   }
 
-  policyGroups.value = [
-    ...policyGroups.value.filter((group) => group.name !== name),
-    {
-      id: createPolicyId(),
-      name,
-      members: policyGroupForm.members,
-    },
-  ];
+  const editing = policyGroupEditing.value;
+  const group: PolicyGroup = editing
+    ? { ...editing, name, members: [...policyGroupForm.members] }
+    : createPolicyGroup(name, [...policyGroupForm.members]);
+
+  commitPolicyState(upsertGroup(policyDesignerState.value, group));
   handlePolicyGroupDialogOpen(false);
 }
 
@@ -3383,7 +3608,7 @@ function requestRemovePolicyGroup(group: PolicyGroup) {
 }
 
 function removePolicyGroup(id: string) {
-  policyGroups.value = policyGroups.value.filter((group) => group.id !== id);
+  commitPolicyState(removeGroupById(policyDesignerState.value, id));
 }
 
 function addPolicyTagOwner() {
@@ -3392,14 +3617,12 @@ function addPolicyTagOwner() {
     return;
   }
 
-  policyTagOwners.value = [
-    ...policyTagOwners.value.filter((tagOwner) => tagOwner.tag !== tag),
-    {
-      id: createPolicyId(),
-      tag,
-      owners: policyTagOwnerForm.owners,
-    },
-  ];
+  const editing = policyTagOwnerEditing.value;
+  const tagOwner: PolicyTagOwner = editing
+    ? { ...editing, tag, owners: [...policyTagOwnerForm.owners] }
+    : createPolicyTagOwner(tag, [...policyTagOwnerForm.owners]);
+
+  commitPolicyState(upsertTagOwner(policyDesignerState.value, tagOwner));
   handlePolicyTagOwnerDialogOpen(false);
 }
 
@@ -3413,7 +3636,7 @@ function requestRemovePolicyTagOwner(tagOwner: PolicyTagOwner) {
 }
 
 function removePolicyTagOwner(id: string) {
-  policyTagOwners.value = policyTagOwners.value.filter((tagOwner) => tagOwner.id !== id);
+  commitPolicyState(removeTagOwnerById(policyDesignerState.value, id));
 }
 
 function handlePolicyRemovalDialogOpen(open: boolean) {
@@ -3637,6 +3860,7 @@ async function confirmRenameMember() {
 
 function requestDeleteMember(user: HeadscaleUser) {
   clearActionFeedback("delete-member");
+  cleanupPolicyOnDelete.value = true;
   pendingDeleteUser.value = user;
 }
 
@@ -3654,6 +3878,19 @@ async function confirmDeleteMember() {
   const user = pendingDeleteUser.value;
   if (!user) {
     return;
+  }
+
+  if (cleanupPolicyOnDelete.value && pendingDeleteUserReferences.value.length > 0) {
+    const principals = userPolicyPrincipals(user);
+    const cleaned = removeReferencesToValues(policyDesignerState.value, principals);
+    commitPolicyState(cleaned);
+    const saved = await mutate("save-policy", (client) =>
+      client.setPolicy({ policy: JSON.stringify(serializePolicy(cleaned), null, 2) }),
+    );
+    if (!saved) {
+      return;
+    }
+    policyDraft.value = saved.policy;
   }
 
   const deleted = await mutate("delete-member", (client) => client.deleteUser({ id: user.id }));
@@ -5035,15 +5272,51 @@ watch(activeSection, scrollActiveTabIntoView, { immediate: true });
                 <section class="grid gap-2">
                   <h3 class="text-sm font-semibold">{{ copy.policyReferences }}</h3>
                   <div v-if="selectedUserPolicyReferences.length" class="flex flex-wrap gap-1">
-                    <Badge v-for="reference in selectedUserPolicyReferences" :key="reference" variant="outline">
-                      {{ reference }}
+                    <Badge
+                      v-for="reference in selectedUserPolicyReferences"
+                      :key="`${reference.kind}-${reference.id}`"
+                      variant="outline"
+                      class="gap-1 pe-1"
+                      :data-testid="`user-policy-reference-${reference.kind}-${reference.id}`"
+                    >
+                      <span class="break-all">{{ reference.label }}</span>
+                      <button
+                        type="button"
+                        class="rounded-sm p-0.5 text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        :aria-label="copy.removeFromReference"
+                        :disabled="isActionPending('save-policy')"
+                        :data-testid="`remove-user-policy-reference-${reference.kind}-${reference.id}`"
+                        @click="removeUserFromPolicyReference(selectedDetailUser, reference)"
+                      >
+                        <Trash2 class="h-3 w-3" aria-hidden="true" />
+                      </button>
                     </Badge>
                   </div>
                   <p v-else class="text-sm text-muted-foreground">{{ copy.noPolicyReferences }}</p>
                 </section>
               </div>
 
-              <DialogFooter class="gap-2">
+              <DialogFooter class="flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  data-testid="user-detail-assign-groups"
+                  :disabled="!preferredPrincipalForUser(selectedDetailUser)"
+                  @click="openAssignMembershipsDialog(selectedDetailUser)"
+                >
+                  <Users class="h-4 w-4" aria-hidden="true" />
+                  {{ copy.addUserToGroup }}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  data-testid="user-detail-grant-tags"
+                  :disabled="!preferredPrincipalForUser(selectedDetailUser)"
+                  @click="openAssignTagOwnershipsDialog(selectedDetailUser)"
+                >
+                  <ShieldCheck class="h-4 w-4" aria-hidden="true" />
+                  {{ copy.grantTagToUser }}
+                </Button>
                 <Button type="button" variant="outline" data-testid="user-detail-view-machines" @click="jumpToMachinesForUser(selectedDetailUser)">
                   <Network class="h-4 w-4" aria-hidden="true" />
                   {{ copy.viewMachines }}
@@ -5056,6 +5329,36 @@ watch(activeSection, scrollActiveTabIntoView, { immediate: true });
             </template>
           </DialogContent>
         </Dialog>
+
+        <AssignMemberDialog
+          :open="assignMembershipsOpen"
+          :title="copy.assignMembershipsTitle"
+          :description="copy.assignMembershipsDescription"
+          :options="assignMembershipsOptions"
+          :apply-label="copy.applyAssignment"
+          :cancel-label="copy.cancelAssignment"
+          :empty-label="copy.noGroupsAvailable"
+          testid-prefix="assign-user-groups"
+          :is-submitting="isActionPending('assign-user-groups')"
+          :error="actionError('assign-user-groups')"
+          @update:open="handleAssignMembershipsDialogOpen"
+          @apply="applyAssignMemberships"
+        />
+
+        <AssignMemberDialog
+          :open="assignTagOwnershipsOpen"
+          :title="copy.assignTagOwnershipsTitle"
+          :description="copy.assignTagOwnershipsDescription"
+          :options="assignTagOwnershipsOptions"
+          :apply-label="copy.applyAssignment"
+          :cancel-label="copy.cancelAssignment"
+          :empty-label="copy.noTagsAvailable"
+          testid-prefix="assign-user-tags"
+          :is-submitting="isActionPending('assign-user-tags')"
+          :error="actionError('assign-user-tags')"
+          @update:open="handleAssignTagOwnershipsDialogOpen"
+          @apply="applyAssignTagOwnerships"
+        />
 
         <Dialog :open="Boolean(selectedRenameUser)" @update:open="handleRenameMemberDialogOpen">
           <DialogContent v-if="selectedRenameUser" data-testid="rename-member-dialog">
@@ -5101,10 +5404,34 @@ watch(activeSection, scrollActiveTabIntoView, { immediate: true });
                 <span class="mt-2 block font-medium text-foreground">{{ userLabel(pendingDeleteUser) }}</span>
               </AlertDialogDescription>
             </AlertDialogHeader>
+            <div
+              v-if="pendingDeleteUserReferences.length"
+              class="grid gap-2"
+              data-testid="delete-member-policy-impact"
+            >
+              <p class="text-sm font-medium">{{ copy.userImpactOnDeleteHeading }}</p>
+              <ul class="grid gap-1">
+                <li
+                  v-for="reference in pendingDeleteUserReferences"
+                  :key="`${reference.kind}-${reference.id}`"
+                  class="rounded-md border bg-background px-3 py-2 text-sm break-all"
+                >
+                  {{ reference.label }}
+                </li>
+              </ul>
+              <label class="flex items-start gap-2 text-sm">
+                <Checkbox
+                  v-model="cleanupPolicyOnDelete"
+                  :disabled="isActionPending('delete-member') || isActionPending('save-policy')"
+                  data-testid="delete-member-cleanup-policy"
+                />
+                <span>{{ copy.cleanupReferencesOption }}</span>
+              </label>
+            </div>
             <AlertDialogFooter>
-              <AlertDialogCancel data-testid="cancel-delete-member" :disabled="isActionPending('delete-member')">{{ copy.cancel }}</AlertDialogCancel>
-              <Button type="button" variant="destructive" data-testid="confirm-delete-member" :disabled="isActionPending('delete-member')" @click="confirmDeleteMember">
-                <LoaderCircle v-if="isActionPending('delete-member')" class="h-4 w-4 animate-spin" aria-hidden="true" />
+              <AlertDialogCancel data-testid="cancel-delete-member" :disabled="isActionPending('delete-member') || isActionPending('save-policy')">{{ copy.cancel }}</AlertDialogCancel>
+              <Button type="button" variant="destructive" data-testid="confirm-delete-member" :disabled="isActionPending('delete-member') || isActionPending('save-policy')" @click="confirmDeleteMember">
+                <LoaderCircle v-if="isActionPending('delete-member') || isActionPending('save-policy')" class="h-4 w-4 animate-spin" aria-hidden="true" />
                 {{ copy.confirmDeleteMember }}
               </Button>
             </AlertDialogFooter>
@@ -5115,6 +5442,14 @@ watch(activeSection, scrollActiveTabIntoView, { immediate: true });
               data-testid="delete-member-error"
             >
               {{ actionError("delete-member") }}
+            </p>
+            <p
+              v-if="actionError('save-policy')"
+              role="alert"
+              class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              data-testid="delete-member-policy-error"
+            >
+              {{ actionError("save-policy") }}
             </p>
           </AlertDialogContent>
         </AlertDialog>
@@ -6880,7 +7215,9 @@ watch(activeSection, scrollActiveTabIntoView, { immediate: true });
                   <Dialog :open="policyGroupDialogOpen" @update:open="handlePolicyGroupDialogOpen">
                     <DialogContent class="sm:max-w-xl" data-testid="policy-group-dialog">
                       <DialogHeader>
-                        <DialogTitle>{{ copy.addGroup }}</DialogTitle>
+                        <DialogTitle>
+                          {{ policyGroupEditing ? copy.editPolicyGroup : copy.addGroup }}
+                        </DialogTitle>
                         <DialogDescription>{{ copy.groupMemberPicker }}</DialogDescription>
                       </DialogHeader>
                       <form class="grid gap-3" data-testid="policy-group-form" @submit.prevent="addPolicyGroup">
@@ -6922,14 +7259,35 @@ watch(activeSection, scrollActiveTabIntoView, { immediate: true });
                         </div>
                         <div class="rounded-md border bg-background px-3 py-2" data-testid="policy-group-members">
                           <p class="text-xs font-medium text-muted-foreground">{{ copy.selectedMembers }}</p>
-                          <p class="mt-1 min-h-6 break-all text-sm font-medium">
-                            {{ policyGroupForm.members || copy.selectGroupMember }}
+                          <div v-if="policyGroupForm.members.length" class="mt-1 flex flex-wrap gap-1">
+                            <Badge
+                              v-for="member in policyGroupForm.members"
+                              :key="member.value"
+                              variant="secondary"
+                              class="gap-1 pe-1"
+                              :data-testid="`policy-group-form-member-${member.value}`"
+                            >
+                              <span class="break-all">{{ policyMemberDisplay(member) }}</span>
+                              <button
+                                type="button"
+                                class="rounded-sm p-0.5 text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                :aria-label="copy.removeItem"
+                                :data-testid="`remove-policy-group-form-member-${member.value}`"
+                                @click="removePolicyGroupFormMember(member.value)"
+                              >
+                                <Trash2 class="h-3 w-3" aria-hidden="true" />
+                              </button>
+                            </Badge>
+                          </div>
+                          <p v-else class="mt-1 min-h-6 break-all text-sm text-muted-foreground">
+                            {{ copy.selectGroupMember }}
                           </p>
                         </div>
                         <DialogFooter>
                           <Button type="submit" data-testid="add-policy-group">
-                            <Plus class="h-4 w-4" aria-hidden="true" />
-                            {{ copy.addGroup }}
+                            <Plus v-if="!policyGroupEditing" class="h-4 w-4" aria-hidden="true" />
+                            <Pencil v-else class="h-4 w-4" aria-hidden="true" />
+                            {{ policyGroupEditing ? copy.saveChanges : copy.addGroup }}
                           </Button>
                         </DialogFooter>
                       </form>
@@ -6957,11 +7315,42 @@ watch(activeSection, scrollActiveTabIntoView, { immediate: true });
                             :data-testid="`policy-group-${group.id}`"
                           >
                             <TableCell class="font-medium">{{ group.name }}</TableCell>
-                            <TableCell class="break-all text-muted-foreground">{{ group.members }}</TableCell>
+                            <TableCell class="text-muted-foreground">
+                              <div v-if="group.members.length" class="flex flex-wrap gap-1">
+                                <Badge
+                                  v-for="member in group.members"
+                                  :key="member.value"
+                                  variant="outline"
+                                  class="break-all"
+                                  :data-testid="`policy-group-${group.id}-member-${member.value}`"
+                                >
+                                  {{ policyMemberDisplay(member) }}
+                                </Badge>
+                              </div>
+                              <span v-else class="text-sm">{{ copy.noPolicyGroupMembers }}</span>
+                            </TableCell>
                             <TableCell>
-                              <Button type="button" variant="destructive" size="sm" :data-testid="`remove-policy-group-${group.id}`" @click="requestRemovePolicyGroup(group)">
-                                {{ copy.removeItem }}
-                              </Button>
+                              <div class="flex flex-wrap gap-1">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  :data-testid="`edit-policy-group-${group.id}`"
+                                  @click="openPolicyGroupEditor(group)"
+                                >
+                                  <Pencil class="h-4 w-4" aria-hidden="true" />
+                                  {{ copy.editItem }}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  :data-testid="`remove-policy-group-${group.id}`"
+                                  @click="requestRemovePolicyGroup(group)"
+                                >
+                                  {{ copy.removeItem }}
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         </TableBody>
@@ -6988,7 +7377,9 @@ watch(activeSection, scrollActiveTabIntoView, { immediate: true });
                   <Dialog :open="policyTagOwnerDialogOpen" @update:open="handlePolicyTagOwnerDialogOpen">
                     <DialogContent class="sm:max-w-xl" data-testid="policy-tag-owner-dialog">
                       <DialogHeader>
-                        <DialogTitle>{{ copy.addTagOwner }}</DialogTitle>
+                        <DialogTitle>
+                          {{ policyTagOwnerEditing ? copy.editPolicyTagOwner : copy.addTagOwner }}
+                        </DialogTitle>
                         <DialogDescription>{{ copy.tagOwnerPicker }}</DialogDescription>
                       </DialogHeader>
                       <form class="grid gap-3" data-testid="policy-tag-owner-form" @submit.prevent="addPolicyTagOwner">
@@ -7030,14 +7421,35 @@ watch(activeSection, scrollActiveTabIntoView, { immediate: true });
                         </div>
                         <div class="rounded-md border bg-background px-3 py-2" data-testid="policy-tag-owners">
                           <p class="text-xs font-medium text-muted-foreground">{{ copy.selectedOwners }}</p>
-                          <p class="mt-1 min-h-6 break-all text-sm font-medium">
-                            {{ policyTagOwnerForm.owners || copy.selectTagOwner }}
+                          <div v-if="policyTagOwnerForm.owners.length" class="mt-1 flex flex-wrap gap-1">
+                            <Badge
+                              v-for="owner in policyTagOwnerForm.owners"
+                              :key="owner.value"
+                              variant="secondary"
+                              class="gap-1 pe-1"
+                              :data-testid="`policy-tag-owner-form-owner-${owner.value}`"
+                            >
+                              <span class="break-all">{{ policyMemberDisplay(owner) }}</span>
+                              <button
+                                type="button"
+                                class="rounded-sm p-0.5 text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                :aria-label="copy.removeItem"
+                                :data-testid="`remove-policy-tag-owner-form-owner-${owner.value}`"
+                                @click="removePolicyTagOwnerFormOwner(owner.value)"
+                              >
+                                <Trash2 class="h-3 w-3" aria-hidden="true" />
+                              </button>
+                            </Badge>
+                          </div>
+                          <p v-else class="mt-1 min-h-6 break-all text-sm text-muted-foreground">
+                            {{ copy.selectTagOwner }}
                           </p>
                         </div>
                         <DialogFooter>
                           <Button type="submit" data-testid="add-policy-tag-owner">
-                            <Plus class="h-4 w-4" aria-hidden="true" />
-                            {{ copy.addTagOwner }}
+                            <Plus v-if="!policyTagOwnerEditing" class="h-4 w-4" aria-hidden="true" />
+                            <Pencil v-else class="h-4 w-4" aria-hidden="true" />
+                            {{ policyTagOwnerEditing ? copy.saveChanges : copy.addTagOwner }}
                           </Button>
                         </DialogFooter>
                       </form>
@@ -7065,11 +7477,42 @@ watch(activeSection, scrollActiveTabIntoView, { immediate: true });
                             :data-testid="`policy-tag-owner-${tagOwner.id}`"
                           >
                             <TableCell class="font-medium">{{ tagOwner.tag }}</TableCell>
-                            <TableCell class="break-all text-muted-foreground">{{ tagOwner.owners }}</TableCell>
+                            <TableCell class="text-muted-foreground">
+                              <div v-if="tagOwner.owners.length" class="flex flex-wrap gap-1">
+                                <Badge
+                                  v-for="owner in tagOwner.owners"
+                                  :key="owner.value"
+                                  variant="outline"
+                                  class="break-all"
+                                  :data-testid="`policy-tag-owner-${tagOwner.id}-owner-${owner.value}`"
+                                >
+                                  {{ policyMemberDisplay(owner) }}
+                                </Badge>
+                              </div>
+                              <span v-else class="text-sm">{{ copy.noPolicyTagOwnerEntries }}</span>
+                            </TableCell>
                             <TableCell>
-                              <Button type="button" variant="destructive" size="sm" :data-testid="`remove-policy-tag-owner-${tagOwner.id}`" @click="requestRemovePolicyTagOwner(tagOwner)">
-                                {{ copy.removeItem }}
-                              </Button>
+                              <div class="flex flex-wrap gap-1">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  :data-testid="`edit-policy-tag-owner-${tagOwner.id}`"
+                                  @click="openPolicyTagOwnerEditor(tagOwner)"
+                                >
+                                  <Pencil class="h-4 w-4" aria-hidden="true" />
+                                  {{ copy.editItem }}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  :data-testid="`remove-policy-tag-owner-${tagOwner.id}`"
+                                  @click="requestRemovePolicyTagOwner(tagOwner)"
+                                >
+                                  {{ copy.removeItem }}
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         </TableBody>

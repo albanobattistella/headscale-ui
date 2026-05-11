@@ -1427,6 +1427,9 @@ test("keeps failed destructive member actions busy and error-visible", async () 
   await page.getByTestId("member-actions-trigger-alice").click();
   await page.getByTestId("delete-member-alice").click();
   await expect.element(page.getByTestId("delete-member-dialog")).toBeVisible();
+  await expect.element(page.getByTestId("delete-member-policy-impact")).toBeVisible();
+  await page.getByTestId("delete-member-cleanup-policy").click();
+  await page.getByTestId("delete-member-cleanup-policy").click();
   await page.getByTestId("confirm-delete-member").click();
 
   const confirmButton = document.querySelector<HTMLButtonElement>(
@@ -1512,6 +1515,12 @@ test("covers user filters, user export and member deletion", async () => {
   await page.getByTestId("member-detail-link-charlie").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Charlie");
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("oidc");
+  await page.getByTestId("user-detail-assign-groups").click();
+  await expect.element(page.getByTestId("assign-user-groups-dialog")).toBeVisible();
+  await page.getByTestId("assign-user-groups-cancel").click();
+  await page.getByTestId("user-detail-grant-tags").click();
+  await expect.element(page.getByTestId("assign-user-tags-dialog")).toBeVisible();
+  await page.getByTestId("assign-user-tags-cancel").click();
   await page.getByTestId("user-detail-create-auth-key").click();
   await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
   await expect.element(page.getByTestId("invite-user")).toHaveValue("3");
@@ -1602,6 +1611,7 @@ test("covers auth-key filters, expiration and deletion", async () => {
   expect(document.querySelector('[data-testid="invite-1"]')?.closest("table")).toBeTruthy();
   await page.getByTestId("invite-owner-link-1").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Alice Ops");
+  clickLastByTestIdPrefix("remove-user-policy-reference-");
   await closeLayerWithEscape("user-detail-dialog");
   expect(
     document
@@ -1772,6 +1782,10 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   await page.getByTestId("add-policy-group").click();
   await expect.poll(() => countTableRowsByTestIdPrefix("policy-group-")).toBe(initialGroups + 1);
 
+  clickLastByTestIdPrefix("edit-policy-group-");
+  await expect.element(page.getByTestId("policy-group-dialog")).toBeVisible();
+  await page.getByTestId("add-policy-group").click();
+
   await page.getByTestId("policy-tab-tags").click();
   await expect.element(page.getByTestId("policy-tag-owners-toolbar")).toBeVisible();
   await expect.element(page.getByTestId("policy-tag-owners-table")).toBeVisible();
@@ -1788,6 +1802,10 @@ test("covers policy builder add, remove and save behavior without raw JSON editi
   await expect
     .poll(() => countTableRowsByTestIdPrefix("policy-tag-owner-"))
     .toBe(initialTagOwners + 1);
+
+  clickLastByTestIdPrefix("edit-policy-tag-owner-");
+  await expect.element(page.getByTestId("policy-tag-owner-dialog")).toBeVisible();
+  await page.getByTestId("add-policy-tag-owner").click();
 
   await page.getByTestId("policy-tab-rules").click();
   await expect.element(page.getByTestId("policy-rules-toolbar")).toBeVisible();
