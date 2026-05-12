@@ -26,6 +26,12 @@ export type ProfileStorageProvider = {
   getProfileScope(profileId: string): ProfileStorageScope | null;
   setActiveProfile(profileId: string, scope: ProfileStorageScope): void;
   clearActiveProfile(): void;
+  /** Currently-active profile id (session storage wins over local). */
+  readActiveProfile(): string | null;
+  /** True iff at least one profile is saved in either scope. */
+  hasAnyProfile(): boolean;
+  /** True iff a profile with this exact id exists (no substring matching). */
+  hasProfile(profileId: string): boolean;
   consumeLegacyConnection(): string | null;
 };
 
@@ -120,6 +126,25 @@ export function createProfileStorageProvider(
       dependencies.persistent?.removeItem(activeProfileStorageKey);
       dependencies.session?.removeItem(activeProfileStorageKey);
     },
+    readActiveProfile() {
+      return (
+        dependencies.session?.getItem(activeProfileStorageKey) ??
+        dependencies.persistent?.getItem(activeProfileStorageKey) ??
+        null
+      );
+    },
+    hasAnyProfile() {
+      return (
+        readProfiles(dependencies.session).length > 0 ||
+        readProfiles(dependencies.persistent).length > 0
+      );
+    },
+    hasProfile(profileId) {
+      return (
+        readProfiles(dependencies.session).some((p) => p.id === profileId) ||
+        readProfiles(dependencies.persistent).some((p) => p.id === profileId)
+      );
+    },
     consumeLegacyConnection() {
       const value = dependencies.persistent?.getItem(legacyConnectionStorageKey) ?? null;
       dependencies.persistent?.removeItem(legacyConnectionStorageKey);
@@ -128,9 +153,11 @@ export function createProfileStorageProvider(
   };
 }
 
-export function createBrowserProfileStorageProvider() {
-  return createProfileStorageProvider({
-    persistent: typeof localStorage === "undefined" ? undefined : localStorage,
-    session: typeof sessionStorage === "undefined" ? undefined : sessionStorage,
-  });
-}
+/**
+ * Singleton browser-backed profile storage. Use this everywhere in app code.
+ * Tests construct their own provider via `createProfileStorageProvider`.
+ */
+export const profileStorage: ProfileStorageProvider = createProfileStorageProvider({
+  persistent: typeof localStorage === "undefined" ? undefined : localStorage,
+  session: typeof sessionStorage === "undefined" ? undefined : sessionStorage,
+});

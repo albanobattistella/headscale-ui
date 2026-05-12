@@ -1,3 +1,5 @@
+import { readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import type { ElementNode, RootNode, TemplateChildNode } from "@vue/compiler-dom";
 import { baseParse, ElementTypes, NodeTypes } from "@vue/compiler-dom";
 import { parse as parseSfc } from "@vue/compiler-sfc";
@@ -9,7 +11,21 @@ type SourceTarget = {
   testIdPattern: string;
 };
 
-const SOURCE_FILES = ["src/views/DashboardView.vue", "src/components/CreateAuthKeyDialog.vue"];
+function collectVueFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    const stat = statSync(full);
+    if (stat.isDirectory()) {
+      out.push(...collectVueFiles(full));
+    } else if (entry.endsWith(".vue") && !entry.endsWith(".test.vue")) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+const SOURCE_FILES = [...collectVueFiles("src/pages"), "src/components/CreateAuthKeyDialog.vue"];
 const E2E_FILE = "e2e/headscale-ui.browser.test.ts";
 const FLOW_TAGS = new Set([
   "AlertDialogCancel",

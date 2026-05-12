@@ -2,10 +2,11 @@ import { beforeEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { render } from "vitest-browser-vue";
 import { createRouter, createWebHistory } from "vue-router";
+import App from "@/App.vue";
+import { resetAllSingletons } from "@/composables/__testing";
 import { i18n } from "@/i18n";
-import { routes } from "@/router";
+import { installAuthGuard, routes } from "@/router";
 import "@/styles/globals.css";
-import DashboardView from "@/views/DashboardView.vue";
 
 type StoredProfile = {
   id: string;
@@ -26,6 +27,7 @@ beforeEach(async () => {
   document.documentElement.lang = "en";
   document.documentElement.dir = "ltr";
   window.__headscaleUiOperationCalls = [];
+  resetAllSingletons();
 });
 
 async function renderLogin(path = "/") {
@@ -34,7 +36,8 @@ async function renderLogin(path = "/") {
     history: createWebHistory(),
     routes,
   });
-  const rendered = await render(DashboardView, {
+  installAuthGuard(testRouter);
+  const rendered = await render(App, {
     global: {
       plugins: [i18n, testRouter],
     },
@@ -444,7 +447,9 @@ function expectAppHeader() {
   expect(activeTab?.className).toContain("text-primary");
 }
 
-function expectMachinesWorkbench() {
+async function expectMachinesWorkbench() {
+  await expect.element(page.getByTestId("machines-workbench")).toBeVisible();
+  await expect.element(page.getByTestId("device-1")).toBeVisible();
   expect(document.querySelector<HTMLElement>('[data-testid="machines-workbench"]')).toBeTruthy();
   expect(document.querySelector<HTMLElement>('[data-testid="machine-toolbar"]')).toBeTruthy();
   expect(document.querySelector<HTMLElement>('[data-testid="machine-list"]')).toBeTruthy();
@@ -717,7 +722,9 @@ async function chooseProfileMenuOption(testId: string) {
 
 async function selectSectionTab(section: string) {
   await page.getByTestId(`section-${section}`).click();
-  expect(window.location.pathname.endsWith(`/${section}`)).toBe(true);
+  await expect
+    .poll(() => window.location.pathname.endsWith(`/${section}`), { timeout: 2000 })
+    .toBe(true);
 }
 
 async function confirmDeleteProfile(name: string) {
@@ -770,11 +777,11 @@ test("manages multiple saved connection profiles and supports logout", async () 
   await expect.element(page.getByTestId("profile-menu")).toHaveTextContent("HQ");
   expect(document.querySelector('[data-testid="current-server"]')).toBeNull();
   await closeProfileMenu();
-  await expect.poll(() => window.location.pathname).toBe(`/${hqProfile?.id}/home`);
+  await expect.poll(() => window.location.pathname).toBe("/home");
   await expect.element(page.getByTestId("section-devices")).toBeVisible();
   await page.getByTestId("section-devices").click();
-  await expect.poll(() => window.location.pathname).toBe(`/${hqProfile?.id}/devices`);
-  expectMachinesWorkbench();
+  await expect.poll(() => window.location.pathname).toBe("/devices");
+  await expectMachinesWorkbench();
 
   const profileRoute = window.location.pathname;
   await rendered.unmount();
@@ -795,7 +802,7 @@ test("manages multiple saved connection profiles and supports logout", async () 
   window.__headscaleUiOperationCalls = [];
   await new Promise((resolve) => window.setTimeout(resolve, 5200));
   expect(window.__headscaleUiOperationCalls).toEqual([]);
-  expect(window.location.pathname).toBe("/");
+  expect(window.location.pathname).toBe("/login");
   expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
   expect(localStorage.getItem("headscale-ui-profiles")).toContain("HQ");
 
@@ -823,12 +830,12 @@ test("does not flash the login form while restoring a profile route", async () =
   localStorage.setItem("headscale-ui-profiles", JSON.stringify([profile]));
   localStorage.setItem("headscale-ui-active-profile", profile.id);
 
-  await renderLogin(`/${profile.id}/devices`);
+  await renderLogin("/devices");
 
   expect(document.querySelector('[data-testid="connect-form"]')).toBeNull();
   await expect.element(page.getByTestId("section-devices")).toBeVisible();
-  expectMachinesWorkbench();
-  expect(window.location.pathname).toBe(`/${profile.id}/devices`);
+  await expectMachinesWorkbench();
+  expect(window.location.pathname).toBe("/devices");
 });
 
 test("redirects unknown profile routes back to login", async () => {
@@ -846,7 +853,7 @@ test("redirects unknown profile routes back to login", async () => {
   await renderLogin("/00000000-0000-4000-8000-000000000000/devices");
 
   await expect.element(page.getByTestId("profile-picker")).toBeVisible();
-  await expect.poll(() => window.location.pathname).toBe("/");
+  await expect.poll(() => window.location.pathname).toBe("/login");
   expect(document.querySelector('[data-testid="section-devices"]')).toBeNull();
   expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
 });
@@ -863,10 +870,10 @@ test("validates saved profile credentials before restoring a route", async () =>
   localStorage.setItem("headscale-ui-profiles", JSON.stringify([profile]));
   localStorage.setItem("headscale-ui-active-profile", profile.id);
 
-  await renderLogin(`/${profile.id}/devices`);
+  await renderLogin("/devices");
 
   await expect.element(page.getByTestId("profile-picker")).toBeVisible();
-  await expect.poll(() => window.location.pathname).toBe("/");
+  await expect.poll(() => window.location.pathname).toBe("/login");
   await expect.element(page.getByTestId("login-error")).toBeVisible();
   expect(document.querySelector('[data-testid="section-devices"]')).toBeNull();
   expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
@@ -926,7 +933,7 @@ test("asks before saving an unreachable profile and validates it before login", 
   await expect.element(page.getByTestId("profile-loading-Offline")).toBeVisible();
   await expect.element(page.getByTestId("login-error")).toBeVisible();
   expect(document.querySelector('[data-testid="section-home"]')).toBeNull();
-  expect(window.location.pathname).toBe("/");
+  expect(window.location.pathname).toBe("/login");
 });
 
 test("stores non-remembered profiles in session storage", async () => {
@@ -1217,7 +1224,7 @@ test("supports consumer-friendly tailnet management flows", async () => {
   await expect.element(page.getByTestId("created-invite")).toBeVisible();
 
   await page.getByTestId("section-devices").click();
-  expectMachinesWorkbench();
+  await expectMachinesWorkbench();
   await page.getByTestId("device-owner-link-1").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Alice Ops");
   await page.getByTestId("user-detail-view-machines").click();
@@ -1358,13 +1365,13 @@ test("covers dashboard refresh, machine filters, exports and machine lifecycle a
   ).toBe(0);
 
   await page.getByTestId("section-devices").click();
-  expectMachinesWorkbench();
+  await expectMachinesWorkbench();
   await page.getByTestId("device-search").fill("edge");
   expect(document.querySelector('[data-testid="device-1"]')).toBeNull();
   await page.getByTestId("machine-filter").selectOptions("routes");
   await expect.element(page.getByTestId("device-2")).toBeVisible();
   await page.getByTestId("clear-machine-filters").click();
-  expectMachinesWorkbench();
+  await expectMachinesWorkbench();
 
   const downloadStub = stubDownloads();
   try {
@@ -1491,6 +1498,7 @@ test("covers user filters, user export and member deletion", async () => {
   await connectWithDefaults();
 
   await page.getByTestId("section-members").click();
+  await expect.element(page.getByTestId("member-alice")).toBeVisible();
   expect(document.querySelector('[data-testid="member-alice"]')?.closest("table")).toBeTruthy();
   expect(
     document.querySelector('[data-testid="user-search"]')?.closest('[data-testid="user-table"]'),
@@ -1539,8 +1547,9 @@ test("covers user filters, user export and member deletion", async () => {
   await expect.element(page.getByTestId("device-search")).toHaveValue("charlie@example.com");
   await expect.element(page.getByTestId("device-3")).toBeVisible();
   await page.getByTestId("section-members").click();
+  await expect.element(page.getByTestId("member-alice")).toBeVisible();
   inputDomTestId("user-search", "charlie");
-  expect(document.querySelector('[data-testid="member-alice"]')).toBeNull();
+  await expect.poll(() => document.querySelector('[data-testid="member-alice"]')).toBeNull();
   inputDomTestId("user-search", "");
   selectDomTestId("user-filter", "service");
   expect(document.querySelector('[data-testid="member-tagged-devices"]')).toBeNull();
@@ -2154,7 +2163,7 @@ test("keeps every core function usable on mobile", async () => {
     clickDomTestId("clear-machine-filters");
   }
   await expect.element(page.getByTestId("device-1")).toBeVisible();
-  expectMachinesWorkbench();
+  await expectMachinesWorkbench();
   await page.getByTestId("device-search").fill("alice");
   clickDomTestId("machine-actions-trigger-mobile-1");
   await page.getByTestId("view-node-details-action-mobile-1").click();
@@ -2232,6 +2241,7 @@ test("defaults to English and supports the United Nations official languages plu
   await chooseProfileMenuOption("locale-option-zh");
   await expect.element(page.getByTestId("section-devices")).toHaveTextContent("机器");
   await page.getByTestId("section-members").click();
+  await expect.element(page.getByTestId("member-devices-header")).toBeVisible();
   expect(document.querySelector('[data-testid="member-devices-header"]')?.textContent?.trim()).toBe(
     "设备",
   );
@@ -2453,7 +2463,7 @@ test("uses a Tailscale-style add device setup dialog", async () => {
   await connectWithDefaults();
 
   await page.getByTestId("section-devices").click();
-  expectMachinesWorkbench();
+  await expectMachinesWorkbench();
   await page.getByTestId("add-device-toggle").click();
   await expect.element(page.getByTestId("add-device-dialog")).toBeVisible();
   expect(document.querySelector('[data-testid="add-device-stepper"]')).toBeNull();
@@ -2482,5 +2492,5 @@ test("uses a Tailscale-style add device setup dialog", async () => {
   await expect.element(page.getByTestId("created-invite")).toHaveTextContent("tailscale up");
 
   await page.getByTestId("add-device-finish").click();
-  expectMachinesWorkbench();
+  await expectMachinesWorkbench();
 });
