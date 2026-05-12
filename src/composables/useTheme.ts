@@ -1,15 +1,13 @@
 import { type Ref, ref, watchEffect } from "vue";
+import { readSetting, writeSetting } from "@/lib/settings-storage";
 
 export type ThemeMode = "light" | "dark" | "auto";
 
-const themeStorageKey = "headscale-ui-theme";
+const THEME_SETTING_KEY = "theme";
 export const themeModes: ThemeMode[] = ["light", "dark", "auto"];
 
 function initialThemeMode(): ThemeMode {
-  if (typeof localStorage === "undefined") {
-    return "auto";
-  }
-  const saved = localStorage.getItem(themeStorageKey);
+  const saved = readSetting(THEME_SETTING_KEY);
   return isThemeMode(saved) ? saved : "auto";
 }
 
@@ -28,9 +26,7 @@ function applyThemeMode(mode: ThemeMode) {
       mode === "dark" || (mode === "auto" && prefersDarkMode()),
     );
   }
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem(themeStorageKey, mode);
-  }
+  writeSetting(THEME_SETTING_KEY, mode);
 }
 
 interface UseThemeReturn {

@@ -1297,6 +1297,14 @@ function openUserDetailsExternal(user?: HeadscaleUser) {
             {{ copy.replaceTagsWarning }}
           </p>
         </div>
+        <p
+          v-if="actionError('node-tags')"
+          role="alert"
+          class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          data-testid="node-tags-error"
+        >
+          {{ actionError("node-tags") }}
+        </p>
         <DialogFooter>
           <Button type="button" variant="outline" data-testid="node-tags-cancel" :disabled="isActionPending('node-tags')" @click="handleTagsDialogOpen(false)">
             {{ copy.cancel }}
@@ -1306,14 +1314,6 @@ function openUserDetailsExternal(user?: HeadscaleUser) {
             {{ copy.saveTags }}
           </Button>
         </DialogFooter>
-        <p
-          v-if="actionError('node-tags')"
-          role="alert"
-          class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-          data-testid="node-tags-error"
-        >
-          {{ actionError("node-tags") }}
-        </p>
       </DialogContent>
     </Dialog>
 
@@ -1326,13 +1326,6 @@ function openUserDetailsExternal(user?: HeadscaleUser) {
             <span class="mt-2 block font-medium text-foreground">{{ selectedExpireNode.name }}</span>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel data-testid="expire-node-cancel" :disabled="isActionPending('expire-node')">{{ copy.cancel }}</AlertDialogCancel>
-          <Button variant="destructive" data-testid="expire-node-confirm" :disabled="isActionPending('expire-node')" @click="confirmExpireNode">
-            <LoaderCircle v-if="isActionPending('expire-node')" class="h-4 w-4 animate-spin" aria-hidden="true" />
-            {{ copy.confirmExpire }}
-          </Button>
-        </AlertDialogFooter>
         <p
           v-if="actionError('expire-node')"
           role="alert"
@@ -1341,6 +1334,13 @@ function openUserDetailsExternal(user?: HeadscaleUser) {
         >
           {{ actionError("expire-node") }}
         </p>
+        <AlertDialogFooter>
+          <AlertDialogCancel data-testid="expire-node-cancel" :disabled="isActionPending('expire-node')">{{ copy.cancel }}</AlertDialogCancel>
+          <Button variant="destructive" data-testid="expire-node-confirm" :disabled="isActionPending('expire-node')" @click="confirmExpireNode">
+            <LoaderCircle v-if="isActionPending('expire-node')" class="h-4 w-4 animate-spin" aria-hidden="true" />
+            {{ copy.confirmExpire }}
+          </Button>
+        </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
 
@@ -1353,13 +1353,6 @@ function openUserDetailsExternal(user?: HeadscaleUser) {
             <span class="mt-2 block font-medium text-foreground">{{ selectedRemoveNode.name }}</span>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel data-testid="remove-node-cancel" :disabled="isActionPending('remove-node')">{{ copy.cancel }}</AlertDialogCancel>
-          <Button variant="destructive" data-testid="remove-node-confirm" :disabled="isActionPending('remove-node')" @click="confirmRemoveNode">
-            <LoaderCircle v-if="isActionPending('remove-node')" class="h-4 w-4 animate-spin" aria-hidden="true" />
-            {{ copy.confirmRemove }}
-          </Button>
-        </AlertDialogFooter>
         <p
           v-if="actionError('remove-node')"
           role="alert"
@@ -1368,6 +1361,13 @@ function openUserDetailsExternal(user?: HeadscaleUser) {
         >
           {{ actionError("remove-node") }}
         </p>
+        <AlertDialogFooter>
+          <AlertDialogCancel data-testid="remove-node-cancel" :disabled="isActionPending('remove-node')">{{ copy.cancel }}</AlertDialogCancel>
+          <Button variant="destructive" data-testid="remove-node-confirm" :disabled="isActionPending('remove-node')" @click="confirmRemoveNode">
+            <LoaderCircle v-if="isActionPending('remove-node')" class="h-4 w-4 animate-spin" aria-hidden="true" />
+            {{ copy.confirmRemove }}
+          </Button>
+        </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
 

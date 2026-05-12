@@ -1,26 +1,16 @@
 import { computed } from "vue";
 import { createI18n, useI18n as useVueI18n } from "vue-i18n";
 import type { OperationGroup, OperationId } from "@/domain/headscale-operations";
+import { readSetting, writeSetting } from "@/lib/settings-storage";
 import { DEFAULT_LOCALE, isLocale, LOCALE_META, type Locale, SUPPORTED_LOCALES } from "./locales";
 import { commonMessages, getGroupLabel, getOperationMessage, type MessageKey } from "./messages";
 
-const storageKey = "headscale-ui-locale";
-
-function initialLocale(): Locale {
-  if (typeof localStorage === "undefined") {
-    return DEFAULT_LOCALE;
-  }
-
-  const saved = localStorage.getItem(storageKey);
-  return saved && isLocale(saved) ? saved : DEFAULT_LOCALE;
-}
-
-const startingLocale = initialLocale();
+const LOCALE_SETTING_KEY = "locale";
 
 export const i18n = createI18n<[Record<MessageKey, string>], Locale>({
   legacy: false,
   globalInjection: false,
-  locale: startingLocale,
+  locale: DEFAULT_LOCALE,
   fallbackLocale: DEFAULT_LOCALE,
   messages: commonMessages,
 });
@@ -30,13 +20,21 @@ function syncDocument(locale: Locale) {
     document.documentElement.lang = locale;
     document.documentElement.dir = LOCALE_META[locale].dir;
   }
-
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem(storageKey, locale);
-  }
+  writeSetting(LOCALE_SETTING_KEY, locale);
 }
 
-syncDocument(startingLocale);
+/**
+ * Pulls the persisted locale out of settings-storage and applies it. Called
+ * by main.ts once hydrateSettings() has resolved, before the app mounts.
+ */
+export function applyStoredLocale(): void {
+  const saved = readSetting(LOCALE_SETTING_KEY);
+  const next = saved && isLocale(saved) ? saved : DEFAULT_LOCALE;
+  // With legacy: false the global is a Composer where locale is a
+  // WritableComputedRef<Locale>; vue-i18n's union typing forces a narrow cast.
+  (i18n.global.locale as unknown as { value: Locale }).value = next;
+  syncDocument(next);
+}
 
 export function useHeadscaleI18n() {
   const composer = useVueI18n<[Record<MessageKey, string>], Locale>({

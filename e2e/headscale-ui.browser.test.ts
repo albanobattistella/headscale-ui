@@ -1239,6 +1239,24 @@ test("keeps core dialogs usable on a short mobile viewport", async () => {
   expectDialogUsableInViewport("tag-detail-dialog");
   await closeLayerWithEscape("tag-detail-dialog");
 
+  // Force the unsaved-changes AlertDialog onto the 360px viewport — its three
+  // stacked buttons (keep editing / discard / save and close) must all fit.
+  await page.getByTestId("team-card-group:ops").click();
+  await expect.element(page.getByTestId("team-detail-dialog")).toBeVisible();
+  const memberToRemove = document.querySelector(
+    '[data-testid^="team-member-remove-"]',
+  ) as HTMLElement | null;
+  expect(memberToRemove).not.toBeNull();
+  memberToRemove?.click();
+  await page.getByTestId("team-detail-close").click();
+  await expect.element(page.getByTestId("unsaved-changes-dialog")).toBeVisible();
+  expectDialogUsableInViewport("unsaved-changes-dialog");
+  expectTestIdFitsViewport("unsaved-changes-keep-editing");
+  expectTestIdFitsViewport("unsaved-changes-discard");
+  expectTestIdFitsViewport("unsaved-changes-save");
+  await captureResponsiveScreenshot("unsaved-changes-360x568");
+  await page.getByTestId("unsaved-changes-discard").click();
+
   expectNoHorizontalOverflow();
 });
 
@@ -1863,6 +1881,80 @@ test("renders initial mock policy with team/tag cards and risk banners", async (
   expectNoRawPolicyEditor();
 });
 
+test("clean up orphan refs banner: cancel keeps them, confirm strips them", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+  await openAccessSection();
+
+  await expect.element(page.getByTestId("orphan-ref-banner")).toBeVisible();
+  await page.getByTestId("cleanup-orphan-refs").click();
+  await expect.element(page.getByTestId("cleanup-orphans-dialog")).toBeVisible();
+
+  // Cancel keeps the orphan banner around.
+  await page.getByTestId("cleanup-orphans-cancel").click();
+  await expect.element(page.getByTestId("orphan-ref-banner")).toBeVisible();
+
+  // Confirm wipes the references; banner disappears once state is clean.
+  await page.getByTestId("cleanup-orphan-refs").click();
+  await page.getByTestId("cleanup-orphans-confirm").click();
+  await expect.poll(() => document.querySelector('[data-testid="orphan-ref-banner"]')).toBeNull();
+});
+
+test("unsaved-changes dialog covers cancel, discard and save-and-close paths", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+  await openAccessSection();
+  window.__headscaleUiOperationCalls = [];
+
+  // Open team detail; clean state — Escape closes silently.
+  await page.getByTestId("team-card-group:ops").click();
+  await expect.element(page.getByTestId("team-detail-dialog")).toBeVisible();
+
+  // Make it dirty by removing an existing member. The mock policy must give
+  // group:ops at least one member — fail loudly if that ever changes.
+  const memberRow = document.querySelector(
+    '[data-testid^="team-member-remove-"]',
+  ) as HTMLElement | null;
+  expect(memberRow).not.toBeNull();
+  memberRow?.click();
+
+  // Escape now triggers the unsaved-changes confirm.
+  await userEvent.keyboard("{Escape}");
+  await expect.element(page.getByTestId("unsaved-changes-dialog")).toBeVisible();
+
+  // Keep-editing returns to the team dialog with edits intact.
+  await page.getByTestId("unsaved-changes-keep-editing").click();
+  await expect
+    .poll(() => document.querySelector('[data-testid="unsaved-changes-dialog"]'))
+    .toBeNull();
+  await expect.element(page.getByTestId("team-detail-dialog")).toBeVisible();
+
+  // Escape again, this time discard. The global unsaved badge must vanish
+  // along with the dialog — that's the contract of "Close without saving".
+  await userEvent.keyboard("{Escape}");
+  await expect.element(page.getByTestId("unsaved-changes-dialog")).toBeVisible();
+  await page.getByTestId("unsaved-changes-discard").click();
+  await expect.poll(() => document.querySelector('[data-testid="team-detail-dialog"]')).toBeNull();
+  await expect
+    .poll(() => document.querySelector('[data-testid="save-policy-dirty-badge"]'))
+    .toBeNull();
+
+  // Reopen — discard should have restored the original state, so the member
+  // row is back. Dirty it again, this time use save-and-close.
+  await page.getByTestId("team-card-group:ops").click();
+  await expect.element(page.getByTestId("team-detail-dialog")).toBeVisible();
+  const memberRow2 = document.querySelector(
+    '[data-testid^="team-member-remove-"]',
+  ) as HTMLElement | null;
+  expect(memberRow2).not.toBeNull();
+  memberRow2?.click();
+  await userEvent.keyboard("{Escape}");
+  await page.getByTestId("unsaved-changes-save").click();
+  await expect
+    .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "policy.set"))
+    .toBe(true);
+});
+
 test("creates a team, adds a member, saves and reopens it", async () => {
   await renderLogin();
   await connectWithDefaults();
@@ -1881,13 +1973,15 @@ test("creates a team, adds a member, saves and reopens it", async () => {
   await page.getByTestId("team-add-member-option-alice@example.com").click();
   await expect.element(page.getByTestId("team-member-row-alice@example.com")).toBeVisible();
 
+  // Dialog is dirty (a member was added) — "Done" routes through the unsaved-
+  // changes confirm. Save-and-close persists the policy in one step.
   await page.getByTestId("team-detail-close").click();
-  await expect.element(page.getByTestId("team-card-group:dev")).toBeVisible();
-
-  await page.getByTestId("save-policy").click();
+  await expect.element(page.getByTestId("unsaved-changes-dialog")).toBeVisible();
+  await page.getByTestId("unsaved-changes-save").click();
   await expect
     .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "policy.set"))
     .toBe(true);
+  await expect.element(page.getByTestId("team-card-group:dev")).toBeVisible();
 
   const saved = latestSavedPolicy();
   expect(saved.groups?.["group:dev"]).toEqual(["alice@example.com"]);
@@ -1899,7 +1993,14 @@ test("creates a team, adds a member, saves and reopens it", async () => {
   await expect
     .poll(() => document.querySelector('[data-testid="team-member-row-alice@example.com"]'))
     .toBeNull();
+  // Removing the member made the dialog dirty again. Discard returns to the
+  // last saved state, and the global "unsaved" badge must disappear with it.
   await page.getByTestId("team-detail-close").click();
+  await expect.element(page.getByTestId("unsaved-changes-dialog")).toBeVisible();
+  await page.getByTestId("unsaved-changes-discard").click();
+  await expect
+    .poll(() => document.querySelector('[data-testid="save-policy-dirty-badge"]'))
+    .toBeNull();
 });
 
 test("creates a device label with an accessor + label manager and saves the rule", async () => {
@@ -1931,13 +2032,14 @@ test("creates a device label with an accessor + label manager and saves the rule
   await page.getByTestId("tag-add-owner-option-group:ops").click();
   await expect.element(page.getByTestId("tag-owner-row-group:ops")).toBeVisible();
 
+  // Tag dialog is dirty — close routes through the unsaved-changes confirm.
   await page.getByTestId("tag-detail-close").click();
-  await expect.element(page.getByTestId("tag-card-tag:db")).toBeVisible();
-
-  await page.getByTestId("save-policy").click();
+  await expect.element(page.getByTestId("unsaved-changes-dialog")).toBeVisible();
+  await page.getByTestId("unsaved-changes-save").click();
   await expect
     .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "policy.set"))
     .toBe(true);
+  await expect.element(page.getByTestId("tag-card-tag:db")).toBeVisible();
 
   const saved = latestSavedPolicy();
   expect(saved.tagOwners?.["tag:db"]).toEqual(["group:ops"]);
@@ -1972,7 +2074,9 @@ test("removes an accessor row from a tag detail dialog", async () => {
     .toBeNull();
   // The dialog can be re-portaled after removing the accessor; re-query the close button.
   await expect.element(page.getByTestId("tag-detail-dialog")).toBeVisible();
+  // Dirty (we created a tag + removed an accessor) — discard to return to baseline.
   await page.getByTestId("tag-detail-close").click();
+  await page.getByTestId("unsaved-changes-discard").click();
 });
 
 test("removes a tag owner and saves the cleanup", async () => {
@@ -1988,9 +2092,9 @@ test("removes a tag owner and saves the cleanup", async () => {
   await expect
     .poll(() => document.querySelector('[data-testid="tag-owner-row-alice@"]'))
     .toBeNull();
+  // Dialog is dirty — close routes through the unsaved-changes confirm.
   await page.getByTestId("tag-detail-close").click();
-
-  await page.getByTestId("save-policy").click();
+  await page.getByTestId("unsaved-changes-save").click();
   await expect
     .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "policy.set"))
     .toBe(true);
@@ -2071,7 +2175,9 @@ test("high-risk confirm appears when a service expands to all", async () => {
   await expect
     .poll(() => document.querySelector('[data-testid="high-risk-confirm-dialog"]') === null)
     .toBe(true);
+  // Adding the accessor made the dialog dirty — discard to clean up.
   await page.getByTestId("tag-detail-close").click();
+  await page.getByTestId("unsaved-changes-discard").click();
 });
 
 test("empty state renders templates and applies one", async () => {
@@ -2097,6 +2203,34 @@ test("empty state renders templates and applies one", async () => {
   await expect.element(page.getByTestId("team-card-group:team")).toBeVisible();
   await expect.element(page.getByTestId("tag-card-tag:shared")).toBeVisible();
   expect(document.querySelector('[data-testid="resource-access-empty"]')).toBeNull();
+});
+
+test("blank policy: edits still trigger the unsaved-changes guard", async () => {
+  // Regression guard: `isPolicyDirty` used to short-circuit to `false` whenever
+  // `policyDraft` was an empty string, so on a fresh Headscale instance the
+  // user could add a team, hit Close, and walk away with the edits silently
+  // discarded. After the fix, an empty draft must still participate in dirty
+  // detection.
+  await renderLogin();
+  await connectWithDefaults();
+  await resetMockPolicy("");
+  await openAccessSection();
+
+  await expect.element(page.getByTestId("resource-access-empty")).toBeVisible();
+
+  await page.getByTestId("empty-create-team").click();
+  await expect.element(page.getByTestId("team-detail-dialog")).toBeVisible();
+  inputDomTestId("team-name-input", "ops");
+  await page.getByTestId("team-name-confirm").click();
+  await expect.element(page.getByTestId("team-members-section")).toBeVisible();
+
+  // Closing the dirty dialog must now route through the unsaved-changes guard.
+  await page.getByTestId("team-detail-close").click();
+  await expect.element(page.getByTestId("unsaved-changes-dialog")).toBeVisible();
+  await page.getByTestId("unsaved-changes-discard").click();
+  await expect
+    .poll(() => document.querySelector('[data-testid="save-policy-dirty-badge"]'))
+    .toBeNull();
 });
 
 test("IP-only rules collapse into the direct-device section", async () => {

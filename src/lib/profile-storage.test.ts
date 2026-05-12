@@ -11,12 +11,10 @@ import {
 } from "./api-key-crypto";
 import { __resetForTest, idbGet, idbGetAll, idbPut, STORE_META, STORE_PROFILES } from "./idb";
 import {
-  activeProfileStorageKey,
   type ConnectionProfile,
   hydrate,
   profileStorage,
   profileStorageTestingHandle,
-  profilesStorageKey,
   reencryptAll,
 } from "./profile-storage";
 
@@ -186,43 +184,7 @@ describe("markCorrupted", () => {
   });
 });
 
-describe("legacy localStorage migration", () => {
-  test("plaintext profiles in localStorage are migrated into encrypted IDB rows", async () => {
-    const id = crypto.randomUUID();
-    localStorage.setItem(
-      profilesStorageKey,
-      JSON.stringify([
-        {
-          id,
-          name: "Legacy",
-          mode: "real",
-          baseUrl: "https://hs.legacy",
-          apiKey: "hs_legacy_plain",
-          updatedAt: new Date().toISOString(),
-        },
-      ]),
-    );
-    localStorage.setItem(activeProfileStorageKey, id);
-
-    const deviceKey = await getOrCreateDeviceKey();
-    await hydrate({
-      encryptLegacy: (plain) => encryptApiKey(plain, deviceKey, "device"),
-    });
-
-    expect(localStorage.getItem(profilesStorageKey)).toBeNull();
-    expect(localStorage.getItem(activeProfileStorageKey)).toBeNull();
-
-    const loaded = profileStorage.loadProfiles();
-    expect(loaded).toHaveLength(1);
-    expect(loaded[0].id).toBe(id);
-    expect(loaded[0].apiKey).not.toBe("hs_legacy_plain");
-    expect((loaded[0].apiKey as ApiKeySecret).scheme).toBe("device");
-    expect(profileStorage.readActiveProfile()).toBe(id);
-
-    const plain = await decryptApiKey(loaded[0].apiKey, deviceKey);
-    expect(plain).toBe("hs_legacy_plain");
-  });
-
+describe("IDB plaintext migration", () => {
   test("plaintext apiKey written directly to IDB gets re-encrypted in place", async () => {
     const id = crypto.randomUUID();
     await idbPut(STORE_PROFILES, {

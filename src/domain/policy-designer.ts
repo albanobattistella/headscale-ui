@@ -412,6 +412,26 @@ export function removeReferencesToValues(
   };
 }
 
+// A bare value (no prefix, no CIDR/wildcard) that should be looked up against
+// the user list. Captures non-email user references that `classifyMember`
+// otherwise lumps into "raw" — without this, `"alice"` written directly in the
+// policy would silently bypass orphan detection.
+//
+// Trade-off: a bare value that *looks* like a username but is actually meant
+// as something else (e.g. someone typed `myhost` instead of `host:myhost`)
+// will be reported as a stale reference. We accept that — the surrounding
+// policy editor never produces such bare values; if they exist in the source
+// JSON they were either typos or migrated from an older format, and surfacing
+// them in the orphan banner gives the operator a chance to fix them.
+function isBarePrincipalCandidate(value: string): boolean {
+  if (value.length === 0) return false;
+  if (value.includes(":")) return false; // autogroup:/host:/group:/tag:/ipv6
+  if (value.includes("/")) return false; // CIDR
+  if (value.includes("*")) return false; // wildcard
+  if (/^\d+(\.\d+){3}$/.test(value)) return false; // bare IPv4 literal
+  return true;
+}
+
 export function findOrphanReferences(
   state: PolicyDesignerState,
   knownUsers: PrincipalIndex,
@@ -435,6 +455,17 @@ export function findOrphanReferences(
           containerName: group.name,
           value: member.value,
         });
+      } else if (
+        member.kind === "raw" &&
+        isBarePrincipalCandidate(member.value) &&
+        !knownUsers.has(member.value)
+      ) {
+        orphans.push({
+          kind: "group-member",
+          containerId: group.id,
+          containerName: group.name,
+          value: member.value,
+        });
       }
     }
   }
@@ -448,6 +479,17 @@ export function findOrphanReferences(
           value: owner.value,
         });
       } else if (owner.kind === "group" && !groupNameSet.has(owner.value)) {
+        orphans.push({
+          kind: "tag-owner",
+          containerId: tagOwner.id,
+          containerName: tagOwner.tag,
+          value: owner.value,
+        });
+      } else if (
+        owner.kind === "raw" &&
+        isBarePrincipalCandidate(owner.value) &&
+        !knownUsers.has(owner.value)
+      ) {
         orphans.push({
           kind: "tag-owner",
           containerId: tagOwner.id,

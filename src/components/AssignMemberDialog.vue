@@ -30,6 +30,7 @@ const props = withDefaults(
     cancelLabel: string;
     emptyLabel: string;
     testidPrefix: string;
+    assignedLabel: string;
     isSubmitting?: boolean;
     error?: string;
   }>(),
@@ -133,10 +134,11 @@ function closeDialog() {
             </div>
             <Badge
               v-if="option.assigned"
-              variant="outline"
-              class="ms-auto self-start text-[10px] uppercase tracking-wide"
+              variant="secondary"
+              class="ms-auto self-start text-xs font-normal"
+              :data-testid="`${testidPrefix}-assigned-${option.id}`"
             >
-              {{ selected.has(option.id) ? "✓" : "—" }}
+              {{ assignedLabel }}
             </Badge>
           </button>
         </div>

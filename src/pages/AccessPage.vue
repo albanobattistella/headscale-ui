@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   Database,
+  Eraser,
   FileCheck2,
   Laptop,
   LoaderCircle,
@@ -12,6 +13,7 @@ import {
   Tag,
   Trash2,
   Users,
+  UserX,
   X,
 } from "lucide-vue-next";
 import { computed, reactive, ref, watch } from "vue";
@@ -54,8 +56,10 @@ import {
   type PolicyDesignerState,
   type PolicyGroup,
   parseCommaList,
+  parsePolicy,
   removeGroupById,
   removeTagOwnerById,
+  serializePolicy,
   toMemberRef,
   upsertGroup,
   upsertTagOwner,
@@ -709,10 +713,125 @@ const { mutate } = useMutation({ skipRefresh: true });
 
 async function savePolicy() {
   const nextDraft = JSON.stringify(policyPayload.value, null, 2);
-  policyDraft.value = nextDraft;
-  await mutate("save-policy" as ActionFeedbackKey, (client) =>
+  const ok = await mutate("save-policy" as ActionFeedbackKey, (client) =>
     client.setPolicy({ policy: nextDraft }),
   );
+  // Only adopt the new "saved baseline" if the server actually accepted it.
+  // Otherwise the dirty signal must stay so the user knows the change didn't
+  // land and `saveAndClose` does not silently dismiss the dialog.
+  if (ok) policyDraft.value = nextDraft;
+}
+
+// `policyDraft` originates from the server snapshot in whatever JSON shape the
+// backend chose; `policyPayload` is rebuilt from the in-memory state with our
+// own key ordering. Compare them through one round-trip of parse+serialize so
+// pure formatting/key-order differences don't read as dirty.
+//
+// Important: an empty draft (fresh Headscale instance with no saved policy)
+// still has to participate in the comparison — otherwise users on a blank
+// policy could add a team and never see the unsaved indicator. `parsePolicy`
+// already collapses `""` to `emptyState()`, which canonicalizes identically
+// to a freshly-loaded empty state.
+const isPolicyDirty = computed(() => {
+  try {
+    const draftCanonical = JSON.stringify(serializePolicy(parsePolicy(policyDraft.value)));
+    const currentCanonical = JSON.stringify(serializePolicy(policyDesignerState.value));
+    return draftCanonical !== currentCanonical;
+  } catch {
+    return true;
+  }
+});
+
+type PendingClose = "tag" | "team" | null;
+const pendingDialogClose = ref<PendingClose>(null);
+const unsavedConfirmOpen = ref(false);
+
+function attemptDialogClose(which: Exclude<PendingClose, null>) {
+  if (isPolicyDirty.value) {
+    pendingDialogClose.value = which;
+    unsavedConfirmOpen.value = true;
+    return;
+  }
+  if (which === "tag") tagDetailOpen.value = false;
+  else teamDetailOpen.value = false;
+}
+
+function handleTagDialogOpen(open: boolean) {
+  if (open) {
+    tagDetailOpen.value = true;
+    return;
+  }
+  attemptDialogClose("tag");
+}
+
+function handleTeamDialogOpen(open: boolean) {
+  if (open) {
+    teamDetailOpen.value = true;
+    return;
+  }
+  attemptDialogClose("team");
+}
+
+// The footer "Done" button is a deliberate close — share the dirty-check path
+// with Escape / outside-click so the user can't accidentally walk away from
+// unsaved policy edits.
+function finishPolicyDialog(which: "tag" | "team") {
+  attemptDialogClose(which);
+}
+
+function closePendingDialog() {
+  const which = pendingDialogClose.value;
+  if (which === "tag") tagDetailOpen.value = false;
+  else if (which === "team") teamDetailOpen.value = false;
+  pendingDialogClose.value = null;
+}
+
+function discardAndClose() {
+  unsavedConfirmOpen.value = false;
+  // Revert in-memory edits back to the last saved snapshot so "close without
+  // saving" really means discarded — otherwise the changes linger on the page
+  // (and in the dirty badge) the next time the user opens the dialog.
+  // `parsePolicy("")` is well-defined (returns `emptyState`), so a blank draft
+  // — fresh Headscale instance — still gets a real reset, not a no-op.
+  commitState(parsePolicy(policyDraft.value));
+  closePendingDialog();
+}
+
+async function saveAndClose() {
+  unsavedConfirmOpen.value = false;
+  await savePolicy();
+  if (!isPolicyDirty.value) closePendingDialog();
+  else pendingDialogClose.value = null;
+}
+
+const cleanupOrphanRefsOpen = ref(false);
+
+function cleanupOrphanRefs() {
+  const orphans = orphanRefs.value;
+  if (orphans.length === 0) {
+    cleanupOrphanRefsOpen.value = false;
+    return;
+  }
+  let next = policyDesignerState.value;
+  for (const orphan of orphans) {
+    if (orphan.kind === "group-member") {
+      const group = next.groups.find((g) => g.id === orphan.containerId);
+      if (!group) continue;
+      next = upsertGroup(next, {
+        ...group,
+        members: group.members.filter((m) => m.value !== orphan.value),
+      });
+    } else {
+      const owner = next.tagOwners.find((t) => t.id === orphan.containerId);
+      if (!owner) continue;
+      next = upsertTagOwner(next, {
+        ...owner,
+        owners: owner.owners.filter((o) => o.value !== orphan.value),
+      });
+    }
+  }
+  commitState(next);
+  cleanupOrphanRefsOpen.value = false;
 }
 </script>
 
@@ -723,20 +842,34 @@ async function savePolicy() {
         <h1 class="text-2xl font-semibold">{{ copy.resourceAccessTitle }}</h1>
         <p class="mt-1 text-sm text-muted-foreground">{{ copy.resourceAccessSubtitle }}</p>
       </div>
-      <Button
-        size="sm"
-        data-testid="save-policy"
-        :disabled="isActionPending('save-policy')"
-        @click="savePolicy"
-      >
-        <LoaderCircle
-          v-if="isActionPending('save-policy')"
-          class="h-4 w-4 animate-spin"
-          aria-hidden="true"
-        />
-        <FileCheck2 v-else class="h-4 w-4" aria-hidden="true" />
-        {{ copy.savePolicy }}
-      </Button>
+      <div class="flex items-center gap-2">
+        <Badge
+          v-if="isPolicyDirty && !isActionPending('save-policy')"
+          variant="outline"
+          class="border-amber-400/60 bg-amber-50/60 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300"
+          data-testid="save-policy-dirty-badge"
+        >
+          <span
+            class="me-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500"
+            aria-hidden="true"
+          />
+          {{ copy.unsavedChangesBadge }}
+        </Badge>
+        <Button
+          size="sm"
+          data-testid="save-policy"
+          :disabled="isActionPending('save-policy')"
+          @click="savePolicy"
+        >
+          <LoaderCircle
+            v-if="isActionPending('save-policy')"
+            class="h-4 w-4 animate-spin"
+            aria-hidden="true"
+          />
+          <FileCheck2 v-else class="h-4 w-4" aria-hidden="true" />
+          {{ copy.savePolicy }}
+        </Button>
+      </div>
     </div>
 
     <p
@@ -768,12 +901,22 @@ async function savePolicy() {
       data-testid="orphan-ref-banner"
     >
       <ShieldAlert class="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
-      <div class="grid gap-0.5">
+      <div class="grid gap-0.5 flex-1">
         <p class="font-medium">{{ copy.orphanRefBannerTitle }}</p>
         <p class="text-xs">
           {{ pluralize(orphanRefs.length, "orphanRefBannerHintOne", "orphanRefBannerHintMany") }}
         </p>
       </div>
+      <Button
+        size="sm"
+        variant="outline"
+        class="shrink-0 border-amber-400/60 bg-background hover:bg-amber-100/60 dark:hover:bg-amber-500/20"
+        data-testid="cleanup-orphan-refs"
+        @click="cleanupOrphanRefsOpen = true"
+      >
+        <Eraser class="h-4 w-4" aria-hidden="true" />
+        {{ pluralize(orphanRefs.length, "cleanupOrphanRefsOne", "cleanupOrphanRefsMany") }}
+      </Button>
     </div>
 
     <div
@@ -969,13 +1112,17 @@ async function savePolicy() {
                     variant="outline"
                     :title="isOrphanValue(a.who) ? copy.orphanReferenceTooltip : undefined"
                     :class="[
-                      'text-xs break-all',
+                      'inline-flex items-center gap-1 text-xs break-all',
                       isOrphanValue(a.who)
-                        ? 'border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
+                        ? 'cursor-help border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
                         : '',
                     ]"
                   >
-                    <span v-if="isOrphanValue(a.who)" class="me-1">⚠</span>
+                    <UserX
+                      v-if="isOrphanValue(a.who)"
+                      class="h-3 w-3 shrink-0"
+                      aria-hidden="true"
+                    />
                     {{ whoDisplayLabel(a.who) }}
                   </Badge>
                   <span class="text-xs text-muted-foreground">
@@ -1005,13 +1152,17 @@ async function savePolicy() {
                   :variant="isOrphanValue(owner) ? 'outline' : 'secondary'"
                   :title="isOrphanValue(owner) ? copy.orphanReferenceTooltip : undefined"
                   :class="[
-                    'text-xs break-all',
+                    'inline-flex items-center gap-1 text-xs break-all',
                     isOrphanValue(owner)
-                      ? 'border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
+                      ? 'cursor-help border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
                       : '',
                   ]"
                 >
-                  <span v-if="isOrphanValue(owner)" class="me-1">⚠</span>
+                  <UserX
+                    v-if="isOrphanValue(owner)"
+                    class="h-3 w-3 shrink-0"
+                    aria-hidden="true"
+                  />
                   {{ whoDisplayLabel(owner) }}
                 </Badge>
                 <Badge
@@ -1054,7 +1205,7 @@ async function savePolicy() {
     </Card>
 
     <!-- Tag detail dialog -->
-    <Dialog v-model:open="tagDetailOpen">
+    <Dialog :open="tagDetailOpen" @update:open="handleTagDialogOpen">
       <DialogContent
         class="sm:max-w-2xl flex flex-col gap-0 p-0 max-h-[85vh] overflow-hidden"
         data-testid="tag-detail-dialog"
@@ -1067,8 +1218,11 @@ async function savePolicy() {
             </span>
           </DialogTitle>
           <DialogDescription>
-            {{ currentTagMeta ? pluralize(currentTagMeta.deviceCount, "oneDeviceTagged", "nDevicesTagged") : copy.deviceLabelNameHint }}
+            {{ copy.tagDetailDialogSubtitle }}
           </DialogDescription>
+          <p v-if="currentTagMeta" class="mt-1 text-xs text-muted-foreground">
+            {{ pluralize(currentTagMeta.deviceCount, "oneDeviceTagged", "nDevicesTagged") }}
+          </p>
         </DialogHeader>
 
         <div class="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
@@ -1091,7 +1245,7 @@ async function savePolicy() {
                 data-testid="tag-name-confirm"
                 @click="commitTagName"
               >
-                {{ copy.svcCustomLabel === "Custom ports" ? "Confirm" : "确定" }}
+                {{ copy.confirm }}
               </Button>
             </div>
             <p class="mt-1 text-xs text-muted-foreground">{{ copy.deviceLabelNameHint }}</p>
@@ -1127,7 +1281,7 @@ async function savePolicy() {
                       :class="[
                         'text-xs',
                         isOrphanValue(a.who)
-                          ? 'border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
+                          ? 'cursor-help border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
                           : '',
                       ]"
                     >
@@ -1225,7 +1379,7 @@ async function savePolicy() {
                     :class="[
                       'text-xs',
                       isOrphanValue(owner)
-                        ? 'border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
+                        ? 'cursor-help border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
                         : '',
                     ]"
                   >
@@ -1259,9 +1413,22 @@ async function savePolicy() {
           </fieldset>
         </div>
 
-        <DialogFooter class="shrink-0 px-6 py-4 border-t sm:justify-between gap-2">
-          <p class="text-xs text-muted-foreground sm:text-start">{{ copy.changesAutoSaveHint }}</p>
-          <Button data-testid="tag-detail-close" @click="tagDetailOpen = false">
+        <DialogFooter
+          class="shrink-0 px-6 py-4 border-t flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+        >
+          <p
+            v-if="isPolicyDirty"
+            class="flex items-center gap-1.5 rounded-md border border-amber-400/60 bg-amber-50/60 px-2 py-1 text-xs text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300 sm:text-start"
+            data-testid="tag-dialog-unsaved-hint"
+          >
+            <span
+              class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500"
+              aria-hidden="true"
+            />
+            {{ copy.changesAutoSaveHint }}
+          </p>
+          <span v-else class="text-xs text-muted-foreground">&nbsp;</span>
+          <Button data-testid="tag-detail-close" @click="finishPolicyDialog('tag')">
             {{ copy.finish }}
           </Button>
         </DialogFooter>
@@ -1269,7 +1436,7 @@ async function savePolicy() {
     </Dialog>
 
     <!-- Team detail dialog -->
-    <Dialog v-model:open="teamDetailOpen">
+    <Dialog :open="teamDetailOpen" @update:open="handleTeamDialogOpen">
       <DialogContent
         class="sm:max-w-2xl flex flex-col gap-0 p-0 max-h-[85vh] overflow-hidden"
         data-testid="team-detail-dialog"
@@ -1304,7 +1471,7 @@ async function savePolicy() {
                 data-testid="team-name-confirm"
                 @click="commitTeamName"
               >
-                {{ copy.svcCustomLabel === "Custom ports" ? "Confirm" : "确定" }}
+                {{ copy.confirm }}
               </Button>
             </div>
           </div>
@@ -1337,7 +1504,7 @@ async function savePolicy() {
                     :class="[
                       'text-xs',
                       isOrphanValue(m.value)
-                        ? 'border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
+                        ? 'cursor-help border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
                         : '',
                     ]"
                   >
@@ -1400,9 +1567,22 @@ async function savePolicy() {
           </fieldset>
         </div>
 
-        <DialogFooter class="shrink-0 px-6 py-4 border-t sm:justify-between gap-2">
-          <p class="text-xs text-muted-foreground sm:text-start">{{ copy.changesAutoSaveHint }}</p>
-          <Button data-testid="team-detail-close" @click="teamDetailOpen = false">
+        <DialogFooter
+          class="shrink-0 px-6 py-4 border-t flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+        >
+          <p
+            v-if="isPolicyDirty"
+            class="flex items-center gap-1.5 rounded-md border border-amber-400/60 bg-amber-50/60 px-2 py-1 text-xs text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300 sm:text-start"
+            data-testid="team-dialog-unsaved-hint"
+          >
+            <span
+              class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500"
+              aria-hidden="true"
+            />
+            {{ copy.changesAutoSaveHint }}
+          </p>
+          <span v-else class="text-xs text-muted-foreground">&nbsp;</span>
+          <Button data-testid="team-detail-close" @click="finishPolicyDialog('team')">
             {{ copy.finish }}
           </Button>
         </DialogFooter>
@@ -1461,6 +1641,65 @@ async function savePolicy() {
             @click="confirmRemovePolicyItem"
           >
             {{ copy.removeItem }}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <!-- Unsaved-changes confirm when closing a policy dialog -->
+    <AlertDialog v-model:open="unsavedConfirmOpen">
+      <AlertDialogContent data-testid="unsaved-changes-dialog">
+        <AlertDialogHeader>
+          <AlertDialogTitle>{{ copy.unsavedChangesTitle }}</AlertDialogTitle>
+          <AlertDialogDescription>{{ copy.unsavedChangesBody }}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel data-testid="unsaved-changes-keep-editing">{{
+            copy.cancel
+          }}</AlertDialogCancel>
+          <Button
+            type="button"
+            variant="outline"
+            data-testid="unsaved-changes-discard"
+            @click="discardAndClose"
+          >
+            {{ copy.unsavedChangesCloseAnyway }}
+          </Button>
+          <Button
+            type="button"
+            data-testid="unsaved-changes-save"
+            :disabled="isActionPending('save-policy')"
+            @click="saveAndClose"
+          >
+            <LoaderCircle
+              v-if="isActionPending('save-policy')"
+              class="h-4 w-4 animate-spin"
+              aria-hidden="true"
+            />
+            {{ copy.unsavedChangesSaveAndClose }}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <!-- Clean up orphan references confirm -->
+    <AlertDialog v-model:open="cleanupOrphanRefsOpen">
+      <AlertDialogContent data-testid="cleanup-orphans-dialog">
+        <AlertDialogHeader>
+          <AlertDialogTitle>{{ copy.cleanupOrphanRefsConfirm }}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {{ copy.cleanupOrphanRefsConfirmBody }}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel data-testid="cleanup-orphans-cancel">{{
+            copy.cancel
+          }}</AlertDialogCancel>
+          <AlertDialogAction
+            data-testid="cleanup-orphans-confirm"
+            @click="cleanupOrphanRefs"
+          >
+            {{ pluralize(orphanRefs.length, "cleanupOrphanRefsOne", "cleanupOrphanRefsMany") }}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

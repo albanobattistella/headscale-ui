@@ -481,4 +481,38 @@ describe("findOrphanReferences", () => {
     state = upsertGroup(state, createGroup("group:ops", [toMemberRef("  Alice@Example.COM  ")]));
     expect(findOrphanReferences(state, new PrincipalIndex(["alice@example.com"]))).toEqual([]);
   });
+
+  test("flags bare username (no @) when not in known principals", () => {
+    let state = emptyState();
+    state = upsertGroup(state, createGroup("group:ops", [toMemberRef("alice")]));
+
+    const orphans = findOrphanReferences(state, new PrincipalIndex([]));
+    expect(orphans).toHaveLength(1);
+    expect(orphans[0]?.value).toBe("alice");
+    expect(orphans[0]?.kind).toBe("group-member");
+  });
+
+  test("accepts bare username when matched against known user.name", () => {
+    let state = emptyState();
+    state = upsertGroup(state, createGroup("group:ops", [toMemberRef("alice")]));
+    expect(findOrphanReferences(state, new PrincipalIndex(["alice"]))).toEqual([]);
+  });
+
+  test("does not flag CIDR or wildcard as orphan even when treated as raw", () => {
+    let state = emptyState();
+    state = upsertTagOwner(
+      state,
+      createTagOwner("tag:server", [toMemberRef("10.0.0.0/8"), toMemberRef("*")]),
+    );
+    expect(findOrphanReferences(state, new PrincipalIndex([]))).toEqual([]);
+  });
+
+  test("flags hostname-shaped bare strings as orphan (documented trade-off)", () => {
+    // A value like "myhost" that doesn't carry a host:/group:/tag: prefix and
+    // isn't a CIDR cannot be distinguished from a typo'd username; if it
+    // doesn't match a known principal we report it so the operator can fix it.
+    let state = emptyState();
+    state = upsertGroup(state, createGroup("group:ops", [toMemberRef("myhost")]));
+    expect(findOrphanReferences(state, new PrincipalIndex([]))).toHaveLength(1);
+  });
 });

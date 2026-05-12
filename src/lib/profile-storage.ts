@@ -23,10 +23,6 @@ export type ConnectionProfile = {
   corrupted?: true;
 };
 
-export const legacyConnectionStorageKey = "headscale-ui-connection";
-export const profilesStorageKey = "headscale-ui-profiles";
-export const activeProfileStorageKey = "headscale-ui-active-profile";
-
 const ACTIVE_PROFILE_META_KEY = "active-profile-id";
 const SESSION_TAB_ID_KEY = "headscale-ui-tab-id";
 
@@ -83,8 +79,6 @@ export async function hydrate(options: HydrateOptions = {}): Promise<void> {
     hydrated = true;
     return;
   }
-
-  await migrateLegacyLocalStorage(options.encryptLegacy);
 
   const raw = await idbGetAll<unknown>(STORE_PROFILES);
   let migratedPlaintextCount = 0;
@@ -181,72 +175,6 @@ async function readActiveProfileFromMeta(): Promise<string | null> {
   }
 }
 
-async function migrateLegacyLocalStorage(
-  encryptLegacy: HydrateOptions["encryptLegacy"],
-): Promise<void> {
-  if (typeof localStorage === "undefined") return;
-
-  const profilesRaw = localStorage.getItem(profilesStorageKey);
-  const activeRaw =
-    localStorage.getItem(activeProfileStorageKey) ??
-    (typeof sessionStorage !== "undefined"
-      ? sessionStorage.getItem(activeProfileStorageKey)
-      : null);
-
-  if (!profilesRaw && !activeRaw) return;
-
-  let migratedCount = 0;
-  if (profilesRaw) {
-    try {
-      const parsed = JSON.parse(profilesRaw);
-      if (Array.isArray(parsed)) {
-        for (const p of parsed) {
-          const partial = p as Partial<ConnectionProfile> & { apiKey?: unknown };
-          if (!partial.id || typeof partial.apiKey !== "string") continue;
-          if (!encryptLegacy) continue;
-          try {
-            const apiKey = await encryptLegacy(partial.apiKey);
-            const profile: ConnectionProfile = {
-              id: partial.id,
-              name: partial.name ?? partial.baseUrl ?? "Profile",
-              mode: partial.mode === "mock" ? "mock" : "real",
-              baseUrl: partial.baseUrl ?? "",
-              apiKey,
-              updatedAt: partial.updatedAt ?? new Date().toISOString(),
-              scope: "persistent",
-            };
-            await idbPut(STORE_PROFILES, profile);
-            migratedCount++;
-          } catch (err) {
-            console.error("[headscale-ui] failed to migrate legacy profile", err);
-          }
-        }
-      }
-    } catch (err) {
-      console.warn("[headscale-ui] failed to parse legacy profiles", err);
-    }
-  }
-
-  if (activeRaw) {
-    try {
-      await idbPut(STORE_META, activeRaw, ACTIVE_PROFILE_META_KEY);
-    } catch (err) {
-      console.error("[headscale-ui] failed to migrate active profile id", err);
-    }
-  }
-
-  localStorage.removeItem(profilesStorageKey);
-  localStorage.removeItem(activeProfileStorageKey);
-  if (typeof sessionStorage !== "undefined") {
-    sessionStorage.removeItem(profilesStorageKey);
-    sessionStorage.removeItem(activeProfileStorageKey);
-  }
-
-  if (migratedCount > 0) {
-    console.info(`[headscale-ui] migrated ${migratedCount} profile(s) from localStorage`);
-  }
-}
-
 export type ProfileStorageProvider = {
   loadProfiles(): ConnectionProfile[];
   saveProfile(profile: ConnectionProfile, scope: ProfileStorageScope): void;
@@ -257,7 +185,6 @@ export type ProfileStorageProvider = {
   readActiveProfile(): string | null;
   hasAnyProfile(): boolean;
   hasProfile(profileId: string): boolean;
-  consumeLegacyConnection(): string | null;
   markCorrupted(profileId: string): void;
   isPersistentAvailable(): boolean;
   currentTabId(): string;
@@ -322,12 +249,6 @@ export const profileStorage: ProfileStorageProvider = {
   hasProfile(profileId) {
     ensureHydrated();
     return cache.profiles.has(profileId);
-  },
-  consumeLegacyConnection() {
-    if (typeof localStorage === "undefined") return null;
-    const v = localStorage.getItem(legacyConnectionStorageKey);
-    localStorage.removeItem(legacyConnectionStorageKey);
-    return v;
   },
   markCorrupted(profileId) {
     ensureHydrated();
