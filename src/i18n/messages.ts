@@ -25,17 +25,18 @@ export const messageKeys = {
   addProfile: "Add",
   addingProfile: "Adding",
   checkingCredentials: "Checking credentials",
+  restoringSession: "Reconnecting to {name}…",
   close: "Close",
   discardProfileChangesTitle: "Close without adding this server?",
   discardProfileChangesDescription:
     "The profile details have changed. Closing now will discard the unsaved edits.",
   keepEditingProfile: "Keep editing",
   discardProfileChanges: "Discard changes",
-  continueAddProfileTitle: "Add this server anyway?",
-  continueAddProfileDescription:
-    "The UI could not verify the server URL or API key. You can keep editing the details, or add the profile and fix it later.",
-  reviewProfileConnection: "Review details",
-  continueAddProfile: "Continue adding",
+  connectionValidationFailedTitle: "Add this server anyway?",
+  connectionValidationFailedDescription:
+    "The UI could not verify the server URL or API key. You can keep editing the details, or add the profile and fix it later. You can edit this profile from the list at any time.",
+  backToEditConnection: "Review details",
+  saveAnywayButton: "Continue adding",
   savedProfiles: "Saved profiles",
   useProfile: "Use",
   editProfile: "Edit profile",
@@ -111,6 +112,43 @@ export const messageKeys = {
   serveTitle: "Serve, Funnel and Taildrop",
   serveDescription:
     "Serve and Funnel are Tailscale client features; Taildrop is Headscale configuration, not a v0.28 management API.",
+  encryptionSectionTitle: "Encryption",
+  encryptionEnableLabel: "Use a passphrase to protect saved API keys",
+  encryptionEnableHint:
+    "Without a passphrase, saved keys are bound to this browser only and cannot be transferred.",
+  encryptionSetupWarning:
+    "This passphrase cannot be recovered. If you forget it, you must clear all saved profiles and re-enter your API keys.",
+  encryptionSetupWarningConfirm: "I have safely recorded this passphrase",
+  encryptionSetPassphrase: "Set a passphrase",
+  encryptionConfirmPassphrase: "Confirm passphrase",
+  encryptionChangePassphrase: "Change passphrase",
+  encryptionDisable: "Disable passphrase",
+  encryptionDisableConfirm:
+    "Enter current passphrase to disable. Saved keys will fall back to device-bound encryption.",
+  encryptionUnlockTitle: "Unlock saved profiles",
+  encryptionUnlockDescription:
+    "Enter the passphrase you set previously to access your saved API keys.",
+  encryptionUnlockSubmit: "Unlock",
+  encryptionEnterPassphrase: "Enter passphrase",
+  encryptionLocalityNote:
+    "Your API keys are encrypted on this device. The passphrase never leaves your browser.",
+  encryptionUnlockFailed: "Incorrect passphrase.",
+  encryptionForgotten:
+    "Forgot your passphrase? You must clear all saved profiles and re-enter your API keys. The passphrase cannot be recovered.",
+  encryptionForgottenButton: "Clear all saved profiles",
+  forgotConfirmTitle: "Clear all encrypted data?",
+  forgotConfirmDescription:
+    "This will permanently delete all {count} saved server profile(s) and reset your passphrase. You will need to add your servers and API keys again. This cannot be undone.",
+  profilesClearedNotice: "All saved profiles have been cleared. Add a server to start fresh.",
+  encryptionProfileCorrupted:
+    "This profile's data is corrupted (not a passphrase issue). Re-enter the API key to rebuild this connection.",
+  encryptionStorageNote: "Saved API keys are encrypted in this browser.",
+  encryptionSessionOnlyBadge: "Session only",
+  encryptionEncryptedBadge: "Encrypted",
+  encryptionLockedBadge: "Locked",
+  encryptionCorruptedBadge: "Corrupted",
+  encryptionUnsupportedHint: "This browser does not support persistent storage.",
+  encryptionMultiTabNote: "Each browser tab requires its own unlock.",
 } as const;
 
 export type MessageKey = keyof typeof messageKeys;
@@ -140,16 +178,17 @@ const commonMessagesBase = {
     addProfile: "添加",
     addingProfile: "添加中",
     checkingCredentials: "正在校验凭证",
+    restoringSession: "正在恢复与 {name} 的连接…",
     close: "关闭",
     discardProfileChangesTitle: "不添加并关闭？",
     discardProfileChangesDescription: "Profile 信息已经修改。现在关闭会丢弃未保存的编辑。",
     keepEditingProfile: "继续编辑",
     discardProfileChanges: "丢弃修改",
-    continueAddProfileTitle: "仍然添加这个服务器？",
-    continueAddProfileDescription:
-      "UI 无法校验服务器 URL 或 API Key。你可以继续修改信息，也可以先添加这个 Profile，稍后再修正。",
-    reviewProfileConnection: "返回修改",
-    continueAddProfile: "继续添加",
+    connectionValidationFailedTitle: "仍然添加这个服务器？",
+    connectionValidationFailedDescription:
+      "UI 无法校验服务器 URL 或 API Key。你可以继续修改信息，也可以先添加这个 Profile，稍后再修正。随时可以从列表里编辑这个 Profile。",
+    backToEditConnection: "返回修改",
+    saveAnywayButton: "继续添加",
     savedProfiles: "已保存 Profile",
     useProfile: "使用",
     editProfile: "编辑 Profile",
@@ -218,6 +257,39 @@ const commonMessagesBase = {
     serveTitle: "Serve、Funnel 与 Taildrop",
     serveDescription:
       "Serve/Funnel 是 Tailscale 客户端能力；Taildrop 是 Headscale 配置，不是 v0.28 管理 API。",
+    encryptionSectionTitle: "加密",
+    encryptionEnableLabel: "使用口令保护已记住的 API key",
+    encryptionEnableHint: "不设口令时，保存的 key 仅与当前浏览器绑定，无法转移到其他设备。",
+    encryptionSetupWarning:
+      "该口令无法找回。忘记后必须清除所有已保存的 profile 并重新输入 API key。",
+    encryptionSetupWarningConfirm: "我已妥善记录此口令",
+    encryptionSetPassphrase: "设置口令",
+    encryptionConfirmPassphrase: "确认口令",
+    encryptionChangePassphrase: "修改口令",
+    encryptionDisable: "禁用口令",
+    encryptionDisableConfirm: "输入当前口令以禁用。已保存的 key 将回退到设备绑定加密。",
+    encryptionUnlockTitle: "解锁已保存的 profile",
+    encryptionUnlockDescription: "输入此前设置的口令以访问已保存的 API key。",
+    encryptionUnlockSubmit: "解锁",
+    encryptionEnterPassphrase: "输入口令",
+    encryptionLocalityNote: "你的 API Key 仅加密保存在本设备。口令不会离开浏览器。",
+    encryptionUnlockFailed: "口令不正确。",
+    encryptionForgotten:
+      "忘记口令？必须清除所有已保存的 profile 并重新输入 API key。口令无法找回。",
+    encryptionForgottenButton: "清除所有已保存的 profile",
+    forgotConfirmTitle: "清除所有加密数据？",
+    forgotConfirmDescription:
+      "将永久删除全部 {count} 个已保存的服务器 Profile 并重置口令。需要重新添加服务器与 API Key。此操作不可撤销。",
+    profilesClearedNotice: "已清空所有保存的连接配置。添加一台服务器重新开始。",
+    encryptionProfileCorrupted:
+      "此 profile 数据已损坏（与口令无关）。请重新输入 API key 以重建此连接。",
+    encryptionStorageNote: "已保存的 API key 在此浏览器中加密存储。",
+    encryptionSessionOnlyBadge: "仅本次会话",
+    encryptionEncryptedBadge: "已加密",
+    encryptionLockedBadge: "已锁定",
+    encryptionCorruptedBadge: "数据损坏",
+    encryptionUnsupportedHint: "此浏览器不支持持久化存储。",
+    encryptionMultiTabNote: "每个浏览器标签需单独解锁。",
   },
   fr: {
     appTitle: "Headscale UI",
@@ -242,17 +314,18 @@ const commonMessagesBase = {
     addProfile: "Ajouter",
     addingProfile: "Ajout",
     checkingCredentials: "Vérification des identifiants",
+    restoringSession: "Reconnexion à {name}…",
     close: "Fermer",
     discardProfileChangesTitle: "Fermer sans ajouter ce serveur ?",
     discardProfileChangesDescription:
       "Les détails du profil ont changé. Fermer maintenant supprimera les modifications non enregistrées.",
     keepEditingProfile: "Continuer à modifier",
     discardProfileChanges: "Ignorer les modifications",
-    continueAddProfileTitle: "Ajouter ce serveur quand même ?",
-    continueAddProfileDescription:
-      "L'UI n'a pas pu vérifier l'URL du serveur ou la clé API. Vous pouvez corriger les détails ou ajouter le profil et le modifier plus tard.",
-    reviewProfileConnection: "Vérifier les détails",
-    continueAddProfile: "Continuer l'ajout",
+    connectionValidationFailedTitle: "Ajouter ce serveur quand même ?",
+    connectionValidationFailedDescription:
+      "L'UI n'a pas pu vérifier l'URL du serveur ou la clé API. Vous pouvez corriger les détails ou ajouter le profil et le modifier plus tard. Vous pouvez modifier ce profil depuis la liste à tout moment.",
+    backToEditConnection: "Vérifier les détails",
+    saveAnywayButton: "Continuer l'ajout",
     savedProfiles: "Profils enregistrés",
     useProfile: "Utiliser",
     editProfile: "Modifier le profil",
@@ -331,6 +404,44 @@ const commonMessagesBase = {
     serveTitle: "Serve, Funnel et Taildrop",
     serveDescription:
       "Serve et Funnel sont des fonctions client Tailscale; Taildrop est de la configuration Headscale.",
+    encryptionSectionTitle: "Chiffrement",
+    encryptionEnableLabel: "Utiliser une phrase secrète pour protéger les clés API enregistrées",
+    encryptionEnableHint:
+      "Sans phrase secrète, les clés enregistrées sont liées à ce navigateur uniquement et ne peuvent pas être transférées.",
+    encryptionSetupWarning:
+      "Cette phrase secrète ne peut pas être récupérée. Si vous l'oubliez, vous devrez supprimer tous les profils enregistrés et ressaisir vos clés API.",
+    encryptionSetupWarningConfirm: "J'ai noté cette phrase secrète en lieu sûr",
+    encryptionSetPassphrase: "Définir une phrase secrète",
+    encryptionConfirmPassphrase: "Confirmer la phrase secrète",
+    encryptionChangePassphrase: "Changer la phrase secrète",
+    encryptionDisable: "Désactiver la phrase secrète",
+    encryptionDisableConfirm:
+      "Saisissez la phrase secrète actuelle pour désactiver. Les clés enregistrées reviendront au chiffrement lié à l'appareil.",
+    encryptionUnlockTitle: "Déverrouiller les profils enregistrés",
+    encryptionUnlockDescription:
+      "Saisissez la phrase secrète définie précédemment pour accéder à vos clés API enregistrées.",
+    encryptionUnlockSubmit: "Déverrouiller",
+    encryptionEnterPassphrase: "Saisir la phrase secrète",
+    encryptionLocalityNote:
+      "Vos clés API sont chiffrées sur cet appareil. La phrase secrète ne quitte jamais votre navigateur.",
+    encryptionUnlockFailed: "Phrase secrète incorrecte.",
+    encryptionForgotten:
+      "Phrase secrète oubliée ? Vous devez supprimer tous les profils enregistrés et ressaisir vos clés API. La phrase secrète ne peut pas être récupérée.",
+    encryptionForgottenButton: "Effacer tous les profils enregistrés",
+    forgotConfirmTitle: "Effacer toutes les données chiffrées ?",
+    forgotConfirmDescription:
+      "Cela supprimera définitivement les {count} profils enregistrés et réinitialisera votre phrase secrète. Vous devrez ajouter à nouveau vos serveurs et clés API. Cette action est irréversible.",
+    profilesClearedNotice:
+      "Tous les profils enregistrés ont été effacés. Ajoutez un serveur pour repartir à zéro.",
+    encryptionProfileCorrupted:
+      "Les données de ce profil sont corrompues (ce n'est pas un problème de phrase secrète). Ressaisissez la clé API pour reconstruire cette connexion.",
+    encryptionStorageNote: "Les clés API enregistrées sont chiffrées dans ce navigateur.",
+    encryptionSessionOnlyBadge: "Session uniquement",
+    encryptionEncryptedBadge: "Chiffré",
+    encryptionLockedBadge: "Verrouillé",
+    encryptionCorruptedBadge: "Corrompu",
+    encryptionUnsupportedHint: "Ce navigateur ne prend pas en charge le stockage persistant.",
+    encryptionMultiTabNote: "Chaque onglet du navigateur doit être déverrouillé séparément.",
   },
   ru: {
     appTitle: "Headscale UI",
@@ -354,17 +465,18 @@ const commonMessagesBase = {
     addProfile: "Добавить",
     addingProfile: "Добавление",
     checkingCredentials: "Проверка учётных данных",
+    restoringSession: "Восстановление подключения к {name}…",
     close: "Закрыть",
     discardProfileChangesTitle: "Закрыть без добавления сервера?",
     discardProfileChangesDescription:
       "Данные профиля изменены. Закрытие сейчас отбросит несохранённые правки.",
     keepEditingProfile: "Продолжить редактирование",
     discardProfileChanges: "Отбросить изменения",
-    continueAddProfileTitle: "Всё равно добавить этот сервер?",
-    continueAddProfileDescription:
-      "UI не смог проверить URL сервера или API-ключ. Можно исправить данные или добавить профиль и поправить его позже.",
-    reviewProfileConnection: "Проверить данные",
-    continueAddProfile: "Продолжить добавление",
+    connectionValidationFailedTitle: "Всё равно добавить этот сервер?",
+    connectionValidationFailedDescription:
+      "UI не смог проверить URL сервера или API-ключ. Можно исправить данные или добавить профиль и поправить его позже. Вы можете отредактировать этот профиль из списка в любое время.",
+    backToEditConnection: "Проверить данные",
+    saveAnywayButton: "Продолжить добавление",
     savedProfiles: "Сохранённые профили",
     useProfile: "Использовать",
     editProfile: "Редактировать профиль",
@@ -440,6 +552,43 @@ const commonMessagesBase = {
     serveTitle: "Serve, Funnel и Taildrop",
     serveDescription:
       "Serve и Funnel являются функциями клиента Tailscale; Taildrop является конфигурацией Headscale.",
+    encryptionSectionTitle: "Шифрование",
+    encryptionEnableLabel: "Использовать кодовую фразу для защиты сохранённых ключей API",
+    encryptionEnableHint:
+      "Без кодовой фразы сохранённые ключи привязаны только к этому браузеру и не могут быть перенесены.",
+    encryptionSetupWarning:
+      "Эту кодовую фразу нельзя восстановить. Если вы её забудете, придётся удалить все сохранённые профили и ввести ключи API заново.",
+    encryptionSetupWarningConfirm: "Я надёжно сохранил эту кодовую фразу",
+    encryptionSetPassphrase: "Задать кодовую фразу",
+    encryptionConfirmPassphrase: "Подтвердить кодовую фразу",
+    encryptionChangePassphrase: "Изменить кодовую фразу",
+    encryptionDisable: "Отключить кодовую фразу",
+    encryptionDisableConfirm:
+      "Введите текущую кодовую фразу для отключения. Сохранённые ключи вернутся к шифрованию, привязанному к устройству.",
+    encryptionUnlockTitle: "Разблокировать сохранённые профили",
+    encryptionUnlockDescription:
+      "Введите ранее заданную кодовую фразу для доступа к сохранённым ключам API.",
+    encryptionUnlockSubmit: "Разблокировать",
+    encryptionEnterPassphrase: "Введите кодовую фразу",
+    encryptionLocalityNote:
+      "Ваши API-ключи зашифрованы на этом устройстве. Кодовая фраза не покидает браузер.",
+    encryptionUnlockFailed: "Неверная кодовая фраза.",
+    encryptionForgotten:
+      "Забыли кодовую фразу? Необходимо удалить все сохранённые профили и ввести ключи API заново. Кодовую фразу восстановить нельзя.",
+    encryptionForgottenButton: "Удалить все сохранённые профили",
+    forgotConfirmTitle: "Удалить все зашифрованные данные?",
+    forgotConfirmDescription:
+      "Будут безвозвратно удалены все {count} сохранённых профилей серверов и сброшена кодовая фраза. Потребуется заново добавить серверы и ключи API. Это действие нельзя отменить.",
+    profilesClearedNotice: "Все сохранённые профили удалены. Добавьте сервер, чтобы начать заново.",
+    encryptionProfileCorrupted:
+      "Данные этого профиля повреждены (не связано с кодовой фразой). Введите ключ API заново, чтобы восстановить это соединение.",
+    encryptionStorageNote: "Сохранённые ключи API зашифрованы в этом браузере.",
+    encryptionSessionOnlyBadge: "Только сессия",
+    encryptionEncryptedBadge: "Зашифровано",
+    encryptionLockedBadge: "Заблокировано",
+    encryptionCorruptedBadge: "Повреждено",
+    encryptionUnsupportedHint: "Этот браузер не поддерживает постоянное хранилище.",
+    encryptionMultiTabNote: "Каждая вкладка браузера должна разблокироваться отдельно.",
   },
   es: {
     appTitle: "Headscale UI",
@@ -463,17 +612,18 @@ const commonMessagesBase = {
     addProfile: "Añadir",
     addingProfile: "Añadiendo",
     checkingCredentials: "Verificando credenciales",
+    restoringSession: "Reconectando a {name}…",
     close: "Cerrar",
     discardProfileChangesTitle: "¿Cerrar sin añadir este servidor?",
     discardProfileChangesDescription:
       "Los datos del perfil cambiaron. Si cierras ahora, se descartarán los cambios sin guardar.",
     keepEditingProfile: "Seguir editando",
     discardProfileChanges: "Descartar cambios",
-    continueAddProfileTitle: "¿Añadir este servidor de todos modos?",
-    continueAddProfileDescription:
-      "La UI no pudo verificar la URL del servidor o la clave API. Puedes revisar los datos o añadir el perfil y corregirlo después.",
-    reviewProfileConnection: "Revisar datos",
-    continueAddProfile: "Continuar añadiendo",
+    connectionValidationFailedTitle: "¿Añadir este servidor de todos modos?",
+    connectionValidationFailedDescription:
+      "La UI no pudo verificar la URL del servidor o la clave API. Puedes revisar los datos o añadir el perfil y corregirlo después. Puedes editar este perfil desde la lista en cualquier momento.",
+    backToEditConnection: "Revisar datos",
+    saveAnywayButton: "Continuar añadiendo",
     savedProfiles: "Perfiles guardados",
     useProfile: "Usar",
     editProfile: "Editar perfil",
@@ -549,6 +699,44 @@ const commonMessagesBase = {
     serveTitle: "Serve, Funnel y Taildrop",
     serveDescription:
       "Serve y Funnel son funciones del cliente Tailscale; Taildrop es configuración de Headscale.",
+    encryptionSectionTitle: "Cifrado",
+    encryptionEnableLabel: "Usar una frase de contraseña para proteger las claves API guardadas",
+    encryptionEnableHint:
+      "Sin frase de contraseña, las claves guardadas están vinculadas solo a este navegador y no se pueden transferir.",
+    encryptionSetupWarning:
+      "Esta frase de contraseña no se puede recuperar. Si la olvida, deberá borrar todos los perfiles guardados y volver a introducir sus claves API.",
+    encryptionSetupWarningConfirm: "He guardado esta frase de contraseña de forma segura",
+    encryptionSetPassphrase: "Establecer una frase de contraseña",
+    encryptionConfirmPassphrase: "Confirmar frase de contraseña",
+    encryptionChangePassphrase: "Cambiar frase de contraseña",
+    encryptionDisable: "Desactivar frase de contraseña",
+    encryptionDisableConfirm:
+      "Introduzca la frase actual para desactivar. Las claves guardadas volverán al cifrado vinculado al dispositivo.",
+    encryptionUnlockTitle: "Desbloquear perfiles guardados",
+    encryptionUnlockDescription:
+      "Introduzca la frase de contraseña que estableció anteriormente para acceder a sus claves API guardadas.",
+    encryptionUnlockSubmit: "Desbloquear",
+    encryptionEnterPassphrase: "Introducir frase de contraseña",
+    encryptionLocalityNote:
+      "Tus claves API están cifradas en este dispositivo. La frase de contraseña nunca sale de tu navegador.",
+    encryptionUnlockFailed: "Frase de contraseña incorrecta.",
+    encryptionForgotten:
+      "¿Olvidó su frase de contraseña? Debe borrar todos los perfiles guardados y volver a introducir sus claves API. La frase de contraseña no se puede recuperar.",
+    encryptionForgottenButton: "Borrar todos los perfiles guardados",
+    forgotConfirmTitle: "¿Borrar todos los datos cifrados?",
+    forgotConfirmDescription:
+      "Esto eliminará permanentemente los {count} perfiles de servidor guardados y restablecerá tu frase de contraseña. Tendrás que añadir los servidores y las claves API de nuevo. Esta acción no se puede deshacer.",
+    profilesClearedNotice:
+      "Se han borrado todos los perfiles guardados. Añade un servidor para empezar de nuevo.",
+    encryptionProfileCorrupted:
+      "Los datos de este perfil están dañados (no es un problema de frase de contraseña). Vuelva a introducir la clave API para reconstruir esta conexión.",
+    encryptionStorageNote: "Las claves API guardadas están cifradas en este navegador.",
+    encryptionSessionOnlyBadge: "Solo sesión",
+    encryptionEncryptedBadge: "Cifrado",
+    encryptionLockedBadge: "Bloqueado",
+    encryptionCorruptedBadge: "Dañado",
+    encryptionUnsupportedHint: "Este navegador no admite almacenamiento persistente.",
+    encryptionMultiTabNote: "Cada pestaña del navegador requiere su propio desbloqueo.",
   },
   ar: {
     appTitle: "Headscale UI",
@@ -572,17 +760,18 @@ const commonMessagesBase = {
     addProfile: "إضافة",
     addingProfile: "جار الإضافة",
     checkingCredentials: "جار التحقق من بيانات الاعتماد",
+    restoringSession: "إعادة الاتصال بـ {name}…",
     close: "إغلاق",
     discardProfileChangesTitle: "إغلاق دون إضافة هذا الخادم؟",
     discardProfileChangesDescription:
       "تم تغيير تفاصيل الملف. سيؤدي الإغلاق الآن إلى تجاهل التعديلات غير المحفوظة.",
     keepEditingProfile: "متابعة التحرير",
     discardProfileChanges: "تجاهل التغييرات",
-    continueAddProfileTitle: "إضافة هذا الخادم على أي حال؟",
-    continueAddProfileDescription:
-      "تعذر على الواجهة التحقق من عنوان الخادم أو مفتاح API. يمكنك مراجعة التفاصيل أو إضافة الملف وتعديله لاحقا.",
-    reviewProfileConnection: "مراجعة التفاصيل",
-    continueAddProfile: "متابعة الإضافة",
+    connectionValidationFailedTitle: "إضافة هذا الخادم على أي حال؟",
+    connectionValidationFailedDescription:
+      "تعذر على الواجهة التحقق من عنوان الخادم أو مفتاح API. يمكنك مراجعة التفاصيل أو إضافة الملف وتعديله لاحقا. يمكنك تعديل هذا الملف الشخصي من القائمة في أي وقت.",
+    backToEditConnection: "مراجعة التفاصيل",
+    saveAnywayButton: "متابعة الإضافة",
     savedProfiles: "الملفات المحفوظة",
     useProfile: "استخدام",
     editProfile: "تعديل الملف",
@@ -657,6 +846,43 @@ const commonMessagesBase = {
     serveTitle: "Serve و Funnel و Taildrop",
     serveDescription:
       "Serve و Funnel ميزتان في عميل Tailscale؛ Taildrop إعداد في Headscale وليس API إدارة.",
+    encryptionSectionTitle: "التشفير",
+    encryptionEnableLabel: "استخدام عبارة مرور لحماية مفاتيح API المحفوظة",
+    encryptionEnableHint:
+      "بدون عبارة مرور، تكون المفاتيح المحفوظة مرتبطة بهذا المتصفح فقط ولا يمكن نقلها.",
+    encryptionSetupWarning:
+      "لا يمكن استرداد عبارة المرور هذه. إذا نسيتها، يجب مسح جميع الملفات الشخصية المحفوظة وإدخال مفاتيح API من جديد.",
+    encryptionSetupWarningConfirm: "لقد سجلت عبارة المرور هذه بأمان",
+    encryptionSetPassphrase: "تعيين عبارة مرور",
+    encryptionConfirmPassphrase: "تأكيد عبارة المرور",
+    encryptionChangePassphrase: "تغيير عبارة المرور",
+    encryptionDisable: "تعطيل عبارة المرور",
+    encryptionDisableConfirm:
+      "أدخل عبارة المرور الحالية للتعطيل. ستعود المفاتيح المحفوظة إلى التشفير المرتبط بالجهاز.",
+    encryptionUnlockTitle: "فتح قفل الملفات الشخصية المحفوظة",
+    encryptionUnlockDescription:
+      "أدخل عبارة المرور التي عيّنتها سابقاً للوصول إلى مفاتيح API المحفوظة.",
+    encryptionUnlockSubmit: "فتح القفل",
+    encryptionEnterPassphrase: "أدخل عبارة المرور",
+    encryptionLocalityNote:
+      "مفاتيح API الخاصة بك مشفّرة على هذا الجهاز. لا تغادر عبارة المرور المتصفح أبدا.",
+    encryptionUnlockFailed: "عبارة المرور غير صحيحة.",
+    encryptionForgotten:
+      "هل نسيت عبارة المرور؟ يجب مسح جميع الملفات الشخصية المحفوظة وإدخال مفاتيح API من جديد. لا يمكن استرداد عبارة المرور.",
+    encryptionForgottenButton: "مسح جميع الملفات الشخصية المحفوظة",
+    forgotConfirmTitle: "مسح جميع البيانات المشفّرة؟",
+    forgotConfirmDescription:
+      "سيؤدي هذا إلى حذف جميع الملفات الشخصية المحفوظة وعددها {count} نهائيا وإعادة تعيين عبارة المرور. ستحتاج إلى إضافة الخوادم ومفاتيح API من جديد. لا يمكن التراجع عن هذا الإجراء.",
+    profilesClearedNotice: "تم مسح جميع الملفات الشخصية المحفوظة. أضف خادما للبدء من جديد.",
+    encryptionProfileCorrupted:
+      "بيانات هذا الملف الشخصي تالفة (ليست مشكلة عبارة مرور). أدخل مفتاح API من جديد لإعادة بناء هذا الاتصال.",
+    encryptionStorageNote: "مفاتيح API المحفوظة مشفّرة في هذا المتصفح.",
+    encryptionSessionOnlyBadge: "للجلسة فقط",
+    encryptionEncryptedBadge: "مشفّر",
+    encryptionLockedBadge: "مقفل",
+    encryptionCorruptedBadge: "تالف",
+    encryptionUnsupportedHint: "هذا المتصفح لا يدعم التخزين الدائم.",
+    encryptionMultiTabNote: "يتطلّب كل علامة تبويب في المتصفح فتح قفلها بشكل منفصل.",
   },
 } satisfies Record<SourceLocale, Record<MessageKey, string>>;
 

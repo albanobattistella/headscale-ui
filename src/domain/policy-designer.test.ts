@@ -2,17 +2,22 @@ import { describe, expect, test } from "bun:test";
 import {
   addMemberToGroup,
   addOwnerToTag,
+  addRule,
   classifyMember,
   createGroup,
+  createRule,
   createTagOwner,
   emptyState,
   findOrphanReferences,
   findReferencesToValues,
+  joinCommaList,
+  parseCommaList,
   parseMemberList,
   parsePolicy,
   removeMemberFromGroup,
   removeOwnerFromTag,
   removeReferencesToValues,
+  removeRuleById,
   serializePolicy,
   toMemberRef,
   upsertGroup,
@@ -33,6 +38,41 @@ function normalizeForCompare(input: Record<string, unknown>) {
   }
   return clone;
 }
+
+describe("parseCommaList / joinCommaList", () => {
+  test("parseCommaList trims and drops empty entries", () => {
+    expect(parseCommaList("22, 443 ,, 80")).toEqual(["22", "443", "80"]);
+  });
+
+  test("parseCommaList handles single value", () => {
+    expect(parseCommaList("*")).toEqual(["*"]);
+  });
+
+  test("parseCommaList returns [] for empty string", () => {
+    expect(parseCommaList("")).toEqual([]);
+    expect(parseCommaList("   ")).toEqual([]);
+  });
+
+  test("parseCommaList keeps wildcard ports intact", () => {
+    expect(parseCommaList("22, *, 80")).toEqual(["22", "*", "80"]);
+  });
+
+  test("joinCommaList trims and drops empty entries", () => {
+    expect(joinCommaList(["22", " 443", "", "80"])).toBe("22,443,80");
+  });
+
+  test("joinCommaList returns empty string for empty input", () => {
+    expect(joinCommaList([])).toBe("");
+    expect(joinCommaList(["", "  "])).toBe("");
+  });
+
+  test("parseCommaList ↔ joinCommaList round trip", () => {
+    const cases = ["22", "22,443", "alice@example.com,group:ops", "*"];
+    for (const raw of cases) {
+      expect(joinCommaList(parseCommaList(raw))).toBe(raw.replace(/\s/g, ""));
+    }
+  });
+});
 
 describe("classifyMember", () => {
   test("recognizes group prefix", () => {
@@ -300,6 +340,50 @@ describe("mutators", () => {
     const state = emptyState();
     const next = upsertGroup(state, createGroup("  "));
     expect(next.groups).toHaveLength(0);
+  });
+
+  test("upsertTagOwner replaces by tag name", () => {
+    let state = emptyState();
+    state = upsertTagOwner(state, createTagOwner("tag:server", [toMemberRef("group:ops")]));
+    state = upsertTagOwner(state, createTagOwner("tag:server", [toMemberRef("group:dev")]));
+
+    expect(state.tagOwners).toHaveLength(1);
+    expect(state.tagOwners[0]?.owners[0]?.value).toBe("group:dev");
+  });
+
+  test("upsertTagOwner ignores empty tag", () => {
+    const state = emptyState();
+    const next = upsertTagOwner(state, createTagOwner("   "));
+    expect(next.tagOwners).toHaveLength(0);
+  });
+
+  test("addRule appends a rule and removeRuleById removes it", () => {
+    const state = emptyState();
+    const rule = createRule("group:ops", "tag:server", "22");
+    const withRule = addRule(state, rule);
+    expect(withRule.rules.some((r) => r.id === rule.id)).toBe(true);
+
+    const without = removeRuleById(withRule, rule.id);
+    expect(without.rules.some((r) => r.id === rule.id)).toBe(false);
+  });
+
+  test("createRule defaults empty fields to *", () => {
+    const rule = createRule("", "", "");
+    expect(rule.source).toBe("*");
+    expect(rule.destination).toBe("*");
+    expect(rule.ports).toBe("*");
+    expect(rule.action).toBe("accept");
+    expect(rule.id).toBeDefined();
+  });
+
+  test("createGroup and createTagOwner allocate unique ids", () => {
+    const a = createGroup("group:a");
+    const b = createGroup("group:b");
+    expect(a.id).not.toBe(b.id);
+
+    const t1 = createTagOwner("tag:x");
+    const t2 = createTagOwner("tag:y");
+    expect(t1.id).not.toBe(t2.id);
   });
 });
 

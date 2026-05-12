@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import {
+  AlertCircle,
   Check,
+  ClipboardCheck,
+  Copy,
   Github,
+  Info,
   KeyRound,
   Languages,
   LoaderCircle,
+  Lock,
+  LockKeyhole,
   MonitorCog,
   MoonStar,
   Pencil,
@@ -14,7 +20,6 @@ import {
 } from "lucide-vue-next";
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import type { ConnectionSettings } from "@/api/http";
 import HeadscaleLogo from "@/components/HeadscaleLogo.vue";
 import {
   AlertDialog,
@@ -26,6 +31,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -48,22 +54,37 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { useActionFeedback } from "@/composables/useActionFeedback";
+import { useConnectionDialog } from "@/composables/useConnectionDialog";
 import { useDisplayHelpers } from "@/composables/useDisplayHelpers";
+import { useLoginPageShell } from "@/composables/useLoginPageShell";
 import { newProfileId, useProfiles } from "@/composables/useProfiles";
-import { isThemeMode, type ThemeMode, useTheme } from "@/composables/useTheme";
-import { LOCALE_META, type Locale, SUPPORTED_LOCALES, useHeadscaleI18n } from "@/i18n";
-import type { ConnectionProfile } from "@/lib/profile-storage";
+import { useProfileValidationFlow } from "@/composables/useProfileValidationFlow";
+import { useProfileVisuals } from "@/composables/useProfileVisuals";
+import { LOCALE_META, SUPPORTED_LOCALES, useHeadscaleI18n } from "@/i18n";
+import { type ConnectionProfile, profileStorage } from "@/lib/profile-storage";
 
 const apiKeyCommand = "headscale apikeys create --expiration 90d";
+const commandCopied = ref(false);
+async function copyApiKeyCommand() {
+  try {
+    await navigator.clipboard.writeText(apiKeyCommand);
+    commandCopied.value = true;
+    window.setTimeout(() => {
+      commandCopied.value = false;
+    }, 1200);
+  } catch {
+    // ignore — clipboard API may be unavailable (insecure context / older browsers)
+  }
+}
 const headscaleRemoteCliDocsUrl = "https://docs.headscale.org/ref/remote-cli/";
 const githubRepositoryUrl = "https://github.com/MunMunMiao/headscale-ui";
 
-const { t, locale, setLocale } = useHeadscaleI18n();
-const { colorMode, themeModes, setTheme } = useTheme();
+const { t, locale } = useHeadscaleI18n();
 const { lastError } = useActionFeedback();
 const {
   profiles,
   connectionForm,
+  phase,
   isConnecting,
   isRestoringSession,
   authenticatingProfileId,
@@ -74,165 +95,42 @@ const {
   profileValidationError,
   pendingDeleteProfile,
   enterProfile,
-  loadProfile,
-  openConnectionDialog,
-  closeConnectionDialog,
-  addProfile,
-  persistConnection,
-  editProfile,
   deleteProfile,
   confirmDeleteProfile,
 } = useProfiles();
 
+const { colorMode, themeModes, themeLabel, themeModeLabel, chooseLocale, chooseTheme } =
+  useLoginPageShell();
+const { profileVisualState, profileAvatarLabel, profileModeLabel } = useProfileVisuals();
+const {
+  syncConnectionFormBaseline,
+  openConnectionDialogWithBaseline,
+  editProfileWithBaseline,
+  requestConnectionDialogClose,
+  confirmConnectionDialogClose,
+  handleConnectionDialogOpen,
+  handleConnectionCloseConfirmOpen,
+  preventConnectionDialogOutsideClose,
+  handleConnectionDialogEscape,
+} = useConnectionDialog();
+const { reviewProfileConnection, continueAddingProfile, submitAddProfile } =
+  useProfileValidationFlow(syncConnectionFormBaseline);
+
 const route = useRoute();
 const router = useRouter();
 
-const connectionFormBaseline = ref("");
-const restoringProfileId = ref("");
+const isPersistentAvailable = computed(() => profileStorage.isPersistentAvailable());
 
-const themeLabel = computed(() => themeModeLabel(colorMode.value));
+// Derived from the phase-driven authenticatingProfileId so the session-restore
+// loader picks up cold-start restorations (previously a local ref was only
+// written on manual clicks, leaving cold-start without a profile reference).
 const restoringProfile = computed(() => {
-  const profileId = restoringProfileId.value;
+  const profileId = authenticatingProfileId.value;
   return profileId ? profiles.value.find((profile) => profile.id === profileId) : null;
 });
-
-function themeModeLabel(mode: ThemeMode) {
-  if (mode === "dark") {
-    return t("dark");
-  }
-  if (mode === "light") {
-    return t("light");
-  }
-  return t("system");
-}
-
-function profileAvatarLabel(profile: ConnectionProfile) {
-  const source = profile.name || profile.baseUrl;
-  return source.trim().slice(0, 2).toUpperCase() || "HS";
-}
-
-function profileModeLabel(mode: ConnectionSettings["mode"]) {
-  return mode === "mock" ? t("mockMode") : t("realMode");
-}
+const restoringProfileLabel = computed(() => restoringProfile.value?.name ?? t("profile"));
 
 const { formatDate } = useDisplayHelpers();
-
-function changeLocale(nextLocale: string) {
-  if (SUPPORTED_LOCALES.includes(nextLocale as Locale)) {
-    setLocale(nextLocale as Locale);
-  }
-}
-
-function changeTheme(nextTheme: string) {
-  if (isThemeMode(nextTheme)) {
-    setTheme(nextTheme);
-  }
-}
-
-function chooseLocale(option: Locale) {
-  changeLocale(option);
-}
-
-function chooseTheme(mode: ThemeMode) {
-  changeTheme(mode);
-}
-
-function serializeConnectionForm() {
-  return JSON.stringify({
-    apiKey: connectionForm.apiKey,
-    baseUrl: connectionForm.baseUrl,
-    mode: connectionForm.mode,
-    profileId: connectionForm.profileId,
-    profileName: connectionForm.profileName,
-    remember: connectionForm.remember,
-  });
-}
-
-function syncConnectionFormBaseline() {
-  connectionFormBaseline.value = serializeConnectionForm();
-}
-
-function isConnectionFormDirty() {
-  return serializeConnectionForm() !== connectionFormBaseline.value;
-}
-
-function openConnectionDialogWithBaseline(profileId: string) {
-  openConnectionDialog(profileId);
-  syncConnectionFormBaseline();
-}
-
-function editProfileWithBaseline(profile: ConnectionProfile) {
-  editProfile(profile);
-  syncConnectionFormBaseline();
-}
-
-function requestConnectionDialogClose() {
-  if (isConnectionFormDirty()) {
-    connectionCloseConfirmOpen.value = true;
-    return;
-  }
-
-  closeConnectionDialog();
-}
-
-function confirmConnectionDialogClose() {
-  syncConnectionFormBaseline();
-  closeConnectionDialog();
-}
-
-function handleConnectionDialogOpen(open: boolean) {
-  if (open) {
-    connectionDialogOpen.value = true;
-    return;
-  }
-
-  requestConnectionDialogClose();
-}
-
-function handleConnectionCloseConfirmOpen(open: boolean) {
-  connectionCloseConfirmOpen.value = open;
-}
-
-function originalOutsideEventTarget(event: Event) {
-  const originalEvent = (event as CustomEvent<{ originalEvent?: Event }>).detail?.originalEvent;
-  const target = originalEvent?.target ?? event.target;
-  return target instanceof HTMLElement ? target : null;
-}
-
-function preventConnectionDialogOutsideClose(event: Event) {
-  const target = originalOutsideEventTarget(event);
-  if (target?.closest('[data-slot="alert-dialog-content"]')) {
-    return;
-  }
-
-  event.preventDefault();
-}
-
-function handleConnectionDialogEscape(event: Event) {
-  event.preventDefault();
-  requestConnectionDialogClose();
-}
-
-function reviewProfileConnection() {
-  lastError.value = profileValidationError.value;
-  profileValidationDialogOpen.value = false;
-}
-
-function continueAddingProfile() {
-  persistConnection();
-  syncConnectionFormBaseline();
-  profileValidationDialogOpen.value = false;
-  profileValidationError.value = "";
-  lastError.value = "";
-  closeConnectionDialog();
-}
-
-async function submitAddProfile() {
-  await addProfile();
-  if (!profileValidationDialogOpen.value) {
-    syncConnectionFormBaseline();
-  }
-}
 
 function requestDeleteProfile(profile: ConnectionProfile) {
   deleteProfile(profile);
@@ -247,14 +145,17 @@ function handleDeleteProfileDialogOpen(open: boolean) {
 }
 
 async function enterProfileAndRoute(profile: ConnectionProfile) {
-  restoringProfileId.value = profile.id;
+  if (profile.corrupted) {
+    await editProfileWithBaseline(profile);
+    return;
+  }
   const succeeded = await enterProfile(profile);
   if (succeeded) {
     await router.push({ name: "home" });
-  } else {
-    restoringProfileId.value = "";
   }
 }
+
+const profilesWereCleared = computed(() => route.query.cleared === "1");
 
 onMounted(() => {
   // TODO: auto-login via route.query.profile (legacy URL compatibility).
@@ -276,8 +177,14 @@ onMounted(() => {
           <LoaderCircle class="absolute h-16 w-16 animate-spin text-primary" aria-hidden="true" />
         </div>
         <div class="grid gap-1">
-          <p class="font-medium text-foreground">{{ restoringProfile?.name ?? t("profile") }}</p>
-          <p>{{ t("checkingCredentials") }}</p>
+          <p class="font-medium text-foreground">{{ restoringProfileLabel }}</p>
+          <p>
+            {{
+              phase.kind === "restoring"
+                ? t("restoringSession", { name: restoringProfileLabel })
+                : t("checkingCredentials")
+            }}
+          </p>
         </div>
       </div>
     </section>
@@ -290,7 +197,7 @@ onMounted(() => {
             <span class="truncate text-sm font-semibold leading-none sm:text-base">Headscale UI</span>
           </div>
 
-          <div class="ms-auto flex items-center gap-1">
+          <div class="ms-auto flex items-center gap-1 py-1">
             <Button
               as="a"
               :href="githubRepositoryUrl"
@@ -385,6 +292,15 @@ onMounted(() => {
             {{ lastError }}
           </div>
 
+          <div
+            v-if="profilesWereCleared && profiles.length === 0"
+            data-testid="profiles-cleared-notice"
+            role="status"
+            class="mx-auto mt-4 max-w-xl rounded-md border bg-muted/40 px-3 py-2 text-start text-sm text-muted-foreground"
+          >
+            {{ t("profilesClearedNotice") }}
+          </div>
+
           <div class="mx-auto mt-6 grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-testid="profile-picker">
             <div
               v-for="profile in profiles"
@@ -403,16 +319,37 @@ onMounted(() => {
               >
                 <span
                   class="relative flex h-16 w-16 items-center justify-center rounded-full border bg-background text-lg font-semibold transition-colors"
-                  :class="authenticatingProfileId === profile.id ? 'border-primary/50 bg-primary/10 text-primary' : ''"
+                  :class="[
+                    authenticatingProfileId === profile.id ? 'border-primary/50 bg-primary/10 text-primary' : '',
+                    profileVisualState(profile) === 'corrupted' ? 'border-destructive/50' : '',
+                  ]"
                 >
                   <LoaderCircle
                     v-if="authenticatingProfileId === profile.id"
-                    class="absolute h-14 w-14 animate-spin"
+                    class="absolute h-[72px] w-[72px] animate-spin"
                     aria-hidden="true"
                     :data-testid="`profile-loading-${profile.name}`"
                   />
                   <span :class="authenticatingProfileId === profile.id ? 'opacity-35' : ''">
                     {{ profileAvatarLabel(profile) }}
+                  </span>
+                  <span
+                    v-if="profileVisualState(profile) === 'password'"
+                    class="absolute -bottom-1 -end-1 flex h-5 w-5 items-center justify-center rounded-full border bg-background text-muted-foreground"
+                  >
+                    <Lock class="h-3 w-3" aria-hidden="true" />
+                  </span>
+                  <span
+                    v-else-if="profileVisualState(profile) === 'locked'"
+                    class="absolute -bottom-1 -end-1 flex h-5 w-5 items-center justify-center rounded-full border bg-background text-primary"
+                  >
+                    <LockKeyhole class="h-3 w-3" aria-hidden="true" />
+                  </span>
+                  <span
+                    v-else-if="profileVisualState(profile) === 'corrupted'"
+                    class="absolute -bottom-1 -end-1 flex h-5 w-5 items-center justify-center rounded-full border bg-background text-destructive"
+                  >
+                    <AlertCircle class="h-3 w-3" aria-hidden="true" />
                   </span>
                 </span>
                 <span class="grid w-full min-w-0 gap-1">
@@ -423,6 +360,40 @@ onMounted(() => {
                   </span>
                   <span v-else class="text-xs text-muted-foreground">
                     {{ profileModeLabel(profile.mode) }} · {{ t("updatedProfile") }} {{ formatDate(profile.updatedAt) }}
+                  </span>
+                  <span
+                    v-if="profileVisualState(profile) !== 'device'"
+                    class="flex justify-center"
+                  >
+                    <Badge
+                      v-if="profileVisualState(profile) === 'corrupted'"
+                      variant="destructive"
+                      :data-testid="`profile-badge-corrupted-${profile.name}`"
+                    >
+                      {{ t("encryptionCorruptedBadge") }}
+                    </Badge>
+                    <Badge
+                      v-else-if="profileVisualState(profile) === 'locked'"
+                      variant="default"
+                      :data-testid="`profile-badge-locked-${profile.name}`"
+                    >
+                      {{ t("encryptionLockedBadge") }}
+                    </Badge>
+                    <Badge
+                      v-else-if="profileVisualState(profile) === 'password'"
+                      variant="secondary"
+                      :data-testid="`profile-badge-encrypted-${profile.name}`"
+                    >
+                      {{ t("encryptionEncryptedBadge") }}
+                    </Badge>
+                    <Badge
+                      v-else-if="profileVisualState(profile) === 'session'"
+                      variant="outline"
+                      class="border-amber-400/50 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                      :data-testid="`profile-badge-session-${profile.name}`"
+                    >
+                      {{ t("encryptionSessionOnlyBadge") }}
+                    </Badge>
                   </span>
                 </span>
               </Button>
@@ -530,11 +501,34 @@ onMounted(() => {
               </div>
 
               <div class="flex min-h-11 items-center gap-2 rounded-md border px-3 py-2 text-sm md:col-span-2">
-                <Checkbox id="connect-remember" v-model="connectionForm.remember" data-testid="connect-remember" />
-                <Label for="connect-remember">{{ t("rememberConnection") }}</Label>
+                <Checkbox
+                  id="connect-remember"
+                  v-model="connectionForm.remember"
+                  data-testid="connect-remember"
+                  :disabled="!isPersistentAvailable"
+                />
+                <Label for="connect-remember" class="flex items-center gap-1.5">
+                  {{ t("rememberConnection") }}
+                  <Info
+                    class="h-3.5 w-3.5 text-muted-foreground"
+                    aria-hidden="true"
+                    :title="t('encryptionStorageNote')"
+                  />
+                </Label>
+                <span
+                  v-if="!isPersistentAvailable"
+                  class="ms-auto text-xs text-muted-foreground"
+                  data-testid="connect-remember-unsupported"
+                >
+                  {{ t("encryptionUnsupportedHint") }}
+                </span>
               </div>
 
-              <details class="group min-w-0 rounded-md border bg-muted/35 p-3 text-sm md:col-span-2" data-testid="api-key-guide">
+              <details
+                open
+                class="group min-w-0 rounded-md border bg-muted/35 p-3 text-sm dark:bg-muted/60 md:col-span-2"
+                data-testid="api-key-guide"
+              >
                 <summary class="flex cursor-pointer list-none items-start gap-2 [&::-webkit-details-marker]:hidden">
                   <KeyRound class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                   <div class="min-w-0">
@@ -542,9 +536,24 @@ onMounted(() => {
                     <p class="mt-1 text-muted-foreground">{{ t("apiKeyGuideDescription") }}</p>
                   </div>
                 </summary>
-                <div class="mt-3 rounded-md border bg-background p-3">
-                  <p class="text-xs font-medium text-muted-foreground">{{ t("apiKeyGuideCommandLabel") }}</p>
-                  <code class="mt-2 block break-all font-mono text-xs text-foreground">{{ apiKeyCommand }}</code>
+                <div class="mt-3 overflow-hidden rounded-md border bg-background p-3">
+                  <div class="flex items-center justify-between gap-2">
+                    <p class="text-xs font-medium text-muted-foreground">{{ t("apiKeyGuideCommandLabel") }}</p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      class="h-7 gap-1 px-2 text-xs"
+                      data-testid="api-key-command-copy"
+                      :aria-label="t('copy')"
+                      @click="copyApiKeyCommand"
+                    >
+                      <ClipboardCheck v-if="commandCopied" class="h-3.5 w-3.5" aria-hidden="true" />
+                      <Copy v-else class="h-3.5 w-3.5" aria-hidden="true" />
+                      {{ commandCopied ? t("copied") : t("copy") }}
+                    </Button>
+                  </div>
+                  <code class="mt-2 block overflow-x-auto whitespace-nowrap font-mono text-xs text-foreground">{{ apiKeyCommand }}</code>
                 </div>
                 <ol class="mt-3 grid gap-1 ps-5 text-xs text-muted-foreground">
                   <li>{{ t("apiKeyGuideStepServer") }}</li>
@@ -602,7 +611,11 @@ onMounted(() => {
             <AlertDialogCancel data-testid="keep-editing-profile">
               {{ t("keepEditingProfile") }}
             </AlertDialogCancel>
-            <AlertDialogAction data-testid="discard-profile-changes" @click="confirmConnectionDialogClose">
+            <AlertDialogAction
+              class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="discard-profile-changes"
+              @click="confirmConnectionDialogClose"
+            >
               {{ t("discardProfileChanges") }}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -612,9 +625,9 @@ onMounted(() => {
       <AlertDialog v-model:open="profileValidationDialogOpen">
         <AlertDialogContent data-testid="profile-validation-dialog">
           <AlertDialogHeader>
-            <AlertDialogTitle>{{ t("continueAddProfileTitle") }}</AlertDialogTitle>
+            <AlertDialogTitle>{{ t("connectionValidationFailedTitle") }}</AlertDialogTitle>
             <AlertDialogDescription>
-              {{ t("continueAddProfileDescription") }}
+              {{ t("connectionValidationFailedDescription") }}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <p
@@ -625,11 +638,19 @@ onMounted(() => {
             {{ profileValidationError }}
           </p>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="review-profile-connection" @click="reviewProfileConnection">
-              {{ t("reviewProfileConnection") }}
+            <AlertDialogCancel
+              class="bg-primary text-primary-foreground hover:bg-primary/90"
+              data-testid="review-profile-connection"
+              @click="reviewProfileConnection"
+            >
+              {{ t("backToEditConnection") }}
             </AlertDialogCancel>
-            <AlertDialogAction data-testid="continue-add-profile" @click="continueAddingProfile">
-              {{ t("continueAddProfile") }}
+            <AlertDialogAction
+              class="border border-input bg-background text-foreground shadow-xs hover:bg-accent hover:text-accent-foreground"
+              data-testid="continue-add-profile"
+              @click="continueAddingProfile"
+            >
+              {{ t("saveAnywayButton") }}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -648,7 +669,11 @@ onMounted(() => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel data-testid="cancel-delete-profile">{{ t("cancel") }}</AlertDialogCancel>
-            <AlertDialogAction data-testid="confirm-delete-profile" @click="confirmDeleteProfile">
+            <AlertDialogAction
+              class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="confirm-delete-profile"
+              @click="confirmDeleteProfile"
+            >
               {{ t("deleteProfile") }}
             </AlertDialogAction>
           </AlertDialogFooter>

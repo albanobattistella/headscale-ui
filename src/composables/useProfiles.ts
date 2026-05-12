@@ -2,6 +2,7 @@ import { type ComputedRef, computed, type Ref, reactive, ref } from "vue";
 import type { ConnectionSettings } from "@/api/http";
 import type { HeadscaleSnapshot } from "@/api/types";
 import { useHeadscaleI18n } from "@/i18n";
+import { isEncryptedApiKey } from "@/lib/api-key-crypto";
 import {
   type ConnectionProfile,
   type ProfileStorageScope,
@@ -9,11 +10,21 @@ import {
 } from "@/lib/profile-storage";
 import { useActionFeedback } from "./useActionFeedback";
 import { useHeadscaleClient } from "./useHeadscaleClient";
+import { useMasterPassword } from "./useMasterPassword";
 import { fetchSnapshot } from "./useSnapshot";
 
 export const newProfileId = "__new__";
 export const localMockBaseUrl = "http://127.0.0.1:8080";
 const profileLoginMinimumMs = 300;
+
+// Explicit state machine for the login lifecycle. Replaces three coupled refs
+// (isConnecting/isRestoringSession/authenticatingProfileId) whose Cartesian
+// product contained semantically ambiguous combinations.
+export type LoginPhase =
+  | { kind: "idle" }
+  | { kind: "restoring"; profileId: string }
+  | { kind: "authenticating"; profileId: string }
+  | { kind: "adding" };
 
 type ConnectionForm = ConnectionSettings & {
   profileId: string;
@@ -27,9 +38,10 @@ type LogoutHook = () => void;
 interface UseProfilesReturn {
   profiles: Ref<ConnectionProfile[]>;
   connectionForm: ConnectionForm;
-  isConnecting: Ref<boolean>;
+  phase: Ref<LoginPhase>;
+  isConnecting: ComputedRef<boolean>;
   isRestoringSession: Ref<boolean>;
-  authenticatingProfileId: Ref<string | null>;
+  authenticatingProfileId: ComputedRef<string | null>;
   selectedProfile: ComputedRef<ConnectionProfile | undefined>;
   currentProfileLabel: ComputedRef<string>;
   connectionDialogOpen: Ref<boolean>;
@@ -37,15 +49,15 @@ interface UseProfilesReturn {
   profileValidationDialogOpen: Ref<boolean>;
   profileValidationError: Ref<string>;
   pendingDeleteProfile: Ref<ConnectionProfile | null>;
-  loadProfile(profileId: string): void;
-  openConnectionDialog(profileId: string): void;
+  loadProfile(profileId: string): Promise<void>;
+  openConnectionDialog(profileId: string): Promise<void>;
   closeConnectionDialog(): void;
   addProfile(): Promise<void>;
-  persistConnection(): string;
-  editProfile(profile: ConnectionProfile): void;
+  persistConnection(): Promise<string>;
+  editProfile(profile: ConnectionProfile): Promise<void>;
   deleteProfile(profile: ConnectionProfile): void;
   confirmDeleteProfile(): void;
-  enterProfile(profile: ConnectionProfile): Promise<boolean>;
+  enterProfile(profile: ConnectionProfile, mode?: "authenticating" | "restoring"): Promise<boolean>;
   logout(): void;
   setOnAuthenticated(hook: AuthenticatedHook | null): void;
   setOnLogout(hook: LogoutHook | null): void;
@@ -86,31 +98,47 @@ function defaultConnectionForm(): ConnectionForm {
   };
 }
 
-function profileToForm(profile: ConnectionProfile): ConnectionForm {
+async function profileToForm(profile: ConnectionProfile): Promise<ConnectionForm> {
+  const mp = useMasterPassword();
+  let apiKey = "";
+  try {
+    apiKey = await mp.decryptApiKey(profile.apiKey);
+  } catch (err) {
+    console.error("[headscale-ui] failed to decrypt profile, marking corrupted", err);
+    profileStorage.markCorrupted(profile.id);
+  }
   return {
     profileId: profile.id,
     profileName: profile.name,
     mode: profile.mode,
     baseUrl: profile.baseUrl,
-    apiKey: profile.apiKey,
+    apiKey,
     remember: profileStorage.getProfileScope(profile.id) !== "session",
   };
 }
 
 function normalizeProfile(profile: Partial<ConnectionProfile>): ConnectionProfile | null {
-  if (!profile.baseUrl || !profile.apiKey || (profile.mode !== "mock" && profile.mode !== "real")) {
+  if (
+    !profile.id ||
+    !profile.baseUrl ||
+    !isEncryptedApiKey(profile.apiKey) ||
+    (profile.mode !== "mock" && profile.mode !== "real")
+  ) {
     return null;
   }
 
   const baseUrl = profile.baseUrl.trim();
 
   return {
-    id: profile.id || createProfileId(),
+    id: profile.id,
     name: profile.name || baseUrl,
     mode: resolveConnectionMode(profile.mode, baseUrl),
     baseUrl,
     apiKey: profile.apiKey,
     updatedAt: profile.updatedAt || new Date().toISOString(),
+    scope: profile.scope ?? "persistent",
+    ...(profile.ownerTabId ? { ownerTabId: profile.ownerTabId } : {}),
+    ...(profile.corrupted ? { corrupted: true as const } : {}),
   };
 }
 
@@ -121,30 +149,7 @@ function normalizeProfiles(profileRecords: Partial<ConnectionProfile>[]) {
 }
 
 function loadConnectionProfiles(): ConnectionProfile[] {
-  const savedProfiles = normalizeProfiles(profileStorage.loadProfiles());
-  if (savedProfiles.length > 0) {
-    return savedProfiles;
-  }
-
-  const legacyConnection = profileStorage.consumeLegacyConnection();
-  if (!legacyConnection) {
-    return [];
-  }
-
-  try {
-    const migrated = normalizeProfile({
-      ...(JSON.parse(legacyConnection) as Partial<ConnectionProfile>),
-      name: "Default",
-    });
-    if (!migrated) {
-      return [];
-    }
-    profileStorage.saveProfile(migrated, "persistent");
-    profileStorage.setActiveProfile(migrated.id, "persistent");
-    return [migrated];
-  } catch {
-    return [];
-  }
+  return normalizeProfiles(profileStorage.loadProfiles());
 }
 
 export function useProfiles(): UseProfilesReturn {
@@ -153,6 +158,7 @@ export function useProfiles(): UseProfilesReturn {
   const { settings, createClient, setSettings } = useHeadscaleClient();
   const { lastError } = useActionFeedback();
   const { t } = useHeadscaleI18n();
+  const masterPassword = useMasterPassword();
 
   const profiles = ref<ConnectionProfile[]>(loadConnectionProfiles());
   const connectionForm = reactive<ConnectionForm>(defaultConnectionForm());
@@ -163,9 +169,20 @@ export function useProfiles(): UseProfilesReturn {
     apiKey: connectionForm.apiKey,
   });
 
-  const isConnecting = ref(false);
+  // Phase is the single source of truth for "what's happening in the login flow."
+  // generation guards against concurrent authorize calls: when the user switches
+  // profiles or logs out mid-flight, the stale promise must not write back state.
+  const phase = ref<LoginPhase>({ kind: "idle" });
+  let generation = 0;
+  const isConnecting = computed(() => phase.value.kind !== "idle");
+  const authenticatingProfileId = computed(() => {
+    const p = phase.value;
+    return p.kind === "authenticating" || p.kind === "restoring" ? p.profileId : null;
+  });
+  // isRestoringSession stays a writable ref because useSessionRestore owns its
+  // lifecycle externally (set true at the start of restoration, false once the
+  // first navigation/cold-start decision settles).
   const isRestoringSession = ref(true);
-  const authenticatingProfileId = ref<string | null>(null);
   const connectionDialogOpen = ref(false);
   const connectionCloseConfirmOpen = ref(false);
   const profileValidationDialogOpen = ref(false);
@@ -197,7 +214,7 @@ export function useProfiles(): UseProfilesReturn {
     };
   }
 
-  function loadProfile(profileId: string) {
+  async function loadProfile(profileId: string) {
     connectionForm.profileId = profileId;
 
     if (profileId === newProfileId) {
@@ -210,12 +227,12 @@ export function useProfiles(): UseProfilesReturn {
       return;
     }
 
-    Object.assign(connectionForm, profileToForm(profile));
+    Object.assign(connectionForm, await profileToForm(profile));
   }
 
-  function openConnectionDialog(profileId: string) {
+  async function openConnectionDialog(profileId: string) {
     lastError.value = "";
-    loadProfile(profileId);
+    await loadProfile(profileId);
     connectionDialogOpen.value = true;
   }
 
@@ -227,20 +244,25 @@ export function useProfiles(): UseProfilesReturn {
     profileValidationError.value = "";
   }
 
-  function persistConnection(): string {
+  async function persistConnection(): Promise<string> {
     const baseUrl = connectionForm.baseUrl.trim();
     const name = connectionForm.profileName.trim() || baseUrl;
     const existingProfile =
       connectionForm.profileId === newProfileId
         ? null
         : profiles.value.find((profile) => profile.id === connectionForm.profileId);
+
+    const apiKeySecret = await masterPassword.encryptApiKey(connectionForm.apiKey.trim());
+    const scope = profileScopeFromForm();
+
     const profile: ConnectionProfile = {
       id: existingProfile?.id ?? createProfileId(),
       name,
       mode: resolveConnectionMode(connectionForm.mode, baseUrl),
       baseUrl,
-      apiKey: connectionForm.apiKey.trim(),
+      apiKey: apiKeySecret,
       updatedAt: new Date().toISOString(),
+      scope,
     };
 
     profiles.value = existingProfile
@@ -249,33 +271,39 @@ export function useProfiles(): UseProfilesReturn {
     connectionForm.profileId = profile.id;
     connectionForm.profileName = profile.name;
     connectionForm.mode = profile.mode;
-    const scope = profileScopeFromForm();
     profileStorage.saveProfile(profile, scope);
     reloadProfiles();
+    // Persist is always followed by closing the connection dialog — owning the
+    // close here keeps both success paths (addProfile + force-save after
+    // validation failure) symmetric.
+    closeConnectionDialog();
 
     return profile.id;
   }
 
   async function addProfile() {
     const nextSettings = formConnectionSettings();
-    isConnecting.value = true;
+    const myGen = ++generation;
+    phase.value = { kind: "adding" };
     lastError.value = "";
     connectionForm.mode = nextSettings.mode;
 
     try {
       await fetchSnapshot(createClient(nextSettings));
-      persistConnection();
-      closeConnectionDialog();
+      if (myGen !== generation) return;
+      await persistConnection();
     } catch (error) {
+      // Surface the failure locally regardless of generation — the validation
+      // dialog is per-attempt and writing it back never overrides committed state.
       profileValidationError.value = error instanceof Error ? error.message : String(error);
       profileValidationDialogOpen.value = true;
     } finally {
-      isConnecting.value = false;
+      if (myGen === generation) phase.value = { kind: "idle" };
     }
   }
 
-  function editProfile(profile: ConnectionProfile) {
-    openConnectionDialog(profile.id);
+  async function editProfile(profile: ConnectionProfile) {
+    await openConnectionDialog(profile.id);
   }
 
   function deleteProfile(profile: ConnectionProfile) {
@@ -294,26 +322,45 @@ export function useProfiles(): UseProfilesReturn {
     reloadProfiles();
 
     if (connectionForm.profileId === profileId) {
-      loadProfile(profiles.value[0]?.id ?? newProfileId);
+      void loadProfile(profiles.value[0]?.id ?? newProfileId);
     }
   }
 
-  async function authorizeProfile(profile: ConnectionProfile): Promise<boolean> {
-    Object.assign(connectionForm, profileToForm(profile));
+  async function authorizeProfile(
+    profile: ConnectionProfile,
+    mode: "authenticating" | "restoring",
+  ): Promise<boolean> {
+    Object.assign(connectionForm, await profileToForm(profile));
+    if (profile.corrupted) {
+      lastError.value = t("encryptionProfileCorrupted");
+      return false;
+    }
+    let plainApiKey = "";
+    try {
+      plainApiKey = await masterPassword.decryptApiKey(profile.apiKey);
+    } catch (err) {
+      console.error("[headscale-ui] decrypt failed during authorize; marking corrupted", err);
+      profileStorage.markCorrupted(profile.id);
+      reloadProfiles();
+      lastError.value = t("encryptionProfileCorrupted");
+      return false;
+    }
+
     const startedAt = performance.now();
     const nextSettings: ConnectionSettings = {
       mode: profile.mode,
       baseUrl: profile.baseUrl,
-      apiKey: profile.apiKey,
+      apiKey: plainApiKey,
     };
 
-    isConnecting.value = true;
-    authenticatingProfileId.value = profile.id;
+    const myGen = ++generation;
+    phase.value = { kind: mode, profileId: profile.id };
     lastError.value = "";
 
     let succeeded = false;
     try {
       const nextSnapshot = await fetchSnapshot(createClient(nextSettings));
+      if (myGen !== generation) return false;
       setSettings(nextSettings);
       onAuthenticated?.(nextSnapshot);
       profileStorage.setActiveProfile(
@@ -322,25 +369,33 @@ export function useProfiles(): UseProfilesReturn {
       );
       succeeded = true;
     } catch (error) {
+      // Always surface the local error; clearActiveProfile is guarded so a
+      // superseded flow doesn't clobber state owned by the newer flow.
       lastError.value = error instanceof Error ? error.message : String(error);
-      profileStorage.clearActiveProfile();
+      if (myGen === generation) profileStorage.clearActiveProfile();
     } finally {
       const remainingMs = profileLoginMinimumMs - (performance.now() - startedAt);
       if (remainingMs > 0) {
         await new Promise((resolve) => window.setTimeout(resolve, remainingMs));
       }
-      isConnecting.value = false;
-      authenticatingProfileId.value = null;
+      if (myGen === generation) phase.value = { kind: "idle" };
     }
     return succeeded;
   }
 
-  async function enterProfile(profile: ConnectionProfile): Promise<boolean> {
+  async function enterProfile(
+    profile: ConnectionProfile,
+    mode: "authenticating" | "restoring" = "authenticating",
+  ): Promise<boolean> {
     connectionDialogOpen.value = false;
-    return await authorizeProfile(profile);
+    return await authorizeProfile(profile, mode);
   }
 
   function logout() {
+    // Bump generation so any in-flight authorize promise cannot resurrect the
+    // active-profile state after we've cleared it.
+    ++generation;
+    phase.value = { kind: "idle" };
     profileStorage.clearActiveProfile();
     connectionDialogOpen.value = false;
     lastError.value = "";
@@ -359,6 +414,7 @@ export function useProfiles(): UseProfilesReturn {
   instance = {
     profiles,
     connectionForm,
+    phase,
     isConnecting,
     isRestoringSession,
     authenticatingProfileId,

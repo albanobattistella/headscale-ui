@@ -4,7 +4,12 @@ import { render } from "vitest-browser-vue";
 import { createRouter, createWebHistory } from "vue-router";
 import App from "@/App.vue";
 import { resetAllSingletons } from "@/composables/__testing";
+import { useHeadscaleClient } from "@/composables/useHeadscaleClient";
+import { masterPasswordTestingHandle, useMasterPassword } from "@/composables/useMasterPassword";
+import { useSnapshot } from "@/composables/useSnapshot";
 import { i18n } from "@/i18n";
+import { __resetForTest as resetIdbCache } from "@/lib/idb";
+import { hydrate, profileStorage, profileStorageTestingHandle } from "@/lib/profile-storage";
 import { installAuthGuard, routes } from "@/router";
 import "@/styles/globals.css";
 
@@ -14,8 +19,39 @@ type StoredProfile = {
   baseUrl: string;
 };
 
-function storedProfiles() {
-  return JSON.parse(localStorage.getItem("headscale-ui-profiles") ?? "[]") as StoredProfile[];
+function storedProfiles(): StoredProfile[] {
+  return profileStorage.loadProfiles().map((p) => ({
+    id: p.id,
+    name: p.name,
+    baseUrl: p.baseUrl,
+  }));
+}
+
+/**
+ * Mirrors the legacy `storedProfilesString()` assertion shape so existing
+ * `.toContain("Office")` checks keep working after the IDB migration. Returns a JSON-serialised
+ * blob of profile names + baseUrls drawn from the live profileStorage cache, plus a sentinel
+ * for the "no profiles saved" case.
+ */
+function storedProfilesString(): string | null {
+  const profiles = profileStorage.loadProfiles();
+  if (profiles.length === 0) return null;
+  return JSON.stringify(
+    profiles.map((p) => ({ id: p.id, name: p.name, baseUrl: p.baseUrl, scope: p.scope })),
+  );
+}
+
+function storedActiveProfileId(): string | null {
+  return profileStorage.readActiveProfile();
+}
+
+async function clearHeadscaleDb(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const req = indexedDB.deleteDatabase("headscale-ui");
+    req.onsuccess = () => resolve();
+    req.onerror = () => resolve();
+    req.onblocked = () => resolve();
+  });
 }
 
 beforeEach(async () => {
@@ -23,6 +59,11 @@ beforeEach(async () => {
   document.body.innerHTML = "";
   localStorage.clear();
   sessionStorage.clear();
+  // Order matters: drop the live db connection first or deleteDatabase blocks.
+  resetIdbCache();
+  profileStorageTestingHandle.reset();
+  masterPasswordTestingHandle.reset();
+  await clearHeadscaleDb();
   i18n.global.locale.value = "en";
   document.documentElement.lang = "en";
   document.documentElement.dir = "ltr";
@@ -31,6 +72,11 @@ beforeEach(async () => {
 });
 
 async function renderLogin(path = "/") {
+  const mp = useMasterPassword();
+  await mp.initialize();
+  await hydrate({
+    encryptLegacy: (plain) => mp.encryptWithDeviceKey(plain),
+  });
   window.history.pushState({}, "", path);
   const testRouter = createRouter({
     history: createWebHistory(),
@@ -524,12 +570,6 @@ function expectRecentDeviceStatusColors() {
   expect(recentExpired?.className).toContain("rose");
 }
 
-function countTableRowsByTestIdPrefix(prefix: string) {
-  return Array.from(document.querySelectorAll<HTMLElement>(`[data-testid^="${prefix}"]`)).filter(
-    (element) => element.tagName === "TR",
-  ).length;
-}
-
 function operationCount(id: string) {
   return window.__headscaleUiOperationCalls?.filter((call) => call.id === id).length ?? 0;
 }
@@ -543,11 +583,6 @@ function lastElementByTestIdPrefix(prefix: string) {
 
 function clickLastByTestIdPrefix(prefix: string) {
   lastElementByTestIdPrefix(prefix).click();
-}
-
-function expectLastPolicyRemovalDestructive(prefix: string) {
-  const button = lastElementByTestIdPrefix(prefix);
-  expect(button.className).toContain("bg-destructive");
 }
 
 async function expectPolicyRemovalDialog() {
@@ -578,12 +613,14 @@ function latestSavedPolicy() {
 }
 
 function expectNoRawPolicyEditor() {
-  const editor = document.querySelector<HTMLElement>('[data-testid="policy-editor"]');
-  expect(editor).toBeTruthy();
-  expect(editor?.querySelector("textarea")).toBeNull();
-  expect(editor?.querySelector('[contenteditable="true"]')).toBeNull();
-  expect(editor?.querySelector("pre, code")).toBeNull();
-  expect(editor?.querySelector(".cm-editor, .monaco-editor")).toBeNull();
+  const labels = document.querySelector<HTMLElement>('[data-testid="device-labels-section"]');
+  const teams = document.querySelector<HTMLElement>('[data-testid="teams-section"]');
+  expect(labels ?? teams).toBeTruthy();
+  for (const root of [labels, teams]) {
+    expect(root?.querySelector("textarea")).toBeNull();
+    expect(root?.querySelector('[contenteditable="true"]')).toBeNull();
+    expect(root?.querySelector(".cm-editor, .monaco-editor")).toBeNull();
+  }
 }
 
 function clickDomTestId(testId: string) {
@@ -743,7 +780,7 @@ test("manages multiple saved connection profiles and supports logout", async () 
   await page.getByTestId("connect-remember").click();
   await page.getByTestId("connect-remember").click();
   await page.getByTestId("connect-submit").click();
-  expect(localStorage.getItem("headscale-ui-profiles")).toContain("Office");
+  expect(storedProfilesString()).toContain("Office");
   const officeProfile = storedProfiles().find((profile) => profile.name === "Office");
   expect(officeProfile?.id).toMatch(
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
@@ -754,8 +791,8 @@ test("manages multiple saved connection profiles and supports logout", async () 
   await expect.element(page.getByTestId("connect-profile-name")).toHaveValue("Office");
   await page.getByTestId("connect-profile-name").fill("HQ");
   await page.getByTestId("connect-submit").click();
-  expect(localStorage.getItem("headscale-ui-profiles")).toContain("HQ");
-  expect(localStorage.getItem("headscale-ui-profiles")).not.toContain("Office");
+  expect(storedProfilesString()).toContain("HQ");
+  expect(storedProfilesString()).not.toContain("Office");
   const hqProfile = storedProfiles().find((profile) => profile.name === "HQ");
   expect(hqProfile).toBeTruthy();
   await expect.element(page.getByTestId("profile-row-HQ")).toBeVisible();
@@ -765,8 +802,8 @@ test("manages multiple saved connection profiles and supports logout", async () 
   await page.getByTestId("connect-profile-name").fill("Lab");
   await page.getByTestId("connect-api-key").fill("lab-api-key");
   await page.getByTestId("connect-submit").click();
-  expect(localStorage.getItem("headscale-ui-profiles")).toContain("HQ");
-  expect(localStorage.getItem("headscale-ui-profiles")).toContain("Lab");
+  expect(storedProfilesString()).toContain("HQ");
+  expect(storedProfilesString()).toContain("Lab");
   const labProfile = storedProfiles().find((profile) => profile.name === "Lab");
   expect(labProfile).toBeTruthy();
 
@@ -793,7 +830,7 @@ test("manages multiple saved connection profiles and supports logout", async () 
 
   expect(document.querySelector("#server-url")).toBeNull();
   expect(document.querySelector("#api-key")).toBeNull();
-  expect(localStorage.getItem("headscale-ui-active-profile")).toBeTruthy();
+  expect(storedActiveProfileId()).toBeTruthy();
 
   await page.getByTestId("profile-menu-trigger").click();
   await openProfileMenu();
@@ -803,19 +840,19 @@ test("manages multiple saved connection profiles and supports logout", async () 
   await new Promise((resolve) => window.setTimeout(resolve, 5200));
   expect(window.__headscaleUiOperationCalls).toEqual([]);
   expect(window.location.pathname).toBe("/login");
-  expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
-  expect(localStorage.getItem("headscale-ui-profiles")).toContain("HQ");
+  expect(storedActiveProfileId()).toBeNull();
+  expect(storedProfilesString()).toContain("HQ");
 
   await page.getByTestId("delete-profile-HQ").click();
   await expect.element(page.getByTestId("delete-profile-dialog")).toBeVisible();
   await expect.element(page.getByTestId("delete-profile-dialog")).toHaveTextContent("HQ");
   await page.getByTestId("cancel-delete-profile").click();
-  expect(localStorage.getItem("headscale-ui-profiles")).toContain("HQ");
+  expect(storedProfilesString()).toContain("HQ");
   await confirmDeleteProfile("HQ");
-  expect(localStorage.getItem("headscale-ui-profiles")).not.toContain("HQ");
-  expect(localStorage.getItem("headscale-ui-profiles")).toContain("Lab");
+  expect(storedProfilesString()).not.toContain("HQ");
+  expect(storedProfilesString()).toContain("Lab");
   await confirmDeleteProfile("Lab");
-  expect(localStorage.getItem("headscale-ui-profiles")).toBeNull();
+  expect(storedProfilesString()).toBeNull();
 });
 
 test("does not flash the login form while restoring a profile route", async () => {
@@ -855,7 +892,7 @@ test("redirects unknown profile routes back to login", async () => {
   await expect.element(page.getByTestId("profile-picker")).toBeVisible();
   await expect.poll(() => window.location.pathname).toBe("/login");
   expect(document.querySelector('[data-testid="section-devices"]')).toBeNull();
-  expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
+  expect(storedActiveProfileId()).toBeNull();
 });
 
 test("validates saved profile credentials before restoring a route", async () => {
@@ -876,7 +913,7 @@ test("validates saved profile credentials before restoring a route", async () =>
   await expect.poll(() => window.location.pathname).toBe("/login");
   await expect.element(page.getByTestId("login-error")).toBeVisible();
   expect(document.querySelector('[data-testid="section-devices"]')).toBeNull();
-  expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
+  expect(storedActiveProfileId()).toBeNull();
 });
 
 test("normalizes stale mock profiles with remote URLs into real profiles", async () => {
@@ -920,14 +957,14 @@ test("asks before saving an unreachable profile and validates it before login", 
   await expect.element(page.getByTestId("connect-form")).toBeVisible();
   await expect.element(page.getByTestId("connect-error")).toBeVisible();
   expect(document.querySelector('[data-testid="section-home"]')).toBeNull();
-  expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
+  expect(storedActiveProfileId()).toBeNull();
 
   await page.getByTestId("connect-submit").click();
   await expect.element(page.getByTestId("profile-validation-dialog")).toBeVisible();
   await page.getByTestId("continue-add-profile").click();
   await expect.element(page.getByTestId("profile-row-Offline")).toBeVisible();
-  expect(localStorage.getItem("headscale-ui-profiles")).toContain("Offline");
-  expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
+  expect(storedProfilesString()).toContain("Offline");
+  expect(storedActiveProfileId()).toBeNull();
 
   clickDomTestId("profile-option-Offline");
   await expect.element(page.getByTestId("profile-loading-Offline")).toBeVisible();
@@ -945,9 +982,13 @@ test("stores non-remembered profiles in session storage", async () => {
   await page.getByTestId("connect-remember").click();
   await page.getByTestId("connect-submit").click();
 
-  expect(localStorage.getItem("headscale-ui-profiles")).toBeNull();
-  expect(sessionStorage.getItem("headscale-ui-profiles")).toContain("Temporary");
-  expect(sessionStorage.getItem("headscale-ui-active-profile")).toBeNull();
+  // Session-scope profiles now live in IndexedDB tagged with ownerTabId — never in plaintext
+  // localStorage/sessionStorage. The "session" semantic comes from hydrate-time tab-id cleanup.
+  expect(storedProfilesString()).toContain("Temporary");
+  const sessionProfile = storedProfiles().find((p) => p.name === "Temporary");
+  expect(sessionProfile).toBeDefined();
+  expect(profileStorage.getProfileScope(sessionProfile?.id ?? "")).toBe("session");
+  expect(storedActiveProfileId()).toBeNull();
   await expect.element(page.getByTestId("profile-row-Temporary")).toBeVisible();
 });
 
@@ -1037,6 +1078,7 @@ test("supports language and theme selectors before login", async () => {
   await expect
     .element(page.getByTestId("api-key-docs-link"))
     .toHaveAttribute("href", "https://docs.headscale.org/ref/remote-cli/");
+  await page.getByTestId("api-key-command-copy").click();
   await closeLayerWithEscape("connection-dialog");
 
   await page.getByTestId("locale-select").click();
@@ -1138,23 +1180,16 @@ test("keeps core dialogs usable on a short mobile viewport", async () => {
   await closeLayerWithEscape("add-device-dialog");
 
   await selectSectionTab("access");
-  await page.getByTestId("open-policy-rule-dialog").click();
-  await expect.element(page.getByTestId("policy-rule-dialog")).toBeVisible();
-  expectDialogUsableInViewport("policy-rule-dialog");
-  await captureResponsiveScreenshot("policy-rule-360x568");
-  await closeLayerWithEscape("policy-rule-dialog");
+  await page.getByTestId("new-team").click();
+  await expect.element(page.getByTestId("team-detail-dialog")).toBeVisible();
+  expectDialogUsableInViewport("team-detail-dialog");
+  await captureResponsiveScreenshot("team-detail-360x568");
+  await closeLayerWithEscape("team-detail-dialog");
 
-  await page.getByTestId("policy-tab-groups").click();
-  await page.getByTestId("open-policy-group-dialog").click();
-  await expect.element(page.getByTestId("policy-group-dialog")).toBeVisible();
-  expectDialogUsableInViewport("policy-group-dialog");
-  await closeLayerWithEscape("policy-group-dialog");
-
-  await page.getByTestId("policy-tab-tags").click();
-  await page.getByTestId("open-policy-tag-owner-dialog").click();
-  await expect.element(page.getByTestId("policy-tag-owner-dialog")).toBeVisible();
-  expectDialogUsableInViewport("policy-tag-owner-dialog");
-  await closeLayerWithEscape("policy-tag-owner-dialog");
+  await page.getByTestId("new-device-label").click();
+  await expect.element(page.getByTestId("tag-detail-dialog")).toBeVisible();
+  expectDialogUsableInViewport("tag-detail-dialog");
+  await closeLayerWithEscape("tag-detail-dialog");
 
   expectNoHorizontalOverflow();
 });
@@ -1227,24 +1262,10 @@ test("supports consumer-friendly tailnet management flows", async () => {
   await expectMachinesWorkbench();
   await page.getByTestId("device-owner-link-1").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Alice Ops");
-  await page.getByTestId("user-detail-view-machines").click();
-  await expect.element(page.getByTestId("device-search")).toHaveValue("alice@example.com");
-  await page.getByTestId("clear-machine-filters").click();
+  await closeLayerWithEscape("user-detail-dialog");
   await page.getByTestId("device-detail-link-1").click();
   await expect.element(page.getByTestId("device-detail-dialog")).toBeVisible();
   await expect.element(page.getByTestId("device-detail-status-1")).toHaveTextContent("Online");
-  await page.getByTestId("device-detail-rename").click();
-  await expect.element(page.getByTestId("rename-node-dialog")).toBeVisible();
-  await page.getByTestId("rename-node-cancel").click();
-  await page.getByTestId("device-detail-link-1").click();
-  await page.getByTestId("device-detail-expire").click();
-  await expect.element(page.getByTestId("expire-node-dialog")).toBeVisible();
-  await page.getByTestId("expire-node-cancel").click();
-  await page.getByTestId("device-detail-link-1").click();
-  await page.getByTestId("device-detail-remove").click();
-  await expect.element(page.getByTestId("remove-node-dialog")).toBeVisible();
-  await page.getByTestId("remove-node-cancel").click();
-  await page.getByTestId("device-detail-link-1").click();
   await page.getByTestId("device-detail-owner-1").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toBeVisible();
   await expect.element(page.getByTestId("user-detail-device-1")).toHaveTextContent("alice-laptop");
@@ -1253,9 +1274,7 @@ test("supports consumer-friendly tailnet management flows", async () => {
   await closeLayerWithEscape("device-detail-dialog");
   await page.getByTestId("device-detail-link-2").click();
   await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("edge-router");
-  await page.getByTestId("device-detail-view-routes").click();
-  await expect.element(page.getByTestId("route-node-2")).toBeVisible();
-  expect(window.location.pathname.endsWith("/routes")).toBe(true);
+  await closeLayerWithEscape("device-detail-dialog");
   await page.getByTestId("section-devices").click();
   await page.getByTestId("machine-filter").selectOptions("routes");
   await page.getByTestId("device-pending-routes-2").click();
@@ -1273,10 +1292,15 @@ test("supports consumer-friendly tailnet management flows", async () => {
   await expect.element(page.getByTestId("machine-actions-menu-2")).toBeVisible();
   await page.getByTestId("view-node-routes-action-2").click();
   await expect.element(page.getByTestId("route-node-2")).toBeVisible();
+  expect(window.location.pathname.endsWith("/routes")).toBe(true);
   await page.getByTestId("section-devices").click();
   await page.getByTestId("machine-actions-trigger-1").click();
   await expect.element(page.getByTestId("machine-actions-menu-1")).toBeVisible();
   expect(document.querySelector('[data-testid="rename-node-1"]')).toBeNull();
+  await page.getByTestId("rename-node-action-1").click();
+  await expect.element(page.getByTestId("rename-node-dialog")).toBeVisible();
+  await page.getByTestId("rename-node-cancel").click();
+  await page.getByTestId("machine-actions-trigger-1").click();
   await page.getByTestId("rename-node-action-1").click();
   await expect.element(page.getByTestId("rename-node-dialog")).toBeVisible();
   await page.getByTestId("rename-node-dialog-input").fill("alice-main");
@@ -1471,7 +1495,7 @@ test("covers the empty machine state and add-first-device flow", async () => {
   await expect.element(page.getByTestId("setup-tags")).toHaveValue("");
 });
 
-test("renames a machine from the user detail device path", async () => {
+test("renames a machine reached from a user detail navigation", async () => {
   await renderLogin();
   await connectWithDefaults();
 
@@ -1480,16 +1504,20 @@ test("renames a machine from the user detail device path", async () => {
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Alice Ops");
   await page.getByTestId("user-detail-device-1").click();
   await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("alice-laptop");
-  await page.getByTestId("device-detail-edit-tags").click();
+  await closeLayerWithEscape("device-detail-dialog");
+
+  await page.getByTestId("member-actions-trigger-alice").click();
+  await page.getByTestId("view-member-machines-alice").click();
+  await expect.element(page.getByTestId("device-search")).toHaveValue("alice@example.com");
+  await page.getByTestId("machine-actions-trigger-1").click();
+  await page.getByTestId("edit-node-tags-action-1").click();
   await expect.element(page.getByTestId("node-tags-dialog")).toBeVisible();
   await page.getByTestId("node-tags-cancel").click();
-  await expect.element(page.getByTestId("device-detail-dialog")).toHaveTextContent("alice-laptop");
-  await page.getByTestId("device-detail-rename").click();
+  await page.getByTestId("machine-actions-trigger-1").click();
+  await page.getByTestId("rename-node-action-1").click();
   await expect.element(page.getByTestId("rename-node-dialog")).toBeVisible();
   await page.getByTestId("rename-node-dialog-input").fill("alice-from-user");
   await page.getByTestId("rename-node-confirm").click();
-
-  await page.getByTestId("section-devices").click();
   await expect.element(page.getByTestId("device-1")).toHaveTextContent("alice-from-user");
 });
 
@@ -1523,16 +1551,15 @@ test("covers user filters, user export and member deletion", async () => {
   await page.getByTestId("member-detail-link-charlie").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Charlie");
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("oidc");
-  await page.getByTestId("user-detail-assign-groups").click();
+  await closeLayerWithEscape("user-detail-dialog");
+  clickDomTestId("member-actions-trigger-charlie");
+  await page.getByTestId("assign-member-groups-charlie").click();
   await expect.element(page.getByTestId("assign-user-groups-dialog")).toBeVisible();
   await page.getByTestId("assign-user-groups-cancel").click();
-  await page.getByTestId("user-detail-grant-tags").click();
+  clickDomTestId("member-actions-trigger-charlie");
+  await page.getByTestId("assign-member-tags-charlie").click();
   await expect.element(page.getByTestId("assign-user-tags-dialog")).toBeVisible();
   await page.getByTestId("assign-user-tags-cancel").click();
-  await page.getByTestId("user-detail-create-auth-key").click();
-  await expect.element(page.getByTestId("invite-create-dialog")).toBeVisible();
-  await expect.element(page.getByTestId("invite-user")).toHaveValue("3");
-  await page.getByTestId("cancel-create-invite").click();
   clickDomTestId("member-actions-trigger-charlie");
   await page.getByTestId("view-member-details-charlie").click();
   await expect.element(page.getByTestId("user-detail-dialog")).toHaveTextContent("Charlie");
@@ -1732,15 +1759,18 @@ test("covers auth-key filters, expiration and deletion", async () => {
       .expiration,
   ).toBe(new Date("2026-06-01T00:00").toISOString());
 
+  await page.getByTestId("invite-actions-trigger-1").click();
   await page.getByTestId("expire-invite-1").click();
   await expect.element(page.getByTestId("expire-invite-dialog")).toBeVisible();
   await page.getByTestId("cancel-invite-action").click();
+  await page.getByTestId("invite-actions-trigger-1").click();
   await page.getByTestId("expire-invite-1").click();
   await expect.element(page.getByTestId("expire-invite-dialog")).toBeVisible();
   await page.getByTestId("confirm-invite-action").click();
   await expect
     .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "preauthkey.expire"))
     .toBe(true);
+  await page.getByTestId("invite-actions-trigger-2").click();
   await page.getByTestId("delete-invite-2").click();
   await expect.element(page.getByTestId("delete-invite-dialog")).toBeVisible();
   await page.getByTestId("confirm-invite-action").click();
@@ -1750,156 +1780,307 @@ test("covers auth-key filters, expiration and deletion", async () => {
   expect(document.querySelector('[data-testid="invite-2"]')).toBeNull();
 });
 
-test("covers policy builder add, remove and save behavior without raw JSON editing", async () => {
+async function resetMockPolicy(policyJson: string) {
+  const { mockClient } = useHeadscaleClient();
+  await mockClient.setPolicy({ policy: policyJson });
+  const { refreshSnapshot } = useSnapshot();
+  await refreshSnapshot();
+}
+
+async function openAccessSection() {
+  await page.getByTestId("section-access").click();
+  // Wait for either the populated layout or the empty-state layout to render.
+  await expect
+    .poll(
+      () =>
+        document.querySelector('[data-testid="teams-section"]') ||
+        document.querySelector('[data-testid="resource-access-empty"]'),
+    )
+    .toBeTruthy();
+}
+
+test("renders initial mock policy with team/tag cards and risk banners", async () => {
   await renderLogin();
   await connectWithDefaults();
+  await openAccessSection();
+
+  await expect.element(page.getByTestId("team-card-group:ops")).toBeVisible();
+  await expect.element(page.getByTestId("tag-card-tag:server")).toBeVisible();
+  await expect.element(page.getByTestId("tag-card-tag:workstation")).toBeVisible();
+
+  await expect.element(page.getByTestId("open-access-banner")).toBeVisible();
+  await expect.element(page.getByTestId("orphan-ref-banner")).toBeVisible();
+
+  expect(document.querySelector('[data-testid="resource-access-empty"]')).toBeNull();
+  expectNoRawPolicyEditor();
+});
+
+test("creates a team, adds a member, saves and reopens it", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+  await openAccessSection();
   window.__headscaleUiOperationCalls = [];
 
-  await page.getByTestId("section-access").click();
-  await expect.element(page.getByTestId("policy-editor")).toBeVisible();
-  await expect.element(page.getByTestId("open-policy-rule-dialog")).toBeVisible();
-  await expect.element(page.getByTestId("policy-summary-warnings-count")).toBeVisible();
-  await expect.element(page.getByTestId("policy-rules-toolbar")).toBeVisible();
-  await expect.element(page.getByTestId("policy-rules-table")).toBeVisible();
-  inputDomTestId("policy-rule-search", "server");
-  inputDomTestId("policy-rule-search", "");
+  await page.getByTestId("new-team").click();
+  await expect.element(page.getByTestId("team-detail-dialog")).toBeVisible();
 
-  const clickOnlyRules = countTableRowsByTestIdPrefix("policy-rule-");
-  await page.getByTestId("open-policy-rule-dialog").click();
-  await expect.element(page.getByTestId("policy-rule-dialog")).toBeVisible();
-  await page.getByTestId("policy-simple-source").selectOptions("alice@example.com");
-  await page.getByTestId("policy-simple-destination").selectOptions("tag:server");
-  await page.getByTestId("policy-simple-ports").selectOptions("22");
-  await expect.element(page.getByTestId("policy-rule-preview")).toHaveTextContent("Alice");
-  await expect.element(page.getByTestId("policy-rule-preview")).toHaveTextContent("tag:server");
-  await expect.element(page.getByTestId("policy-rule-preview")).toHaveTextContent("SSH");
-  clickDomTestId("add-policy-rule");
-  await expect.poll(() => countTableRowsByTestIdPrefix("policy-rule-")).toBe(clickOnlyRules + 1);
+  inputDomTestId("team-name-input", "dev");
+  await page.getByTestId("team-name-confirm").click();
+  await expect.element(page.getByTestId("team-members-section")).toBeVisible();
 
-  await page.getByTestId("policy-tab-groups").click();
-  await expect.element(page.getByTestId("policy-groups-toolbar")).toBeVisible();
-  await expect.element(page.getByTestId("policy-groups-table")).toBeVisible();
-  inputDomTestId("policy-group-search", "ops");
-  inputDomTestId("policy-group-search", "");
-  const initialGroups = countTableRowsByTestIdPrefix("policy-group-");
-  await page.getByTestId("open-policy-group-dialog").click();
-  await expect.element(page.getByTestId("policy-group-dialog")).toBeVisible();
-  await expect.element(page.getByTestId("policy-group-name")).toBeVisible();
-  await page.getByTestId("policy-group-name").selectOptions("group:dev");
-  await page.getByTestId("policy-group-member-select").selectOptions("alice@example.com");
-  await page.getByTestId("add-policy-group-member").click();
-  await page.getByTestId("add-policy-group").click();
-  await expect.poll(() => countTableRowsByTestIdPrefix("policy-group-")).toBe(initialGroups + 1);
+  await page.getByTestId("team-add-member-trigger").click();
+  await expect.element(page.getByTestId("team-add-member-content")).toBeVisible();
+  await page.getByTestId("team-add-member-option-alice@example.com").click();
+  await expect.element(page.getByTestId("team-member-row-alice@example.com")).toBeVisible();
 
-  clickLastByTestIdPrefix("edit-policy-group-");
-  await expect.element(page.getByTestId("policy-group-dialog")).toBeVisible();
-  await page.getByTestId("add-policy-group").click();
+  await page.getByTestId("team-detail-close").click();
+  await expect.element(page.getByTestId("team-card-group:dev")).toBeVisible();
 
-  await page.getByTestId("policy-tab-tags").click();
-  await expect.element(page.getByTestId("policy-tag-owners-toolbar")).toBeVisible();
-  await expect.element(page.getByTestId("policy-tag-owners-table")).toBeVisible();
-  inputDomTestId("policy-tag-owner-search", "server");
-  inputDomTestId("policy-tag-owner-search", "");
-  const initialTagOwners = countTableRowsByTestIdPrefix("policy-tag-owner-");
-  await page.getByTestId("open-policy-tag-owner-dialog").click();
-  await expect.element(page.getByTestId("policy-tag-owner-dialog")).toBeVisible();
-  await expect.element(page.getByTestId("policy-tag-name")).toBeVisible();
-  await page.getByTestId("policy-tag-name").selectOptions("tag:db");
-  await page.getByTestId("policy-tag-owner-select").selectOptions("group:ops");
-  await page.getByTestId("add-policy-tag-owner-selection").click();
-  await page.getByTestId("add-policy-tag-owner").click();
-  await expect
-    .poll(() => countTableRowsByTestIdPrefix("policy-tag-owner-"))
-    .toBe(initialTagOwners + 1);
-
-  clickLastByTestIdPrefix("edit-policy-tag-owner-");
-  await expect.element(page.getByTestId("policy-tag-owner-dialog")).toBeVisible();
-  await page.getByTestId("add-policy-tag-owner").click();
-
-  await page.getByTestId("policy-tab-rules").click();
-  await expect.element(page.getByTestId("policy-rules-toolbar")).toBeVisible();
-  await page.getByTestId("open-policy-rule-dialog").click();
-  await expect.element(page.getByTestId("policy-rule-dialog")).toBeVisible();
-  await page.getByTestId("policy-simple-source").selectOptions("group:dev");
-  await page.getByTestId("policy-simple-destination").selectOptions("tag:db");
-  await page.getByTestId("policy-simple-ports").selectOptions("443");
-  await expect.element(page.getByTestId("policy-rule-preview")).toHaveTextContent("group:dev");
-  await expect.element(page.getByTestId("policy-rule-preview")).toHaveTextContent("tag:db");
-  await expect.element(page.getByTestId("policy-rule-preview")).toHaveTextContent("HTTPS");
-
-  const initialRules = countTableRowsByTestIdPrefix("policy-rule-");
-  clickDomTestId("add-policy-rule");
-  await expect.poll(() => countTableRowsByTestIdPrefix("policy-rule-")).toBe(initialRules + 1);
-
-  expectNoRawPolicyEditor();
-  await page.getByTestId("policy-tab-review").click();
-  await expect.element(page.getByTestId("policy-safety-review")).toBeVisible();
   await page.getByTestId("save-policy").click();
   await expect
     .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "policy.set"))
     .toBe(true);
 
-  const savedWithUiChanges = latestSavedPolicy();
-  expect(savedWithUiChanges.acls).toContainEqual({
-    action: "accept",
-    src: ["alice@example.com"],
-    dst: ["tag:server:22"],
-  });
-  expect(savedWithUiChanges.acls).toContainEqual({
-    action: "accept",
-    src: ["group:dev"],
-    dst: ["tag:db:443"],
-  });
-  expect(savedWithUiChanges.groups?.["group:dev"]).toEqual(["alice@example.com"]);
-  expect(savedWithUiChanges.tagOwners?.["tag:db"]).toEqual(["group:ops"]);
-  expect(savedWithUiChanges.ssh).toBeTruthy();
+  const saved = latestSavedPolicy();
+  expect(saved.groups?.["group:dev"]).toEqual(["alice@example.com"]);
 
+  await page.getByTestId("team-card-group:dev").click();
+  await expect.element(page.getByTestId("team-detail-dialog")).toBeVisible();
+  await expect.element(page.getByTestId("team-member-row-alice@example.com")).toBeVisible();
+  await page.getByTestId("team-member-remove-alice@example.com").click();
+  await expect
+    .poll(() => document.querySelector('[data-testid="team-member-row-alice@example.com"]'))
+    .toBeNull();
+  await page.getByTestId("team-detail-close").click();
+});
+
+test("creates a device label with an accessor + label manager and saves the rule", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+  await openAccessSection();
   window.__headscaleUiOperationCalls = [];
-  await page.getByTestId("policy-tab-rules").click();
-  await expect.element(page.getByTestId("policy-rules-toolbar")).toBeVisible();
-  expectLastPolicyRemovalDestructive("remove-policy-rule-");
-  clickLastByTestIdPrefix("remove-policy-rule-");
+
+  await page.getByTestId("new-device-label").click();
+  await expect.element(page.getByTestId("tag-detail-dialog")).toBeVisible();
+  inputDomTestId("tag-name-input", "db");
+  await page.getByTestId("tag-name-confirm").click();
+  await expect.element(page.getByTestId("tag-accessors-section")).toBeVisible();
+  await expect.element(page.getByTestId("tag-owners-section")).toBeVisible();
+
+  await page.getByTestId("tag-add-accessor-trigger").click();
+  await expect.element(page.getByTestId("tag-add-accessor-content")).toBeVisible();
+  await page.getByTestId("tag-add-accessor-option-group:ops").click();
+  await expect.element(page.getByTestId("tag-accessor-row-group:ops")).toBeVisible();
+
+  clickDomTestId("tag-accessor-svc-group:ops-web");
+  // Custom-port input commits on blur — use the page-level fill helper which
+  // focuses/types/blurs in a way the framework can drive end-to-end.
+  await page.getByTestId("tag-accessor-custom-group:ops").fill("8080");
+  // Force commit by also pressing Enter (handler is bound on both blur + Enter).
+  await userEvent.keyboard("{Enter}");
+
+  await page.getByTestId("tag-add-owner-trigger").click();
+  await page.getByTestId("tag-add-owner-option-group:ops").click();
+  await expect.element(page.getByTestId("tag-owner-row-group:ops")).toBeVisible();
+
+  await page.getByTestId("tag-detail-close").click();
+  await expect.element(page.getByTestId("tag-card-tag:db")).toBeVisible();
+
+  await page.getByTestId("save-policy").click();
+  await expect
+    .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "policy.set"))
+    .toBe(true);
+
+  const saved = latestSavedPolicy();
+  expect(saved.tagOwners?.["tag:db"]).toEqual(["group:ops"]);
+  const dbRule = saved.acls?.find(
+    (r: { src: string[]; dst: string[] }) =>
+      r.src?.[0] === "group:ops" && r.dst?.[0]?.startsWith("tag:db:"),
+  );
+  expect(dbRule).toBeTruthy();
+  const portsString = dbRule?.dst?.[0]?.split(":").at(-1) ?? "";
+  expect(portsString).toContain("22");
+  expect(portsString).toContain("80");
+  expect(portsString).toContain("443");
+  expect(portsString).toContain("8080");
+});
+
+test("removes an accessor row from a tag detail dialog", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+  await openAccessSection();
+
+  // Set up a fresh tag with one accessor so we have something to remove.
+  await page.getByTestId("new-device-label").click();
+  inputDomTestId("tag-name-input", "scratch");
+  await page.getByTestId("tag-name-confirm").click();
+  await page.getByTestId("tag-add-accessor-trigger").click();
+  await page.getByTestId("tag-add-accessor-option-group:ops").click();
+  await expect.element(page.getByTestId("tag-accessor-row-group:ops")).toBeVisible();
+
+  await page.getByTestId("tag-accessor-remove-group:ops").click();
+  await expect
+    .poll(() => document.querySelector('[data-testid="tag-accessor-row-group:ops"]'))
+    .toBeNull();
+  // The dialog can be re-portaled after removing the accessor; re-query the close button.
+  await expect.element(page.getByTestId("tag-detail-dialog")).toBeVisible();
+  await page.getByTestId("tag-detail-close").click();
+});
+
+test("removes a tag owner and saves the cleanup", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+  await openAccessSection();
+  window.__headscaleUiOperationCalls = [];
+
+  await page.getByTestId("tag-card-tag:server").click();
+  await expect.element(page.getByTestId("tag-detail-dialog")).toBeVisible();
+  await expect.element(page.getByTestId("tag-owner-row-alice@")).toBeVisible();
+  await page.getByTestId("tag-owner-remove-alice@").click();
+  await expect
+    .poll(() => document.querySelector('[data-testid="tag-owner-row-alice@"]'))
+    .toBeNull();
+  await page.getByTestId("tag-detail-close").click();
+
+  await page.getByTestId("save-policy").click();
+  await expect
+    .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "policy.set"))
+    .toBe(true);
+
+  const saved = latestSavedPolicy();
+  const stillHasOwner = saved.tagOwners?.["tag:server"]?.includes?.("alice@") ?? false;
+  expect(stillHasOwner).toBe(false);
+});
+
+test("cancels then confirms removal of a team", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+  await openAccessSection();
+
+  await page.getByTestId("team-remove-group:ops").click();
   await expectPolicyRemovalDialog();
   await page.getByTestId("cancel-remove-policy-item").click();
   await expectPolicyRemovalDialogClosed();
-  await expect.poll(() => countTableRowsByTestIdPrefix("policy-rule-")).toBe(initialRules + 1);
-  expectLastPolicyRemovalDestructive("remove-policy-rule-");
-  clickLastByTestIdPrefix("remove-policy-rule-");
-  await expectPolicyRemovalDialog();
-  await page.getByTestId("confirm-remove-policy-item").click();
-  await expectPolicyRemovalDialogClosed();
-  await expect.poll(() => countTableRowsByTestIdPrefix("policy-rule-")).toBe(initialRules);
-  await page.getByTestId("policy-tab-groups").click();
-  await expect.element(page.getByTestId("open-policy-group-dialog")).toBeVisible();
-  expectLastPolicyRemovalDestructive("remove-policy-group-");
-  clickLastByTestIdPrefix("remove-policy-group-");
-  await expectPolicyRemovalDialog();
-  await page.getByTestId("confirm-remove-policy-item").click();
-  await expectPolicyRemovalDialogClosed();
-  await expect.poll(() => countTableRowsByTestIdPrefix("policy-group-")).toBe(initialGroups);
-  await page.getByTestId("policy-tab-tags").click();
-  await expect.element(page.getByTestId("open-policy-tag-owner-dialog")).toBeVisible();
-  expectLastPolicyRemovalDestructive("remove-policy-tag-owner-");
-  clickLastByTestIdPrefix("remove-policy-tag-owner-");
-  await expectPolicyRemovalDialog();
-  await page.getByTestId("confirm-remove-policy-item").click();
-  await expectPolicyRemovalDialogClosed();
-  await expect.poll(() => countTableRowsByTestIdPrefix("policy-tag-owner-")).toBe(initialTagOwners);
+  await expect.element(page.getByTestId("team-card-group:ops")).toBeVisible();
 
-  expectNoRawPolicyEditor();
+  await page.getByTestId("team-remove-group:ops").click();
+  await expectPolicyRemovalDialog();
+  await page.getByTestId("confirm-remove-policy-item").click();
+  await expectPolicyRemovalDialogClosed();
+  await expect.poll(() => document.querySelector('[data-testid="team-card-group:ops"]')).toBeNull();
+});
+
+test("removes a device label and its policy entries via the card trash button", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+  await openAccessSection();
+  window.__headscaleUiOperationCalls = [];
+
+  await page.getByTestId("tag-remove-tag:server").click();
+  await expectPolicyRemovalDialog();
+  await page.getByTestId("confirm-remove-policy-item").click();
+  await expectPolicyRemovalDialogClosed();
+
+  // tag:server is also referenced by a mock node, so the card may still
+  // render — but the saved policy must no longer contain its tagOwner entry.
   await page.getByTestId("save-policy").click();
   await expect
     .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "policy.set"))
     .toBe(true);
+  const saved = latestSavedPolicy();
+  expect(saved.tagOwners?.["tag:server"]).toBeUndefined();
+});
 
-  const savedAfterRemoval = latestSavedPolicy();
-  expect(savedAfterRemoval.acls).not.toContainEqual({
-    action: "accept",
-    src: ["group:dev"],
-    dst: ["tag:db:443"],
-  });
-  expect(savedAfterRemoval.groups?.["group:dev"]).toBeUndefined();
-  expect(savedAfterRemoval.tagOwners?.["tag:db"]).toBeUndefined();
+test("filters device labels via the search input", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+  await openAccessSection();
+
+  inputDomTestId("tag-search", "server");
+  await expect.element(page.getByTestId("tag-card-tag:server")).toBeVisible();
+  await expect
+    .poll(() => document.querySelector('[data-testid="tag-card-tag:workstation"]'))
+    .toBeNull();
+
+  inputDomTestId("tag-search", "");
+  await expect.element(page.getByTestId("tag-card-tag:workstation")).toBeVisible();
+});
+
+test("high-risk confirm appears when a service expands to all", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+  await openAccessSection();
+
+  await page.getByTestId("tag-card-tag:workstation").click();
+  await expect.element(page.getByTestId("tag-detail-dialog")).toBeVisible();
+  await page.getByTestId("tag-add-accessor-trigger").click();
+  await page.getByTestId("tag-add-accessor-option-group:ops").click();
+  await expect.element(page.getByTestId("tag-accessor-row-group:ops")).toBeVisible();
+
+  clickDomTestId("tag-accessor-svc-group:ops-all");
+  await expect.element(page.getByTestId("high-risk-confirm-dialog")).toBeVisible();
+  await page.getByTestId("high-risk-cancel").click();
+  await expect
+    .poll(() => document.querySelector('[data-testid="high-risk-confirm-dialog"]') === null)
+    .toBe(true);
+  await page.getByTestId("tag-detail-close").click();
+});
+
+test("empty state renders templates and applies one", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+  await resetMockPolicy("");
+  await openAccessSection();
+
+  await expect.element(page.getByTestId("resource-access-empty")).toBeVisible();
+  await expect.element(page.getByTestId("template-card-self-only")).toBeVisible();
+  await expect.element(page.getByTestId("template-card-small-team")).toBeVisible();
+  await expect.element(page.getByTestId("template-card-split-env")).toBeVisible();
+
+  await page.getByTestId("empty-create-team").click();
+  await expect.element(page.getByTestId("team-detail-dialog")).toBeVisible();
+  await page.getByTestId("team-detail-close").click();
+
+  await page.getByTestId("empty-create-tag").click();
+  await expect.element(page.getByTestId("tag-detail-dialog")).toBeVisible();
+  await page.getByTestId("tag-detail-close").click();
+
+  await page.getByTestId("template-apply-small-team").click();
+  await expect.element(page.getByTestId("team-card-group:team")).toBeVisible();
+  await expect.element(page.getByTestId("tag-card-tag:shared")).toBeVisible();
+  expect(document.querySelector('[data-testid="resource-access-empty"]')).toBeNull();
+});
+
+test("IP-only rules collapse into the direct-device section", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+  await resetMockPolicy(
+    JSON.stringify({
+      acls: [{ action: "accept", src: ["alice@example.com"], dst: ["10.0.0.1:22"] }],
+      groups: {},
+      tagOwners: {},
+    }),
+  );
+  await openAccessSection();
+
+  await expect.element(page.getByTestId("ip-rules-section")).toBeVisible();
+  await page.getByTestId("ip-rules-toggle").click();
+  expect(document.querySelector('[data-testid^="ip-rule-"]')).toBeTruthy();
+  clickLastByTestIdPrefix("ip-rule-remove-");
+  await expect.poll(() => document.querySelectorAll('[data-testid^="ip-rule-"]').length).toBe(0);
+});
+
+test("mobile sticky save button posts a policy update", async () => {
+  await renderLogin();
+  await connectWithDefaults();
+  await page.viewport(360, 768);
+  await openAccessSection();
+  window.__headscaleUiOperationCalls = [];
+
+  await page.getByTestId("save-policy-sticky").click();
+  await expect
+    .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "policy.set"))
+    .toBe(true);
 });
 
 test("does not expose a settings page", async () => {
@@ -1938,9 +2119,11 @@ test("covers server settings API keys and maintenance actions", async () => {
       .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "apikey.create"))
       .toBe(true);
 
+    await page.getByTestId("api-key-actions-trigger-ak_live_demo").click();
     await page.getByTestId("expire-api-key-ak_live_demo").click();
     await expect.element(page.getByTestId("expire-api-key-dialog")).toBeVisible();
     await page.getByTestId("cancel-api-key-action").click();
+    await page.getByTestId("api-key-actions-trigger-ak_live_demo").click();
     await page.getByTestId("expire-api-key-ak_live_demo").click();
     await expect.element(page.getByTestId("expire-api-key-dialog")).toBeVisible();
     await page.getByTestId("confirm-api-key-action").click();
@@ -1948,6 +2131,7 @@ test("covers server settings API keys and maintenance actions", async () => {
       .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "apikey.expire"))
       .toBe(true);
 
+    await page.getByTestId("api-key-actions-trigger-ak_old_demo").click();
     await page.getByTestId("delete-api-key-ak_old_demo").click();
     await expect.element(page.getByTestId("delete-api-key-dialog")).toBeVisible();
     await page.getByTestId("confirm-api-key-action").click();
@@ -1970,9 +2154,77 @@ test("covers server settings API keys and maintenance actions", async () => {
       )
       .toBe(true);
     await expect.element(page.getByTestId("backfill-node-ips-result")).toBeVisible();
+
+    await page.getByTestId("server-tab-security").click();
+    await expect.element(page.getByTestId("security-settings")).toBeVisible();
   } finally {
     clipboard.restore();
   }
+});
+
+test("encrypts API keys at rest and migrates legacy localStorage profiles", async () => {
+  await renderLogin();
+
+  await page.getByTestId("profile-option-new").click();
+  await expect.element(page.getByTestId("connect-form")).toBeVisible();
+  await page.getByTestId("connect-profile-name").fill("Secure");
+  await page.getByTestId("connect-api-key").fill("secret-bearer-token");
+  await page.getByTestId("connect-submit").click();
+  await expect.element(page.getByTestId("profile-row-Secure")).toBeVisible();
+
+  // localStorage must have been swept: no plaintext profile blob remains.
+  expect(localStorage.getItem("headscale-ui-profiles")).toBeNull();
+  expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
+
+  // IndexedDB row exists with an encrypted ApiKeySecret, never the raw bearer token.
+  const idbProfiles = await new Promise<unknown[]>((resolve, reject) => {
+    const req = indexedDB.open("headscale-ui", 1);
+    req.onsuccess = () => {
+      const db = req.result;
+      const tx = db.transaction("profiles", "readonly");
+      const all = tx.objectStore("profiles").getAll();
+      all.onsuccess = () => resolve(all.result);
+      all.onerror = () => reject(all.error);
+    };
+    req.onerror = () => reject(req.error);
+  });
+  expect(idbProfiles).toHaveLength(1);
+  const stored = idbProfiles[0] as { apiKey: { scheme: string; iv: string; ct: string } };
+  expect(stored.apiKey).toBeTypeOf("object");
+  expect(stored.apiKey.scheme).toBe("device");
+  expect(typeof stored.apiKey.iv).toBe("string");
+  expect(typeof stored.apiKey.ct).toBe("string");
+  expect(JSON.stringify(stored)).not.toContain("secret-bearer-token");
+});
+
+test("hydrate migrates a pre-existing plaintext localStorage profile into IDB", async () => {
+  // Inject a legacy plaintext profile *before* hydrate runs (renderLogin triggers hydrate).
+  // The fake-indexeddb DB has been cleared in beforeEach; localStorage is the only source.
+  const legacyId = "00000000-1111-4222-8333-444444444444";
+  localStorage.setItem(
+    "headscale-ui-profiles",
+    JSON.stringify([
+      {
+        id: legacyId,
+        name: "Legacy",
+        mode: "mock",
+        baseUrl: "http://127.0.0.1:8080",
+        apiKey: "legacy-plaintext-key",
+        updatedAt: "2026-05-04T00:00:00.000Z",
+      },
+    ]),
+  );
+  localStorage.setItem("headscale-ui-active-profile", legacyId);
+
+  await renderLogin();
+
+  // localStorage was swept by the migration path.
+  expect(localStorage.getItem("headscale-ui-profiles")).toBeNull();
+  expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
+
+  // The profile is now encrypted in IDB and the active-profile id was carried over.
+  expect(storedProfilesString()).toContain("Legacy");
+  expect(storedActiveProfileId()).toBe(legacyId);
 });
 
 test("covers task navigation and the client-device setup branch", async () => {
@@ -2069,7 +2321,7 @@ test("covers task navigation and the client-device setup branch", async () => {
   await expect.element(page.getByTestId("setup-device-step")).toBeVisible();
   await expect.element(page.getByTestId("setup-tags")).toHaveValue("tag:client");
   await page.getByTestId("setup-manage-tags").click();
-  await expect.element(page.getByTestId("policy-editor")).toBeVisible();
+  await expect.element(page.getByTestId("device-labels-section")).toBeVisible();
 });
 
 test("copies generated auth keys and install commands", async () => {
@@ -2150,6 +2402,18 @@ test("keeps every core function usable on mobile", async () => {
   expect(document.querySelector('[data-testid="member-mobile"]')).toBeNull();
   expectNoHorizontalOverflow();
 
+  inputDomTestId("user-search", "charlie");
+  await expect.element(page.getByTestId("member-charlie")).toBeVisible();
+  await page.getByTestId("member-actions-trigger-mobile-charlie").click();
+  await page.getByTestId("assign-member-groups-mobile-charlie").click();
+  await expect.element(page.getByTestId("assign-user-groups-dialog")).toBeVisible();
+  await page.getByTestId("assign-user-groups-cancel").click();
+  await page.getByTestId("member-actions-trigger-mobile-charlie").click();
+  await page.getByTestId("assign-member-tags-mobile-charlie").click();
+  await expect.element(page.getByTestId("assign-user-tags-dialog")).toBeVisible();
+  await page.getByTestId("assign-user-tags-cancel").click();
+  inputDomTestId("user-search", "");
+
   await selectSectionTab("invites");
   await page.getByTestId("open-create-invite").click();
   await page.getByTestId("invite-tags").fill("tag:mobile");
@@ -2221,9 +2485,8 @@ test("keeps every core function usable on mobile", async () => {
   expectNoHorizontalOverflow();
 
   await selectSectionTab("access");
-  await expect.element(page.getByTestId("policy-editor")).toBeVisible();
-  await expect.element(page.getByTestId("policy-rules-toolbar")).toBeVisible();
-  await expect.element(page.getByTestId("policy-rules-table")).toBeVisible();
+  await expect.element(page.getByTestId("teams-section")).toBeVisible();
+  await expect.element(page.getByTestId("device-labels-section")).toBeVisible();
   window.__headscaleUiOperationCalls = [];
   await page.getByTestId("save-policy-sticky").click();
   await expect
@@ -2389,13 +2652,11 @@ test("adapts every main page and shared controls for Arabic RTL", async () => {
   expectNoHorizontalOverflow();
 
   await selectSectionTab("access");
-  await expect.element(page.getByTestId("policy-editor")).toBeVisible();
-  await expect.element(page.getByTestId("policy-rules-table")).toBeVisible();
-  await page.getByTestId("open-policy-rule-dialog").click();
-  await expect.element(page.getByTestId("policy-rule-dialog")).toBeVisible();
-  expectDialogMirrorsInlineEnd("policy-rule-dialog");
-  expectNativeSelectIconMirrorsInlineEnd("policy-simple-source");
-  await closeLayerWithEscape("policy-rule-dialog");
+  await expect.element(page.getByTestId("device-labels-section")).toBeVisible();
+  await page.getByTestId("new-device-label").click();
+  await expect.element(page.getByTestId("tag-detail-dialog")).toBeVisible();
+  expectDialogMirrorsInlineEnd("tag-detail-dialog");
+  await closeLayerWithEscape("tag-detail-dialog");
   expectNoHorizontalOverflow();
 
   await page.viewport(390, 844);
@@ -2412,30 +2673,26 @@ test("mirrors the access policy workspace in Arabic", async () => {
 
   await chooseProfileMenuOption("locale-option-ar");
   await selectSectionTab("access");
-  await expect.element(page.getByTestId("policy-rules-toolbar")).toBeVisible();
-  await expect.element(page.getByTestId("policy-rules-table")).toBeVisible();
+  await expect.element(page.getByTestId("teams-section")).toBeVisible();
+  await expect.element(page.getByTestId("device-labels-section")).toBeVisible();
 
   expect(document.documentElement.lang).toBe("ar");
   expect(document.documentElement.dir).toBe("rtl");
 
-  const toolbar = document.querySelector<HTMLElement>('[data-testid="policy-rules-toolbar"]');
-  const tableShell = document.querySelector<HTMLElement>('[data-testid="policy-rules-table"]');
-  expect(toolbar).toBeTruthy();
-  expect(tableShell).toBeTruthy();
+  const teams = document.querySelector<HTMLElement>('[data-testid="teams-section"]');
+  const labels = document.querySelector<HTMLElement>('[data-testid="device-labels-section"]');
+  expect(teams).toBeTruthy();
+  expect(labels).toBeTruthy();
 
-  const toolbarRect = toolbar?.getBoundingClientRect();
-  const tableRect = tableShell?.getBoundingClientRect();
-  expect(toolbarRect?.bottom ?? 0).toBeLessThanOrEqual((tableRect?.top ?? 0) + 1);
-  expect(Math.abs((toolbarRect?.left ?? 0) - (tableRect?.left ?? 0))).toBeLessThan(2);
-  expect(Math.abs((toolbarRect?.right ?? 0) - (tableRect?.right ?? 0))).toBeLessThan(2);
-
-  const headings = Array.from(document.querySelectorAll<HTMLElement>("th"));
-  expect(getComputedStyle(headings[0] as HTMLElement).textAlign).toBe("left");
-  expect(getComputedStyle(headings.at(-1) as HTMLElement).textAlign).toBe("left");
+  const teamsRect = teams?.getBoundingClientRect();
+  const labelsRect = labels?.getBoundingClientRect();
+  expect(teamsRect?.bottom ?? 0).toBeLessThanOrEqual((labelsRect?.top ?? 0) + 1);
+  expect(Math.abs((teamsRect?.left ?? 0) - (labelsRect?.left ?? 0))).toBeLessThan(2);
+  expect(Math.abs((teamsRect?.right ?? 0) - (labelsRect?.right ?? 0))).toBeLessThan(2);
   expectNoHorizontalOverflow();
 
   await page.viewport(390, 844);
-  await expect.element(page.getByTestId("policy-rules-toolbar")).toBeVisible();
+  await expect.element(page.getByTestId("device-labels-section")).toBeVisible();
   expectNoHorizontalOverflow();
 });
 

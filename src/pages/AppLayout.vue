@@ -28,6 +28,7 @@ import { computed, nextTick, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { ApiKey, HeadscaleClient } from "@/api/types";
 import HeadscaleLogo from "@/components/HeadscaleLogo.vue";
+import SecuritySettings from "@/components/SecuritySettings.vue";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -80,7 +81,7 @@ import { LOCALE_META, type Locale, SUPPORTED_LOCALES, useHeadscaleI18n } from "@
 
 type ProductSection = "home" | "devices" | "members" | "invites" | "routes" | "access";
 type ProfileSubmenu = "language" | "theme";
-type ServerSettingsTab = "apiKeys" | "maintenance";
+type ServerSettingsTab = "apiKeys" | "maintenance" | "security";
 type ApiKeyActionTarget = {
   kind: "expire" | "delete";
   key: ApiKey;
@@ -212,7 +213,7 @@ function handleServerSettingsOpen(open: boolean) {
 }
 
 function changeServerSettingsTab(nextTab: string) {
-  if (nextTab === "apiKeys" || nextTab === "maintenance") {
+  if (nextTab === "apiKeys" || nextTab === "maintenance" || nextTab === "security") {
     serverSettingsTab.value = nextTab;
   }
 }
@@ -483,6 +484,10 @@ watch(activeSection, scrollActiveTabIntoView, { immediate: true });
                   <Server class="h-4 w-4" aria-hidden="true" />
                   {{ copy.maintenance }}
                 </TabsTrigger>
+                <TabsTrigger value="security" data-testid="server-tab-security">
+                  <ShieldCheck class="h-4 w-4" aria-hidden="true" />
+                  {{ t("encryptionSectionTitle") }}
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="apiKeys" class="grid gap-4" data-testid="api-key-settings">
@@ -617,6 +622,10 @@ watch(activeSection, scrollActiveTabIntoView, { immediate: true });
                     {{ copy.backfillResult }}: {{ backfillNodeIpsResult }}
                   </p>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="security" class="grid gap-4" data-testid="security-settings">
+                <SecuritySettings />
               </TabsContent>
             </Tabs>
           </DialogContent>

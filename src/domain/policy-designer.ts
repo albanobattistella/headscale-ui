@@ -106,11 +106,18 @@ function destinationParts(value: unknown): { destination: string; ports: string 
   };
 }
 
-function parseCommaList(value: string): string[] {
+export function parseCommaList(value: string): string[] {
   return value
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+export function joinCommaList(values: readonly string[]): string {
+  return values
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join(",");
 }
 
 function serializeDestination(destination: string, ports: string): string[] {

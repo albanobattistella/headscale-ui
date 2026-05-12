@@ -67,6 +67,9 @@ export function useSessionRestore(): void {
 
   // (5) cold-start active-profile restoration
   async function restoreActiveProfile() {
+    // Wait for the first navigation (and its guards) to settle so we don't race the
+    // auth guard's clearActiveProfile path on unknown-profile redirects.
+    await router.isReady();
     if (snap.isAuthorized.value) return;
     const requestedFromUrl = intent.profileId.value;
     const activeId = requestedFromUrl ?? storage.readActiveProfile();
@@ -81,7 +84,7 @@ export function useSessionRestore(): void {
       return;
     }
     profilesApi.isRestoringSession.value = true;
-    const ok = await profilesApi.enterProfile(profile);
+    const ok = await profilesApi.enterProfile(profile, "restoring");
     profilesApi.isRestoringSession.value = false;
     if (!ok && route.meta.requiresAuth) await redirectToLogin();
   }

@@ -50,8 +50,8 @@ export function useHeadscaleI18n() {
     syncDocument(localeValue);
   }
 
-  function t(key: MessageKey) {
-    return composer.t(key);
+  function t(key: MessageKey, named?: Record<string, string | number>): string {
+    return named !== undefined ? composer.t(key, named) : composer.t(key);
   }
 
   function tg(group: OperationGroup) {

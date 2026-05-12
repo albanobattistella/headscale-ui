@@ -76,6 +76,13 @@ interface UsePolicyDesignerReturn {
   policyTagOwnerSearch: Ref<string>;
   policyGroupEditing: Ref<PolicyGroup | null>;
   policyTagOwnerEditing: Ref<PolicyTagOwner | null>;
+  // Resource-centric dialog state
+  tagDetailOpen: Ref<boolean>;
+  tagDetailCurrent: Ref<string>;
+  teamDetailOpen: Ref<boolean>;
+  teamDetailCurrent: Ref<string>;
+  highRiskConfirmOpen: Ref<boolean>;
+  pendingHighRiskAction: Ref<(() => void) | null>;
   policyDesignerState: ComputedRef<PolicyDesignerState>;
   policyPayload: ComputedRef<Record<string, unknown>>;
   policyExtraSectionKeys: ComputedRef<string[]>;
@@ -165,6 +172,13 @@ export function usePolicyDesigner(): UsePolicyDesignerReturn {
   const policyTagOwnerSearch = ref("");
   const policyGroupEditing = ref<PolicyGroup | null>(null);
   const policyTagOwnerEditing = ref<PolicyTagOwner | null>(null);
+
+  const tagDetailOpen = ref(false);
+  const tagDetailCurrent = ref("");
+  const teamDetailOpen = ref(false);
+  const teamDetailCurrent = ref("");
+  const highRiskConfirmOpen = ref(false);
+  const pendingHighRiskAction = ref<(() => void) | null>(null);
 
   const policyDesignerState = computed<PolicyDesignerState>(() => ({
     rules: policyRules.value,
@@ -298,6 +312,12 @@ export function usePolicyDesigner(): UsePolicyDesignerReturn {
     policyTagOwnerSearch,
     policyGroupEditing,
     policyTagOwnerEditing,
+    tagDetailOpen,
+    tagDetailCurrent,
+    teamDetailOpen,
+    teamDetailCurrent,
+    highRiskConfirmOpen,
+    pendingHighRiskAction,
     policyDesignerState,
     policyPayload,
     policyExtraSectionKeys,

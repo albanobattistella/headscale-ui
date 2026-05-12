@@ -1,7 +1,14 @@
 import { createRouter, createWebHistory, type RouteRecordRaw, type Router } from "vue-router";
+import { useMasterPassword } from "@/composables/useMasterPassword";
 import { profileStorage as storage } from "@/lib/profile-storage";
 
 export const routes: RouteRecordRaw[] = [
+  {
+    path: "/unlock",
+    name: "unlock",
+    component: () => import("@/components/UnlockOverlay.vue"),
+    meta: { requiresAuth: false },
+  },
   {
     path: "/login",
     name: "login",
@@ -34,6 +41,19 @@ export const routes: RouteRecordRaw[] = [
 
 export function installAuthGuard(target: Router) {
   target.beforeEach((to) => {
+    // Passphrase gate runs ahead of auth — a locked vault means no profile can decrypt.
+    const mp = useMasterPassword();
+    if (mp.needsUnlock.value && to.name !== "unlock") {
+      return {
+        name: "unlock",
+        query: { redirect: to.fullPath },
+      };
+    }
+    if (to.name === "unlock" && !mp.needsUnlock.value) {
+      const redirect = typeof to.query.redirect === "string" ? to.query.redirect : "/";
+      return redirect;
+    }
+
     if (to.meta.requiresAuth === false) return true;
 
     const hasSession = storage.readActiveProfile() !== null && storage.hasAnyProfile();

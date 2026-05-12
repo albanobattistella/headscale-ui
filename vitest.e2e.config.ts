@@ -12,6 +12,10 @@ export default defineConfig({
   },
   test: {
     include: ["e2e/**/*.test.ts"],
+    // beforeEach does an IDB delete + hydrate (device key + legacy migration scan), adding
+    // roughly 0.5-1s per test. Bump per-test timeout to absorb that overhead.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
     deps: {
       optimizer: {
         web: {
