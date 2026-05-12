@@ -258,6 +258,17 @@ export interface IpRule {
 
 const TAG_PATTERN = /^tag:/;
 
+export function updateIpRule(
+  state: PolicyDesignerState,
+  ruleId: string,
+  patch: Partial<Pick<PolicyRule, "source" | "destination" | "ports">>,
+): PolicyDesignerState {
+  return {
+    ...state,
+    rules: state.rules.map((rule) => (rule.id === ruleId ? { ...rule, ...patch } : rule)),
+  };
+}
+
 export function getIpRules(state: PolicyDesignerState): IpRule[] {
   const rules: IpRule[] = [];
   for (const rule of state.rules) {

@@ -78,6 +78,7 @@ import { useProductCopy } from "@/composables/useProductCopy";
 import { useRefreshGuard } from "@/composables/useRefreshGuard";
 import { useRouteIntent } from "@/composables/useRouteIntent";
 import { useSnapshot } from "@/composables/useSnapshot";
+import { useSegment } from "@/composables/useSnapshotSegment";
 import { isTimestampExpired as isExpired, nodeConnectionStatus } from "@/domain/node-status";
 import { useHeadscaleI18n } from "@/i18n";
 import { downloadCsv } from "@/utils/csv";
@@ -95,13 +96,11 @@ type AddDeviceTask = "server" | "client" | "pending";
 
 const { t } = useHeadscaleI18n();
 const { copy } = useProductCopy();
-const {
-  snapshot,
-  isRefreshing: isRefreshingSnapshot,
-  renameDrafts,
-  refreshSnapshot,
-  nodeById: currentNode,
-} = useSnapshot();
+const { snapshot, renameDrafts, refreshSnapshot, nodeById: currentNode } = useSnapshot();
+const { isRefreshing: isRefreshingSnapshot, refresh: refreshDevices } = useSegment(
+  "fabric",
+  "identity",
+);
 const { actionError, clearActionFeedback, isActionPending } = useActionFeedback();
 const {
   open: deviceSetupDialogOpen,
@@ -1446,7 +1445,7 @@ function openUserDetailsExternal(user?: HeadscaleUser) {
             :aria-label="copy.refreshData"
             :title="copy.refreshData"
             :disabled="isRefreshingSnapshot"
-            @click="refreshSnapshot"
+            @click="refreshDevices"
           >
             <LoaderCircle v-if="isRefreshingSnapshot" class="h-4 w-4 animate-spin" aria-hidden="true" />
             <RefreshCw v-else class="h-4 w-4" aria-hidden="true" />

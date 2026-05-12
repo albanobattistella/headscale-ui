@@ -5,7 +5,6 @@ import {
   Laptop,
   LoaderCircle,
   Network,
-  Pencil,
   Plus,
   Search,
   Server,
@@ -17,6 +16,7 @@ import {
 } from "lucide-vue-next";
 import { computed, reactive, ref, watch } from "vue";
 import MemberMultiSelect, { type MemberOption } from "@/components/MemberMultiSelect.vue";
+import IpRuleRow from "@/components/policy/IpRuleRow.vue";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,9 +74,11 @@ import {
   stripGroupPrefix,
   stripTagPrefix,
   type TagAccessor,
+  updateIpRule,
   withGroupPrefix,
   withTagPrefix,
 } from "@/domain/policy-views";
+import { PrincipalIndex, toPrincipal } from "@/domain/principal";
 import { useHeadscaleI18n } from "@/i18n";
 
 const { meta } = useHeadscaleI18n();
@@ -107,14 +109,7 @@ const visibleUsers = computed(() =>
   snapshot.value.users.filter((user) => user.name !== "tagged-devices"),
 );
 
-const knownUserPrincipals = computed(() => {
-  const list: string[] = [];
-  for (const user of snapshot.value.users) {
-    if (user.email) list.push(user.email);
-    if (user.name) list.push(user.name);
-  }
-  return list;
-});
+const knownUserIndex = computed(() => PrincipalIndex.fromUsers(snapshot.value.users));
 
 const allTags = computed<string[]>(() => {
   const seen = new Set<string>();
@@ -186,10 +181,10 @@ const teamsWithMeta = computed<TeamMeta[]>(() =>
 
 const openAccessWarnings = computed(() => getOpenAccessWarnings(policyDesignerState.value));
 const orphanRefs = computed(() =>
-  findOrphanReferences(policyDesignerState.value, knownUserPrincipals.value),
+  findOrphanReferences(policyDesignerState.value, knownUserIndex.value),
 );
 const ipRules = computed(() => getIpRules(policyDesignerState.value));
-const showIpRules = ref(false);
+const editingIpRuleId = ref<string | null>(null);
 
 function isDefaultRule(rule: { source: string; destination: string; ports: string }) {
   return rule.source === "*" && rule.destination === "*" && rule.ports === "*";
@@ -305,9 +300,10 @@ function tagIcon(tagName: string) {
   return Tag;
 }
 
-const accessorOptionsForCurrentTag = computed<MemberOption[]>(() => {
+function buildAccessOptions(taken: ReadonlySet<string>): MemberOption[] {
   const opts: MemberOption[] = [];
   for (const group of policyGroups.value) {
+    if (taken.has(toPrincipal(group.name))) continue;
     opts.push({
       value: group.name,
       label: stripGroupPrefix(group.name),
@@ -319,6 +315,7 @@ const accessorOptionsForCurrentTag = computed<MemberOption[]>(() => {
   for (const user of visibleUsers.value) {
     const id = user.email || user.name;
     if (!id) continue;
+    if (taken.has(toPrincipal(id))) continue;
     opts.push({
       value: id,
       label: user.displayName || user.name || id,
@@ -328,17 +325,27 @@ const accessorOptionsForCurrentTag = computed<MemberOption[]>(() => {
     });
   }
   return opts;
+}
+
+const accessorOptionsForCurrentTag = computed<MemberOption[]>(() => {
+  const taken = new Set((currentTagMeta.value?.accessors ?? []).map((a) => toPrincipal(a.who)));
+  return buildAccessOptions(taken);
 });
 
-const ownerOptionsForCurrentTag = computed<MemberOption[]>(
-  () => accessorOptionsForCurrentTag.value,
-);
+const ownerOptionsForCurrentTag = computed<MemberOption[]>(() => {
+  const taken = new Set((currentTagMeta.value?.owners ?? []).map((o) => toPrincipal(o)));
+  return buildAccessOptions(taken);
+});
 
 const memberOptionsForCurrentTeam = computed<MemberOption[]>(() => {
+  const taken = new Set(
+    (currentTeamMeta.value?.group.members ?? []).map((m) => toPrincipal(m.value)),
+  );
   const opts: MemberOption[] = [];
   for (const user of visibleUsers.value) {
     const id = user.email || user.name;
     if (!id) continue;
+    if (taken.has(toPrincipal(id))) continue;
     opts.push({
       value: id,
       label: user.displayName || user.name || id,
@@ -683,6 +690,15 @@ function removeIpRule(ruleId: string) {
     ...policyDesignerState.value,
     rules: policyDesignerState.value.rules.filter((r) => r.id !== ruleId),
   });
+  if (editingIpRuleId.value === ruleId) editingIpRuleId.value = null;
+}
+
+function onUpdateIpRule(
+  ruleId: string,
+  patch: { source: string; destination: string; ports: string },
+) {
+  commitState(updateIpRule(policyDesignerState.value, ruleId, patch));
+  editingIpRuleId.value = null;
 }
 
 function useTemplate(template: PolicyTemplate) {
@@ -950,8 +966,14 @@ async function savePolicy() {
                   class="flex items-center gap-1.5"
                 >
                   <Badge
-                    :variant="isOrphanValue(a.who) ? 'destructive' : 'outline'"
-                    class="text-xs break-all"
+                    variant="outline"
+                    :title="isOrphanValue(a.who) ? copy.orphanReferenceTooltip : undefined"
+                    :class="[
+                      'text-xs break-all',
+                      isOrphanValue(a.who)
+                        ? 'border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
+                        : '',
+                    ]"
                   >
                     <span v-if="isOrphanValue(a.who)" class="me-1">⚠</span>
                     {{ whoDisplayLabel(a.who) }}
@@ -980,8 +1002,14 @@ async function savePolicy() {
                 <Badge
                   v-for="owner in t.owners.slice(0, 3)"
                   :key="owner"
-                  :variant="isOrphanValue(owner) ? 'destructive' : 'secondary'"
-                  class="text-xs break-all"
+                  :variant="isOrphanValue(owner) ? 'outline' : 'secondary'"
+                  :title="isOrphanValue(owner) ? copy.orphanReferenceTooltip : undefined"
+                  :class="[
+                    'text-xs break-all',
+                    isOrphanValue(owner)
+                      ? 'border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
+                      : '',
+                  ]"
                 >
                   <span v-if="isOrphanValue(owner)" class="me-1">⚠</span>
                   {{ whoDisplayLabel(owner) }}
@@ -1001,12 +1029,7 @@ async function savePolicy() {
     </Card>
 
     <Card v-if="ipRules.length > 0" class="p-4" data-testid="ip-rules-section">
-      <button
-        type="button"
-        data-testid="ip-rules-toggle"
-        class="w-full flex items-center justify-between text-start"
-        @click="showIpRules = !showIpRules"
-      >
+      <div class="flex items-start justify-between gap-2">
         <div>
           <h2 class="text-base font-semibold">
             {{ copy.ipRulesSectionTitle }}
@@ -1014,38 +1037,29 @@ async function savePolicy() {
           </h2>
           <p class="mt-1 text-xs text-muted-foreground">{{ copy.ipRulesSectionHint }}</p>
         </div>
-        <Pencil class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-      </button>
+      </div>
 
-      <div v-if="showIpRules" class="mt-3 grid gap-1">
-        <div
+      <div class="mt-3 grid gap-1">
+        <IpRuleRow
           v-for="rule in ipRules"
           :key="rule.ruleId"
-          class="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
-          :data-testid="`ip-rule-${rule.ruleId}`"
-        >
-          <p class="break-all">
-            <span class="font-medium">{{ rule.source }}</span>
-            <span class="text-muted-foreground"> → </span>
-            <span class="break-all">{{ rule.destination }}</span>
-            <span class="text-muted-foreground"> · {{ rule.ports }}</span>
-          </p>
-          <Button
-            variant="ghost"
-            size="sm"
-            :data-testid="`ip-rule-remove-${rule.ruleId}`"
-            @click="removeIpRule(rule.ruleId)"
-          >
-            <Trash2 class="h-4 w-4" aria-hidden="true" />
-          </Button>
-        </div>
+          :rule="rule"
+          :is-editing="editingIpRuleId === rule.ruleId"
+          @edit-start="editingIpRuleId = rule.ruleId"
+          @edit-cancel="editingIpRuleId = null"
+          @update="(patch) => onUpdateIpRule(rule.ruleId, patch)"
+          @remove="removeIpRule(rule.ruleId)"
+        />
       </div>
     </Card>
 
     <!-- Tag detail dialog -->
     <Dialog v-model:open="tagDetailOpen">
-      <DialogContent class="sm:max-w-2xl" data-testid="tag-detail-dialog">
-        <DialogHeader>
+      <DialogContent
+        class="sm:max-w-2xl flex flex-col gap-0 p-0 max-h-[85vh] overflow-hidden"
+        data-testid="tag-detail-dialog"
+      >
+        <DialogHeader class="shrink-0 px-6 py-4 border-b">
           <DialogTitle>
             {{ copy.tagDetailDialogTitle }}
             <span v-if="currentTagMeta" class="font-normal text-muted-foreground">
@@ -1057,7 +1071,7 @@ async function savePolicy() {
           </DialogDescription>
         </DialogHeader>
 
-        <div class="grid gap-4 max-h-[60vh] overflow-y-auto pe-1">
+        <div class="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
           <div>
             <Label for="tag-name-input">{{ copy.deviceLabelName }}</Label>
             <div class="mt-2 flex gap-2">
@@ -1095,64 +1109,76 @@ async function savePolicy() {
             </div>
 
             <div
-              v-for="a in currentTagMeta?.accessors ?? []"
-              :key="a.who"
-              class="grid gap-2 rounded-md border bg-background p-2"
-              :data-testid="`tag-accessor-row-${a.who}`"
+              v-else
+              class="grid gap-2 max-h-80 overflow-y-auto pe-1"
+              data-testid="tag-accessors-list"
             >
-              <div class="flex items-center justify-between gap-2">
-                <div class="flex items-center gap-2 min-w-0">
-                  <Badge
-                    :variant="isOrphanValue(a.who) ? 'destructive' : 'secondary'"
-                    class="text-xs"
+              <div
+                v-for="a in currentTagMeta?.accessors ?? []"
+                :key="a.who"
+                class="grid gap-2 rounded-md border bg-background p-2"
+                :data-testid="`tag-accessor-row-${a.who}`"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <Badge
+                      :variant="isOrphanValue(a.who) ? 'outline' : 'secondary'"
+                      :title="isOrphanValue(a.who) ? copy.orphanReferenceTooltip : undefined"
+                      :class="[
+                        'text-xs',
+                        isOrphanValue(a.who)
+                          ? 'border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
+                          : '',
+                      ]"
+                    >
+                      {{ isOrphanValue(a.who) ? copy.orphanReferenceBadge : whoDisplayKind(a.who) }}
+                    </Badge>
+                    <span class="font-medium break-all">{{ whoDisplayLabel(a.who) }}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    :aria-label="copy.removeAccessor"
+                    :data-testid="`tag-accessor-remove-${a.who}`"
+                    @click="removeAccessor(a.who)"
                   >
-                    {{ isOrphanValue(a.who) ? copy.orphanReferenceBadge : whoDisplayKind(a.who) }}
-                  </Badge>
-                  <span class="font-medium break-all">{{ whoDisplayLabel(a.who) }}</span>
+                    <Trash2 class="h-4 w-4" aria-hidden="true" />
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  :aria-label="copy.removeAccessor"
-                  :data-testid="`tag-accessor-remove-${a.who}`"
-                  @click="removeAccessor(a.who)"
-                >
-                  <Trash2 class="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </div>
-              <div class="flex flex-wrap gap-3 text-sm">
-                <label
-                  v-for="def in SERVICE_DEFS"
-                  :key="def.id"
-                  class="flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Checkbox
-                    :model-value="a.services.includes(def.id)"
-                    :data-testid="`tag-accessor-svc-${a.who}-${def.id}`"
-                    @update:model-value="toggleAccessorService(a.who, def.id)"
+                <div class="flex flex-wrap gap-3 text-sm">
+                  <label
+                    v-for="def in SERVICE_DEFS"
+                    :key="def.id"
+                    class="flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Checkbox
+                      :model-value="a.services.includes(def.id)"
+                      :data-testid="`tag-accessor-svc-${a.who}-${def.id}`"
+                      @update:model-value="toggleAccessorService(a.who, def.id)"
+                    />
+                    <span>{{ copy[def.labelKey] }}</span>
+                  </label>
+                  <label class="flex items-center gap-1.5 cursor-pointer">
+                    <Checkbox
+                      :model-value="a.services.includes('all')"
+                      :data-testid="`tag-accessor-svc-${a.who}-all`"
+                      @update:model-value="toggleAccessorService(a.who, 'all')"
+                    />
+                    <span>{{ copy.svcAllLabel }}</span>
+                  </label>
+                </div>
+                <div class="grid gap-1.5">
+                  <Label class="text-xs">{{ copy.svcCustomLabel }}</Label>
+                  <Input
+                    v-model="customPortDrafts[a.who]"
+                    class="h-8 text-xs"
+                    :placeholder="copy.svcCustomPlaceholder"
+                    :data-testid="`tag-accessor-custom-${a.who}`"
+                    @blur="commitCustomPorts(a.who)"
+                    @keydown.enter.prevent="commitCustomPorts(a.who)"
                   />
-                  <span>{{ copy[def.labelKey] }}</span>
-                </label>
-                <label class="flex items-center gap-1.5 cursor-pointer">
-                  <Checkbox
-                    :model-value="a.services.includes('all')"
-                    :data-testid="`tag-accessor-svc-${a.who}-all`"
-                    @update:model-value="toggleAccessorService(a.who, 'all')"
-                  />
-                  <span>{{ copy.svcAllLabel }}</span>
-                </label>
-              </div>
-              <div class="grid gap-1.5">
-                <Label class="text-xs">{{ copy.svcCustomLabel }}</Label>
-                <Input
-                  v-model="customPortDrafts[a.who]"
-                  class="h-8 text-xs"
-                  :placeholder="copy.svcCustomPlaceholder"
-                  :data-testid="`tag-accessor-custom-${a.who}`"
-                  @blur="commitCustomPorts(a.who)"
-                  @keydown.enter.prevent="commitCustomPorts(a.who)"
-                />
+                </div>
               </div>
             </div>
 
@@ -1182,30 +1208,42 @@ async function savePolicy() {
               {{ copy.noLabelManagers }}
             </div>
             <div
-              v-for="owner in currentTagMeta?.owners ?? []"
-              :key="owner"
-              class="flex items-center justify-between gap-2 rounded-md border bg-background p-2"
-              :data-testid="`tag-owner-row-${owner}`"
+              v-else
+              class="grid gap-1 max-h-64 overflow-y-auto pe-1"
+              data-testid="tag-owners-list"
             >
-              <div class="flex items-center gap-2 min-w-0">
-                <Badge
-                  :variant="isOrphanValue(owner) ? 'destructive' : 'secondary'"
-                  class="text-xs"
-                >
-                  {{ isOrphanValue(owner) ? copy.orphanReferenceBadge : whoDisplayKind(owner) }}
-                </Badge>
-                <span class="font-medium break-all">{{ whoDisplayLabel(owner) }}</span>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                :aria-label="copy.removeLabelManager"
-                :data-testid="`tag-owner-remove-${owner}`"
-                @click="removeLabelManager(owner)"
+              <div
+                v-for="owner in currentTagMeta?.owners ?? []"
+                :key="owner"
+                class="flex items-center justify-between gap-2 rounded-md border bg-background p-2"
+                :data-testid="`tag-owner-row-${owner}`"
               >
-                <Trash2 class="h-4 w-4" aria-hidden="true" />
-              </Button>
+                <div class="flex items-center gap-2 min-w-0">
+                  <Badge
+                    :variant="isOrphanValue(owner) ? 'outline' : 'secondary'"
+                    :title="isOrphanValue(owner) ? copy.orphanReferenceTooltip : undefined"
+                    :class="[
+                      'text-xs',
+                      isOrphanValue(owner)
+                        ? 'border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
+                        : '',
+                    ]"
+                  >
+                    {{ isOrphanValue(owner) ? copy.orphanReferenceBadge : whoDisplayKind(owner) }}
+                  </Badge>
+                  <span class="font-medium break-all">{{ whoDisplayLabel(owner) }}</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  :aria-label="copy.removeLabelManager"
+                  :data-testid="`tag-owner-remove-${owner}`"
+                  @click="removeLabelManager(owner)"
+                >
+                  <Trash2 class="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </div>
             </div>
 
             <MemberMultiSelect
@@ -1221,7 +1259,7 @@ async function savePolicy() {
           </fieldset>
         </div>
 
-        <DialogFooter class="sm:justify-between gap-2">
+        <DialogFooter class="shrink-0 px-6 py-4 border-t sm:justify-between gap-2">
           <p class="text-xs text-muted-foreground sm:text-start">{{ copy.changesAutoSaveHint }}</p>
           <Button data-testid="tag-detail-close" @click="tagDetailOpen = false">
             {{ copy.finish }}
@@ -1232,8 +1270,11 @@ async function savePolicy() {
 
     <!-- Team detail dialog -->
     <Dialog v-model:open="teamDetailOpen">
-      <DialogContent class="sm:max-w-2xl" data-testid="team-detail-dialog">
-        <DialogHeader>
+      <DialogContent
+        class="sm:max-w-2xl flex flex-col gap-0 p-0 max-h-[85vh] overflow-hidden"
+        data-testid="team-detail-dialog"
+      >
+        <DialogHeader class="shrink-0 px-6 py-4 border-b">
           <DialogTitle>
             {{ copy.teamDetailDialogTitle }}
             <span v-if="currentTeamMeta" class="font-normal text-muted-foreground">
@@ -1243,7 +1284,7 @@ async function savePolicy() {
           <DialogDescription>{{ copy.teamNameHint }}</DialogDescription>
         </DialogHeader>
 
-        <div class="grid gap-4 max-h-[60vh] overflow-y-auto pe-1">
+        <div class="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
           <div>
             <Label for="team-name-input">{{ copy.teamName }}</Label>
             <div class="mt-2 flex gap-2">
@@ -1279,30 +1320,42 @@ async function savePolicy() {
               —
             </div>
             <div
-              v-for="m in currentTeamMeta?.group.members ?? []"
-              :key="m.value"
-              class="flex items-center justify-between gap-2 rounded-md border bg-background p-2"
-              :data-testid="`team-member-row-${m.value}`"
+              v-else
+              class="grid gap-1 max-h-64 overflow-y-auto pe-1"
+              data-testid="team-members-list"
             >
-              <div class="flex items-center gap-2 min-w-0">
-                <Badge
-                  :variant="isOrphanValue(m.value) ? 'destructive' : 'secondary'"
-                  class="text-xs"
-                >
-                  {{ isOrphanValue(m.value) ? copy.orphanReferenceBadge : whoDisplayKind(m.value) }}
-                </Badge>
-                <span class="font-medium break-all">{{ whoDisplayLabel(m.value) }}</span>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                :aria-label="copy.removeTeamMember"
-                :data-testid="`team-member-remove-${m.value}`"
-                @click="removeTeamMember(m.value)"
+              <div
+                v-for="m in currentTeamMeta?.group.members ?? []"
+                :key="m.value"
+                class="flex items-center justify-between gap-2 rounded-md border bg-background p-2"
+                :data-testid="`team-member-row-${m.value}`"
               >
-                <X class="h-4 w-4" aria-hidden="true" />
-              </Button>
+                <div class="flex items-center gap-2 min-w-0">
+                  <Badge
+                    :variant="isOrphanValue(m.value) ? 'outline' : 'secondary'"
+                    :title="isOrphanValue(m.value) ? copy.orphanReferenceTooltip : undefined"
+                    :class="[
+                      'text-xs',
+                      isOrphanValue(m.value)
+                        ? 'border-amber-300/60 bg-amber-50/60 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
+                        : '',
+                    ]"
+                  >
+                    {{ isOrphanValue(m.value) ? copy.orphanReferenceBadge : whoDisplayKind(m.value) }}
+                  </Badge>
+                  <span class="font-medium break-all">{{ whoDisplayLabel(m.value) }}</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  :aria-label="copy.removeTeamMember"
+                  :data-testid="`team-member-remove-${m.value}`"
+                  @click="removeTeamMember(m.value)"
+                >
+                  <X class="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </div>
             </div>
 
             <MemberMultiSelect
@@ -1328,20 +1381,26 @@ async function savePolicy() {
               {{ copy.noTeamAccess }}
             </div>
             <div
-              v-for="row in currentTeamMeta?.accessRows ?? []"
-              :key="row.tagName"
-              class="flex items-center justify-between gap-2 rounded-md border bg-background p-2 text-sm"
-              :data-testid="`team-access-row-${row.tagName}`"
+              v-else
+              class="grid gap-1 max-h-64 overflow-y-auto pe-1"
+              data-testid="team-access-list"
             >
-              <span class="break-all">{{ stripTagPrefix(row.tagName) }}</span>
-              <span class="text-xs text-muted-foreground">
-                {{ serviceSummary(row.services, row.customPorts) }}
-              </span>
+              <div
+                v-for="row in currentTeamMeta?.accessRows ?? []"
+                :key="row.tagName"
+                class="flex items-center justify-between gap-2 rounded-md border bg-background p-2 text-sm"
+                :data-testid="`team-access-row-${row.tagName}`"
+              >
+                <span class="break-all">{{ stripTagPrefix(row.tagName) }}</span>
+                <span class="text-xs text-muted-foreground">
+                  {{ serviceSummary(row.services, row.customPorts) }}
+                </span>
+              </div>
             </div>
           </fieldset>
         </div>
 
-        <DialogFooter class="sm:justify-between gap-2">
+        <DialogFooter class="shrink-0 px-6 py-4 border-t sm:justify-between gap-2">
           <p class="text-xs text-muted-foreground sm:text-start">{{ copy.changesAutoSaveHint }}</p>
           <Button data-testid="team-detail-close" @click="teamDetailOpen = false">
             {{ copy.finish }}
@@ -1407,21 +1466,5 @@ async function savePolicy() {
       </AlertDialogContent>
     </AlertDialog>
 
-    <div class="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-end px-4">
-      <Button
-        data-testid="save-policy-sticky"
-        class="pointer-events-auto shadow-lg"
-        :disabled="isActionPending('save-policy')"
-        @click="savePolicy"
-      >
-        <LoaderCircle
-          v-if="isActionPending('save-policy')"
-          class="h-4 w-4 animate-spin"
-          aria-hidden="true"
-        />
-        <FileCheck2 v-else class="h-4 w-4" aria-hidden="true" />
-        {{ copy.savePolicy }}
-      </Button>
-    </div>
   </section>
 </template>

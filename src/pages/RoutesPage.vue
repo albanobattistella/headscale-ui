@@ -21,6 +21,7 @@ import { useMutation } from "@/composables/useMutation";
 import { useProductCopy } from "@/composables/useProductCopy";
 import { useRefreshGuard } from "@/composables/useRefreshGuard";
 import { useSnapshot } from "@/composables/useSnapshot";
+import { useSegment } from "@/composables/useSnapshotSegment";
 import { nodePendingRoutes } from "@/utils/node";
 import { isExitRoute, pendingRouteClass } from "@/utils/status-class";
 
@@ -30,12 +31,8 @@ type RouteApprovalTarget = {
 };
 
 const { copy } = useProductCopy();
-const {
-  routeNodes,
-  isRefreshing: isRefreshingSnapshot,
-  refreshSnapshot,
-  nodeById: currentNode,
-} = useSnapshot();
+const { routeNodes, refreshSnapshot, nodeById: currentNode } = useSnapshot();
+const { isRefreshing: isRefreshingSnapshot, refresh: refreshRoutes } = useSegment("fabric");
 const { isActionPending, actionError, clearActionFeedback } = useActionFeedback();
 const router = useRouter();
 
@@ -172,7 +169,7 @@ async function confirmApproveRoute() {
         :aria-label="copy.refreshData"
         :title="copy.refreshData"
         :disabled="isRefreshingSnapshot"
-        @click="refreshSnapshot"
+        @click="refreshRoutes"
       >
         <LoaderCircle v-if="isRefreshingSnapshot" class="h-4 w-4 animate-spin" aria-hidden="true" />
         <RefreshCw v-else class="h-4 w-4" aria-hidden="true" />

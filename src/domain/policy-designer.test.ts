@@ -23,6 +23,7 @@ import {
   upsertGroup,
   upsertTagOwner,
 } from "./policy-designer";
+import { PrincipalIndex } from "./principal";
 
 function normalizeForCompare(input: Record<string, unknown>) {
   const clone: Record<string, unknown> = JSON.parse(JSON.stringify(input));
@@ -437,7 +438,7 @@ describe("findOrphanReferences", () => {
       ]),
     );
 
-    const orphans = findOrphanReferences(state, ["alice@example.com"]);
+    const orphans = findOrphanReferences(state, new PrincipalIndex(["alice@example.com"]));
     expect(orphans).toHaveLength(1);
     expect(orphans[0]?.value).toBe("ghost@example.com");
     expect(orphans[0]?.kind).toBe("group-member");
@@ -447,7 +448,7 @@ describe("findOrphanReferences", () => {
     let state = emptyState();
     state = upsertTagOwner(state, createTagOwner("tag:server", [toMemberRef("group:nonexistent")]));
 
-    const orphans = findOrphanReferences(state, []);
+    const orphans = findOrphanReferences(state, new PrincipalIndex([]));
     expect(orphans).toHaveLength(1);
     expect(orphans[0]?.value).toBe("group:nonexistent");
     expect(orphans[0]?.kind).toBe("tag-owner");
@@ -464,7 +465,7 @@ describe("findOrphanReferences", () => {
       ]),
     );
 
-    expect(findOrphanReferences(state, [])).toEqual([]);
+    expect(findOrphanReferences(state, new PrincipalIndex([]))).toEqual([]);
   });
 
   test("returns empty when all members are known", () => {
@@ -472,6 +473,12 @@ describe("findOrphanReferences", () => {
     state = upsertGroup(state, createGroup("group:ops", [toMemberRef("alice@example.com")]));
     state = upsertTagOwner(state, createTagOwner("tag:server", [toMemberRef("group:ops")]));
 
-    expect(findOrphanReferences(state, ["alice@example.com"])).toEqual([]);
+    expect(findOrphanReferences(state, new PrincipalIndex(["alice@example.com"]))).toEqual([]);
+  });
+
+  test("ignores case and whitespace differences between principals and known users", () => {
+    let state = emptyState();
+    state = upsertGroup(state, createGroup("group:ops", [toMemberRef("  Alice@Example.COM  ")]));
+    expect(findOrphanReferences(state, new PrincipalIndex(["alice@example.com"]))).toEqual([]);
   });
 });

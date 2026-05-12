@@ -58,6 +58,7 @@ import { useMutation } from "@/composables/useMutation";
 import { useProductCopy } from "@/composables/useProductCopy";
 import { useRefreshGuard } from "@/composables/useRefreshGuard";
 import { useSnapshot } from "@/composables/useSnapshot";
+import { useSegment } from "@/composables/useSnapshotSegment";
 import { isTimestampExpired as isExpired } from "@/domain/node-status";
 import { useHeadscaleI18n } from "@/i18n";
 import { keyEphemeralClass, keyKindClass, keyStatusClass, keyTagClass } from "@/utils/status-class";
@@ -71,7 +72,8 @@ type InviteActionTarget = {
 
 const { t, locale } = useHeadscaleI18n();
 const { copy } = useProductCopy();
-const { snapshot, isRefreshing: isRefreshingSnapshot, refreshSnapshot } = useSnapshot();
+const { snapshot, refreshSnapshot } = useSnapshot();
+const { isRefreshing: isRefreshingSnapshot, refresh: refreshInvites } = useSegment("identity");
 const { settings } = useHeadscaleClient();
 const { isActionPending, actionError, clearActionFeedback } = useActionFeedback();
 const { lastCreatedInvite } = useDeviceSetup();
@@ -300,7 +302,7 @@ async function copyInviteKey(value: string) {
           :aria-label="copy.refreshData"
           :title="copy.refreshData"
           :disabled="isRefreshingSnapshot"
-          @click="refreshSnapshot"
+          @click="refreshInvites"
         >
           <LoaderCircle v-if="isRefreshingSnapshot" class="h-4 w-4 animate-spin" aria-hidden="true" />
           <RefreshCw v-else class="h-4 w-4" aria-hidden="true" />

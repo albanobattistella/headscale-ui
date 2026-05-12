@@ -1,3 +1,5 @@
+import type { PrincipalIndex } from "./principal";
+
 export type PolicyMemberKind = "user" | "group" | "tag" | "host" | "raw";
 
 export interface PolicyMemberRef {
@@ -54,7 +56,8 @@ export function classifyMember(value: string): PolicyMemberKind {
 }
 
 export function toMemberRef(value: string): PolicyMemberRef {
-  return { kind: classifyMember(value), value };
+  const trimmed = value.trim();
+  return { kind: classifyMember(trimmed), value: trimmed };
 }
 
 export function parseMemberList(value: unknown): PolicyMemberRef[] {
@@ -411,15 +414,14 @@ export function removeReferencesToValues(
 
 export function findOrphanReferences(
   state: PolicyDesignerState,
-  knownUserPrincipals: string[],
+  knownUsers: PrincipalIndex,
 ): OrphanReference[] {
-  const userSet = new Set(knownUserPrincipals);
   const groupNameSet = new Set(state.groups.map((g) => g.name));
 
   const orphans: OrphanReference[] = [];
   for (const group of state.groups) {
     for (const member of group.members) {
-      if (member.kind === "user" && !userSet.has(member.value)) {
+      if (member.kind === "user" && !knownUsers.has(member.value)) {
         orphans.push({
           kind: "group-member",
           containerId: group.id,
@@ -438,7 +440,7 @@ export function findOrphanReferences(
   }
   for (const tagOwner of state.tagOwners) {
     for (const owner of tagOwner.owners) {
-      if (owner.kind === "user" && !userSet.has(owner.value)) {
+      if (owner.kind === "user" && !knownUsers.has(owner.value)) {
         orphans.push({
           kind: "tag-owner",
           containerId: tagOwner.id,

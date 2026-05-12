@@ -12,6 +12,10 @@ import { useHeadscaleClient } from "./useHeadscaleClient";
 
 type ApplySnapshotHook = (next: HeadscaleSnapshot) => void;
 
+export type SnapshotSegment = "identity" | "fabric" | "policy";
+
+export const ALL_SEGMENTS: readonly SnapshotSegment[] = ["identity", "fabric", "policy"];
+
 interface UseSnapshotReturn {
   snapshot: Ref<HeadscaleSnapshot>;
   isAuthorized: Ref<boolean>;
@@ -26,8 +30,10 @@ interface UseSnapshotReturn {
   /** Find a user by id in the current snapshot (returns `undefined` if absent). */
   userById(id: string): HeadscaleUser | undefined;
   applySnapshot(next: HeadscaleSnapshot): void;
+  applyPatch(patch: Partial<HeadscaleSnapshot>): void;
   applyOfflineHealth(): void;
   refreshSnapshot(): Promise<void>;
+  refreshSegments(segments: readonly SnapshotSegment[]): Promise<void>;
   setOnApplySnapshot(hook: ApplySnapshotHook | null): void;
 }
 
@@ -40,26 +46,47 @@ export const snapshotTestingHandle = {
   },
 };
 
-export async function fetchSnapshot(client: HeadscaleClient): Promise<HeadscaleSnapshot> {
-  const [health, version, users, preAuthKeys, nodes, apiKeys, policy] = await Promise.all([
-    client.health(),
-    client.version(),
-    client.listUsers({}),
-    client.listPreAuthKeys(),
-    client.listNodes({}),
-    client.listApiKeys(),
-    client.getPolicy(),
-  ]);
+const SEGMENT_FETCHERS: Record<
+  SnapshotSegment,
+  (client: HeadscaleClient) => Promise<Partial<HeadscaleSnapshot>>
+> = {
+  identity: async (client) => {
+    const [users, preAuthKeys, apiKeys] = await Promise.all([
+      client.listUsers({}),
+      client.listPreAuthKeys(),
+      client.listApiKeys(),
+    ]);
+    return {
+      users: users.users,
+      preAuthKeys: preAuthKeys.preAuthKeys,
+      apiKeys: apiKeys.apiKeys,
+    };
+  },
+  fabric: async (client) => {
+    const [health, version, nodes] = await Promise.all([
+      client.health(),
+      client.version(),
+      client.listNodes({}),
+    ]);
+    return { health, version, nodes: nodes.nodes };
+  },
+  policy: async (client) => {
+    const policy = await client.getPolicy();
+    return { policy };
+  },
+};
 
-  return {
-    health,
-    version,
-    users: users.users,
-    preAuthKeys: preAuthKeys.preAuthKeys,
-    nodes: nodes.nodes,
-    apiKeys: apiKeys.apiKeys,
-    policy,
-  };
+export async function fetchSegments(
+  client: HeadscaleClient,
+  segments: readonly SnapshotSegment[],
+): Promise<Partial<HeadscaleSnapshot>> {
+  const parts = await Promise.all(segments.map((s) => SEGMENT_FETCHERS[s](client)));
+  return Object.assign({}, ...parts);
+}
+
+export async function fetchSnapshot(client: HeadscaleClient): Promise<HeadscaleSnapshot> {
+  const merged = await fetchSegments(client, ALL_SEGMENTS);
+  return merged as HeadscaleSnapshot;
 }
 
 export function useSnapshot(): UseSnapshotReturn {
@@ -86,15 +113,21 @@ export function useSnapshot(): UseSnapshotReturn {
 
   let onApplySnapshot: ApplySnapshotHook | null = null;
 
-  function applySnapshot(nextSnapshot: HeadscaleSnapshot) {
-    snapshot.value = nextSnapshot;
-    // Reset rename drafts to the fresh node set: drop entries for deleted nodes
-    // and replace all values in a single reactive flush.
-    for (const key of Object.keys(renameDrafts)) delete renameDrafts[key];
-    for (const node of nextSnapshot.nodes) {
-      renameDrafts[node.id] = node.givenName || node.name;
+  function applyPatch(patch: Partial<HeadscaleSnapshot>) {
+    snapshot.value = { ...snapshot.value, ...patch };
+    if (patch.nodes) {
+      // Reset rename drafts to the fresh node set: drop entries for deleted nodes
+      // and replace all values in a single reactive flush.
+      for (const key of Object.keys(renameDrafts)) delete renameDrafts[key];
+      for (const node of patch.nodes) {
+        renameDrafts[node.id] = node.givenName || node.name;
+      }
     }
-    onApplySnapshot?.(nextSnapshot);
+    onApplySnapshot?.(snapshot.value);
+  }
+
+  function applySnapshot(nextSnapshot: HeadscaleSnapshot) {
+    applyPatch(nextSnapshot);
   }
 
   function applyOfflineHealth() {
@@ -108,14 +141,14 @@ export function useSnapshot(): UseSnapshotReturn {
     };
   }
 
-  async function refreshSnapshot() {
+  async function refreshSegments(segments: readonly SnapshotSegment[]) {
     if (!isAuthorized.value) {
       return;
     }
 
     refreshSnapshotInFlight.value += 1;
     try {
-      applySnapshot(await fetchSnapshot(createClient()));
+      applyPatch(await fetchSegments(createClient(), segments));
       lastError.value = "";
     } catch (error) {
       applyOfflineHealth();
@@ -123,6 +156,10 @@ export function useSnapshot(): UseSnapshotReturn {
     } finally {
       refreshSnapshotInFlight.value = Math.max(0, refreshSnapshotInFlight.value - 1);
     }
+  }
+
+  async function refreshSnapshot() {
+    await refreshSegments(ALL_SEGMENTS);
   }
 
   function setOnApplySnapshot(hook: ApplySnapshotHook | null) {
@@ -141,8 +178,10 @@ export function useSnapshot(): UseSnapshotReturn {
     nodeById: (id) => snapshot.value.nodes.find((n) => n.id === id),
     userById: (id) => snapshot.value.users.find((u) => u.id === id),
     applySnapshot,
+    applyPatch,
     applyOfflineHealth,
     refreshSnapshot,
+    refreshSegments,
     setOnApplySnapshot,
   };
   return instance;

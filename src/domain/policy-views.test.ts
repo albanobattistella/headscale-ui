@@ -21,6 +21,7 @@ import {
   setTagAccessor,
   stripGroupPrefix,
   stripTagPrefix,
+  updateIpRule,
   withGroupPrefix,
   withTagPrefix,
 } from "./policy-views";
@@ -308,6 +309,36 @@ describe("getIpRules", () => {
     let state = { ...emptyState(), rules: [] };
     state = addRule(state, createRule("group:ops", "*", "22"));
     expect(getIpRules(state)).toEqual([]);
+  });
+});
+
+describe("updateIpRule", () => {
+  test("patches source/destination/ports on the matching rule only", () => {
+    let state = { ...emptyState(), rules: [] };
+    state = addRule(state, createRule("group:ops", "10.0.0.1", "22"));
+    state = addRule(state, createRule("group:dev", "10.0.0.2", "80"));
+    const targetId = state.rules[0].id;
+
+    const next = updateIpRule(state, targetId, {
+      source: "group:sre",
+      destination: "10.0.0.5",
+      ports: "22,80",
+    });
+
+    expect(next.rules[0]).toMatchObject({
+      id: targetId,
+      source: "group:sre",
+      destination: "10.0.0.5",
+      ports: "22,80",
+    });
+    expect(next.rules[1]).toBe(state.rules[1]);
+  });
+
+  test("ignores unknown rule ids", () => {
+    let state = { ...emptyState(), rules: [] };
+    state = addRule(state, createRule("group:ops", "10.0.0.1", "22"));
+    const next = updateIpRule(state, "nonexistent-id", { ports: "443" });
+    expect(next.rules).toEqual(state.rules);
   });
 });
 

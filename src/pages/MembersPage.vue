@@ -74,6 +74,7 @@ import { useProductCopy } from "@/composables/useProductCopy";
 import { useRefreshGuard } from "@/composables/useRefreshGuard";
 import { useRouteIntent } from "@/composables/useRouteIntent";
 import { useSnapshot } from "@/composables/useSnapshot";
+import { useSegment } from "@/composables/useSnapshotSegment";
 import { isTimestampExpired as isExpired, nodeConnectionStatus } from "@/domain/node-status";
 import {
   addMemberToGroup,
@@ -100,12 +101,8 @@ interface UserPolicyReference {
 
 const { t, locale } = useHeadscaleI18n();
 const { copy } = useProductCopy();
-const {
-  snapshot,
-  isRefreshing: isRefreshingSnapshot,
-  refreshSnapshot,
-  userById: currentUser,
-} = useSnapshot();
+const { snapshot, refreshSnapshot, userById: currentUser } = useSnapshot();
+const { isRefreshing: isRefreshingSnapshot, refresh: refreshMembers } = useSegment("identity");
 const { isActionPending, actionError, clearActionFeedback } = useActionFeedback();
 const {
   policyDraft,
@@ -759,7 +756,7 @@ function openNodeDetailsFromDialog(node: HeadscaleNode) {
           :aria-label="copy.refreshData"
           :title="copy.refreshData"
           :disabled="isRefreshingSnapshot"
-          @click="refreshSnapshot"
+          @click="refreshMembers"
         >
           <LoaderCircle v-if="isRefreshingSnapshot" class="h-4 w-4 animate-spin" aria-hidden="true" />
           <RefreshCw v-else class="h-4 w-4" aria-hidden="true" />

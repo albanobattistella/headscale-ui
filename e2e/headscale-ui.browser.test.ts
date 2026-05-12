@@ -8,8 +8,15 @@ import { useHeadscaleClient } from "@/composables/useHeadscaleClient";
 import { masterPasswordTestingHandle, useMasterPassword } from "@/composables/useMasterPassword";
 import { useSnapshot } from "@/composables/useSnapshot";
 import { i18n } from "@/i18n";
-import { __resetForTest as resetIdbCache } from "@/lib/idb";
+import {
+  idbGet,
+  idbPut,
+  __resetForTest as resetIdbCache,
+  STORE_META,
+  STORE_PROFILES,
+} from "@/lib/idb";
 import { hydrate, profileStorage, profileStorageTestingHandle } from "@/lib/profile-storage";
+import { hydrateSettings, settingsStorageTestingHandle } from "@/lib/settings-storage";
 import { installAuthGuard, routes } from "@/router";
 import "@/styles/globals.css";
 
@@ -45,6 +52,11 @@ function storedActiveProfileId(): string | null {
   return profileStorage.readActiveProfile();
 }
 
+async function readIdbSetting(key: string): Promise<string | null> {
+  const raw = await idbGet<Record<string, string>>(STORE_META, "ui-settings");
+  return raw && typeof raw === "object" && typeof raw[key] === "string" ? raw[key] : null;
+}
+
 async function clearHeadscaleDb(): Promise<void> {
   await new Promise<void>((resolve) => {
     const req = indexedDB.deleteDatabase("headscale-ui");
@@ -63,15 +75,53 @@ beforeEach(async () => {
   resetIdbCache();
   profileStorageTestingHandle.reset();
   masterPasswordTestingHandle.reset();
+  settingsStorageTestingHandle.reset();
   await clearHeadscaleDb();
-  i18n.global.locale.value = "en";
+  (i18n.global.locale as unknown as { value: string }).value = "en";
   document.documentElement.lang = "en";
   document.documentElement.dir = "ltr";
   window.__headscaleUiOperationCalls = [];
   resetAllSingletons();
 });
 
+/**
+ * Seed an encrypted profile row directly into IDB so renderLogin's hydrate
+ * sees a pre-existing saved profile. Replaces the old localStorage seed path.
+ */
+async function seedProfileInIdb(
+  plain: {
+    id: string;
+    name: string;
+    mode: "mock" | "real";
+    baseUrl: string;
+    apiKey: string;
+    updatedAt: string;
+  },
+  opts: { active?: boolean } = {},
+): Promise<void> {
+  const mp = useMasterPassword();
+  await mp.initialize();
+  const apiKey = await mp.encryptWithDeviceKey(plain.apiKey);
+  await idbPut(STORE_PROFILES, {
+    id: plain.id,
+    name: plain.name,
+    mode: plain.mode,
+    baseUrl: plain.baseUrl,
+    apiKey,
+    updatedAt: plain.updatedAt,
+    scope: "persistent",
+  });
+  if (opts.active) {
+    await idbPut(STORE_META, plain.id, "active-profile-id");
+  }
+  // Drop singletons so renderLogin reinitialises and re-reads IDB from a clean state.
+  masterPasswordTestingHandle.reset();
+  profileStorageTestingHandle.reset();
+  resetIdbCache();
+}
+
 async function renderLogin(path = "/") {
+  await hydrateSettings();
   const mp = useMasterPassword();
   await mp.initialize();
   await hydrate({
@@ -856,16 +906,17 @@ test("manages multiple saved connection profiles and supports logout", async () 
 });
 
 test("does not flash the login form while restoring a profile route", async () => {
-  const profile = {
-    id: "profile-office",
-    name: "Office",
-    mode: "mock",
-    baseUrl: "http://127.0.0.1:8080",
-    apiKey: "office-api-key",
-    updatedAt: "2026-05-04T00:00:00.000Z",
-  };
-  localStorage.setItem("headscale-ui-profiles", JSON.stringify([profile]));
-  localStorage.setItem("headscale-ui-active-profile", profile.id);
+  await seedProfileInIdb(
+    {
+      id: "profile-office",
+      name: "Office",
+      mode: "mock",
+      baseUrl: "http://127.0.0.1:8080",
+      apiKey: "office-api-key",
+      updatedAt: "2026-05-04T00:00:00.000Z",
+    },
+    { active: true },
+  );
 
   await renderLogin("/devices");
 
@@ -876,16 +927,17 @@ test("does not flash the login form while restoring a profile route", async () =
 });
 
 test("redirects unknown profile routes back to login", async () => {
-  const profile = {
-    id: "profile-office",
-    name: "Office",
-    mode: "mock",
-    baseUrl: "http://127.0.0.1:8080",
-    apiKey: "office-api-key",
-    updatedAt: "2026-05-04T00:00:00.000Z",
-  };
-  localStorage.setItem("headscale-ui-profiles", JSON.stringify([profile]));
-  localStorage.setItem("headscale-ui-active-profile", profile.id);
+  await seedProfileInIdb(
+    {
+      id: "profile-office",
+      name: "Office",
+      mode: "mock",
+      baseUrl: "http://127.0.0.1:8080",
+      apiKey: "office-api-key",
+      updatedAt: "2026-05-04T00:00:00.000Z",
+    },
+    { active: true },
+  );
 
   await renderLogin("/00000000-0000-4000-8000-000000000000/devices");
 
@@ -896,16 +948,17 @@ test("redirects unknown profile routes back to login", async () => {
 });
 
 test("validates saved profile credentials before restoring a route", async () => {
-  const profile = {
-    id: "profile-offline",
-    name: "Offline",
-    mode: "real",
-    baseUrl: "ftp://127.0.0.1",
-    apiKey: "offline-api-key",
-    updatedAt: "2026-05-04T00:00:00.000Z",
-  };
-  localStorage.setItem("headscale-ui-profiles", JSON.stringify([profile]));
-  localStorage.setItem("headscale-ui-active-profile", profile.id);
+  await seedProfileInIdb(
+    {
+      id: "profile-offline",
+      name: "Offline",
+      mode: "real",
+      baseUrl: "ftp://127.0.0.1",
+      apiKey: "offline-api-key",
+      updatedAt: "2026-05-04T00:00:00.000Z",
+    },
+    { active: true },
+  );
 
   await renderLogin("/devices");
 
@@ -917,19 +970,14 @@ test("validates saved profile credentials before restoring a route", async () =>
 });
 
 test("normalizes stale mock profiles with remote URLs into real profiles", async () => {
-  localStorage.setItem(
-    "headscale-ui-profiles",
-    JSON.stringify([
-      {
-        id: "profile-office",
-        name: "Office",
-        mode: "mock",
-        baseUrl: "http://office.example.test",
-        apiKey: "office-api-key",
-        updatedAt: "2026-05-04T00:00:00.000Z",
-      },
-    ]),
-  );
+  await seedProfileInIdb({
+    id: "profile-office",
+    name: "Office",
+    mode: "mock",
+    baseUrl: "http://office.example.test",
+    apiKey: "office-api-key",
+    updatedAt: "2026-05-04T00:00:00.000Z",
+  });
 
   await renderLogin();
 
@@ -1091,11 +1139,11 @@ test("supports language and theme selectors before login", async () => {
   await page.getByTestId("theme-select").click();
   await page.getByTestId("theme-option-dark").click();
   expect(document.documentElement.classList.contains("dark")).toBe(true);
-  expect(localStorage.getItem("headscale-ui-theme")).toBe("dark");
+  expect(await readIdbSetting("theme")).toBe("dark");
 
   await page.getByTestId("theme-select").click();
   await page.getByTestId("theme-option-auto").click();
-  expect(localStorage.getItem("headscale-ui-theme")).toBe("auto");
+  expect(await readIdbSetting("theme")).toBe("auto");
 });
 
 test("requires explicit confirmation before closing a dirty add profile dialog", async () => {
@@ -2064,20 +2112,19 @@ test("IP-only rules collapse into the direct-device section", async () => {
   await openAccessSection();
 
   await expect.element(page.getByTestId("ip-rules-section")).toBeVisible();
-  await page.getByTestId("ip-rules-toggle").click();
   expect(document.querySelector('[data-testid^="ip-rule-"]')).toBeTruthy();
   clickLastByTestIdPrefix("ip-rule-remove-");
   await expect.poll(() => document.querySelectorAll('[data-testid^="ip-rule-"]').length).toBe(0);
 });
 
-test("mobile sticky save button posts a policy update", async () => {
+test("mobile save button posts a policy update", async () => {
   await renderLogin();
   await connectWithDefaults();
   await page.viewport(360, 768);
   await openAccessSection();
   window.__headscaleUiOperationCalls = [];
 
-  await page.getByTestId("save-policy-sticky").click();
+  await page.getByTestId("save-policy").click();
   await expect
     .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "policy.set"))
     .toBe(true);
@@ -2162,7 +2209,7 @@ test("covers server settings API keys and maintenance actions", async () => {
   }
 });
 
-test("encrypts API keys at rest and migrates legacy localStorage profiles", async () => {
+test("encrypts API keys at rest", async () => {
   await renderLogin();
 
   await page.getByTestId("profile-option-new").click();
@@ -2171,10 +2218,6 @@ test("encrypts API keys at rest and migrates legacy localStorage profiles", asyn
   await page.getByTestId("connect-api-key").fill("secret-bearer-token");
   await page.getByTestId("connect-submit").click();
   await expect.element(page.getByTestId("profile-row-Secure")).toBeVisible();
-
-  // localStorage must have been swept: no plaintext profile blob remains.
-  expect(localStorage.getItem("headscale-ui-profiles")).toBeNull();
-  expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
 
   // IndexedDB row exists with an encrypted ApiKeySecret, never the raw bearer token.
   const idbProfiles = await new Promise<unknown[]>((resolve, reject) => {
@@ -2195,36 +2238,6 @@ test("encrypts API keys at rest and migrates legacy localStorage profiles", asyn
   expect(typeof stored.apiKey.iv).toBe("string");
   expect(typeof stored.apiKey.ct).toBe("string");
   expect(JSON.stringify(stored)).not.toContain("secret-bearer-token");
-});
-
-test("hydrate migrates a pre-existing plaintext localStorage profile into IDB", async () => {
-  // Inject a legacy plaintext profile *before* hydrate runs (renderLogin triggers hydrate).
-  // The fake-indexeddb DB has been cleared in beforeEach; localStorage is the only source.
-  const legacyId = "00000000-1111-4222-8333-444444444444";
-  localStorage.setItem(
-    "headscale-ui-profiles",
-    JSON.stringify([
-      {
-        id: legacyId,
-        name: "Legacy",
-        mode: "mock",
-        baseUrl: "http://127.0.0.1:8080",
-        apiKey: "legacy-plaintext-key",
-        updatedAt: "2026-05-04T00:00:00.000Z",
-      },
-    ]),
-  );
-  localStorage.setItem("headscale-ui-active-profile", legacyId);
-
-  await renderLogin();
-
-  // localStorage was swept by the migration path.
-  expect(localStorage.getItem("headscale-ui-profiles")).toBeNull();
-  expect(localStorage.getItem("headscale-ui-active-profile")).toBeNull();
-
-  // The profile is now encrypted in IDB and the active-profile id was carried over.
-  expect(storedProfilesString()).toContain("Legacy");
-  expect(storedActiveProfileId()).toBe(legacyId);
 });
 
 test("covers task navigation and the client-device setup branch", async () => {
@@ -2488,7 +2501,7 @@ test("keeps every core function usable on mobile", async () => {
   await expect.element(page.getByTestId("teams-section")).toBeVisible();
   await expect.element(page.getByTestId("device-labels-section")).toBeVisible();
   window.__headscaleUiOperationCalls = [];
-  await page.getByTestId("save-policy-sticky").click();
+  await page.getByTestId("save-policy").click();
   await expect
     .poll(() => window.__headscaleUiOperationCalls?.some((call) => call.id === "policy.set"))
     .toBe(true);
@@ -2703,7 +2716,7 @@ test("supports light, dark and system theme modes", async () => {
   const seenThemes = new Set<string>();
   for (const mode of ["light", "dark", "auto"]) {
     await chooseProfileMenuOption(`theme-option-${mode}`);
-    const theme = localStorage.getItem("headscale-ui-theme");
+    const theme = await readIdbSetting("theme");
     if (theme) {
       seenThemes.add(theme);
     }
