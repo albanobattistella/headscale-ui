@@ -566,13 +566,10 @@ function openNodeDetails(node: HeadscaleNode) {
   });
 }
 
-let suppressDetailReturn = false;
-
 function handleNodeDetailsOpen(open: boolean) {
   if (!open) {
     nodeDetailGuard.cancel();
     selectedDetailNode.value = null;
-    if (suppressDetailReturn) return;
     const fromPage = intent.from.value;
     if (fromPage && fromPage !== "devices") {
       const fromUser = fromPage === "members" ? intent.userId.value : null;
@@ -581,12 +578,6 @@ function handleNodeDetailsOpen(open: boolean) {
       );
     }
   }
-}
-
-function closeNodeDetailsWithoutReturn() {
-  suppressDetailReturn = true;
-  handleNodeDetailsOpen(false);
-  suppressDetailReturn = false;
 }
 
 function consumeDeviceQuery() {
@@ -761,26 +752,6 @@ async function confirmRemoveNode() {
   if (removed) {
     handleRemoveDialogOpen(false);
   }
-}
-
-function openRenameDialogFromDetails(node: HeadscaleNode) {
-  closeNodeDetailsWithoutReturn();
-  openRenameDialog(node);
-}
-
-function openExpireDialogFromDetails(node: HeadscaleNode) {
-  closeNodeDetailsWithoutReturn();
-  openExpireDialog(node);
-}
-
-function openRemoveDialogFromDetails(node: HeadscaleNode) {
-  closeNodeDetailsWithoutReturn();
-  openRemoveDialog(node);
-}
-
-function jumpToRoutesFromDetails(node: HeadscaleNode) {
-  closeNodeDetailsWithoutReturn();
-  void jumpToRoutesForMachine(node);
 }
 
 async function jumpToRoutesForMachine(node: HeadscaleNode) {
@@ -1266,32 +1237,6 @@ function openUserDetailsExternal(user?: HeadscaleUser) {
             </section>
           </div>
 
-          <DialogFooter class="flex-col gap-2 sm:flex-row sm:justify-between">
-            <div class="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" data-testid="device-detail-view-routes" @click="jumpToRoutesFromDetails(selectedDetailNode)">
-                <Router class="h-4 w-4" aria-hidden="true" />
-                {{ copy.viewRoutes }}
-              </Button>
-              <Button type="button" variant="outline" size="sm" data-testid="device-detail-rename" @click="openRenameDialogFromDetails(selectedDetailNode)">
-                <Pencil class="h-4 w-4" aria-hidden="true" />
-                {{ copy.rename }}
-              </Button>
-              <Button type="button" variant="outline" size="sm" data-testid="device-detail-edit-tags" @click="openTagsDialog(selectedDetailNode)">
-                <ShieldCheck class="h-4 w-4" aria-hidden="true" />
-                {{ copy.editTags }}
-              </Button>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" data-testid="device-detail-expire" @click="openExpireDialogFromDetails(selectedDetailNode)">
-                <Clock class="h-4 w-4" aria-hidden="true" />
-                {{ copy.expire }}
-              </Button>
-              <Button type="button" variant="destructive" size="sm" data-testid="device-detail-remove" @click="openRemoveDialogFromDetails(selectedDetailNode)">
-                <Trash2 class="h-4 w-4" aria-hidden="true" />
-                {{ copy.remove }}
-              </Button>
-            </div>
-          </DialogFooter>
         </template>
       </DialogContent>
     </Dialog>
@@ -1703,6 +1648,7 @@ function openUserDetailsExternal(user?: HeadscaleUser) {
                           <ShieldCheck class="h-4 w-4" aria-hidden="true" />
                           {{ copy.editTags }}
                         </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem :data-testid="`expire-node-action-${node.id}`" @click="openExpireDialog(node)">
                           <Clock class="h-4 w-4" aria-hidden="true" />
                           {{ copy.expire }}

@@ -3,7 +3,9 @@ import {
   Activity,
   Check,
   CircleUserRound,
+  Clock,
   Copy,
+  EllipsisVertical,
   FileCheck2,
   Github,
   KeyRound,
@@ -19,6 +21,7 @@ import {
   Server,
   ShieldCheck,
   SunMedium,
+  Trash2,
   Users,
 } from "lucide-vue-next";
 import { computed, nextTick, reactive, ref, watch } from "vue";
@@ -558,13 +561,36 @@ watch(activeSection, scrollActiveTabIntoView, { immediate: true });
                         <TableCell class="text-sm text-muted-foreground">{{ formatDate(key.expiration) }}</TableCell>
                         <TableCell class="text-sm text-muted-foreground">{{ formatDate(key.lastSeen) }}</TableCell>
                         <TableCell>
-                          <div class="flex justify-start gap-2">
-                            <Button type="button" size="sm" variant="outline" :data-testid="`expire-api-key-${key.prefix}`" @click="requestApiKeyAction('expire', key)">
-                              {{ copy.expireApiKeyTitle }}
-                            </Button>
-                            <Button type="button" size="sm" variant="destructive" :data-testid="`delete-api-key-${key.prefix}`" @click="requestApiKeyAction('delete', key)">
-                              {{ copy.deleteApiKeyTitle }}
-                            </Button>
+                          <div class="flex justify-start">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger as-child>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  :data-testid="`api-key-actions-trigger-${key.prefix}`"
+                                  :aria-label="`${copy.actions}: ${key.prefix}`"
+                                >
+                                  <EllipsisVertical class="h-4 w-4" aria-hidden="true" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" class="w-56" :data-testid="`api-key-actions-menu-${key.prefix}`">
+                                <DropdownMenuLabel>{{ copy.actions }}</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem :data-testid="`expire-api-key-${key.prefix}`" @click="requestApiKeyAction('expire', key)">
+                                  <Clock class="h-4 w-4" aria-hidden="true" />
+                                  {{ copy.expireApiKeyTitle }}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  :data-testid="`delete-api-key-${key.prefix}`"
+                                  @click="requestApiKeyAction('delete', key)"
+                                >
+                                  <Trash2 class="h-4 w-4" aria-hidden="true" />
+                                  {{ copy.deleteApiKeyTitle }}
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </TableCell>
                       </TableRow>

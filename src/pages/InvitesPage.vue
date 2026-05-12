@@ -1,5 +1,15 @@
 <script setup lang="ts">
-import { Copy, Filter, LoaderCircle, Plus, RefreshCw, Search } from "lucide-vue-next";
+import {
+  Clock,
+  Copy,
+  EllipsisVertical,
+  Filter,
+  LoaderCircle,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+} from "lucide-vue-next";
 import { computed, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import type { HeadscaleClient, HeadscaleUser, PreAuthKey } from "@/api/types";
@@ -21,6 +31,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -348,10 +366,36 @@ async function copyInviteKey(value: string) {
                   </Badge>
                 </div>
               </TableCell>
-              <TableCell class="min-w-48">
-                <div class="flex justify-start gap-2">
-                  <Button size="sm" variant="outline" :data-testid="`expire-invite-${key.id}`" @click="requestInviteAction('expire', key)">{{ copy.expireInvite }}</Button>
-                  <Button size="sm" variant="destructive" :data-testid="`delete-invite-${key.id}`" @click="requestInviteAction('delete', key)">{{ copy.deleteInvite }}</Button>
+              <TableCell class="min-w-16">
+                <div class="flex justify-start">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        :data-testid="`invite-actions-trigger-${key.id}`"
+                        :aria-label="`${copy.actions}: ${shortSecret(key.key)}`"
+                      >
+                        <EllipsisVertical class="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" class="w-56" :data-testid="`invite-actions-menu-${key.id}`">
+                      <DropdownMenuLabel>{{ copy.actions }}</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem :data-testid="`expire-invite-${key.id}`" @click="requestInviteAction('expire', key)">
+                        <Clock class="h-4 w-4" aria-hidden="true" />
+                        {{ copy.expireInvite }}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        :data-testid="`delete-invite-${key.id}`"
+                        @click="requestInviteAction('delete', key)"
+                      >
+                        <Trash2 class="h-4 w-4" aria-hidden="true" />
+                        {{ copy.deleteInvite }}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </TableCell>
             </TableRow>

@@ -828,6 +828,22 @@ function openNodeDetailsFromDialog(node: HeadscaleNode) {
                       <Pencil class="h-4 w-4" aria-hidden="true" />
                       {{ copy.renameMember }}
                     </DropdownMenuItem>
+                    <DropdownMenuItem
+                      :data-testid="`assign-member-groups-mobile-${user.name}`"
+                      :disabled="!preferredPrincipalForUser(user)"
+                      @click="openAssignMembershipsDialog(user)"
+                    >
+                      <Users class="h-4 w-4" aria-hidden="true" />
+                      {{ copy.addUserToGroup }}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      :data-testid="`assign-member-tags-mobile-${user.name}`"
+                      :disabled="!preferredPrincipalForUser(user)"
+                      @click="openAssignTagOwnershipsDialog(user)"
+                    >
+                      <ShieldCheck class="h-4 w-4" aria-hidden="true" />
+                      {{ copy.grantTagToUser }}
+                    </DropdownMenuItem>
                     <DropdownMenuItem variant="destructive" :data-testid="`delete-member-mobile-${user.name}`" @click="requestDeleteMember(user)">
                       <Trash2 class="h-4 w-4" aria-hidden="true" />
                       {{ copy.deleteMember }}
@@ -890,6 +906,23 @@ function openNodeDetailsFromDialog(node: HeadscaleNode) {
                         <Pencil class="h-4 w-4" aria-hidden="true" />
                         {{ copy.renameMember }}
                       </DropdownMenuItem>
+                      <DropdownMenuItem
+                        :data-testid="`assign-member-groups-${user.name}`"
+                        :disabled="!preferredPrincipalForUser(user)"
+                        @click="openAssignMembershipsDialog(user)"
+                      >
+                        <Users class="h-4 w-4" aria-hidden="true" />
+                        {{ copy.addUserToGroup }}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        :data-testid="`assign-member-tags-${user.name}`"
+                        :disabled="!preferredPrincipalForUser(user)"
+                        @click="openAssignTagOwnershipsDialog(user)"
+                      >
+                        <ShieldCheck class="h-4 w-4" aria-hidden="true" />
+                        {{ copy.grantTagToUser }}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem variant="destructive" :data-testid="`delete-member-${user.name}`" @click="requestDeleteMember(user)">
                         <Trash2 class="h-4 w-4" aria-hidden="true" />
                         {{ copy.deleteMember }}
@@ -1031,36 +1064,6 @@ function openNodeDetailsFromDialog(node: HeadscaleNode) {
             </section>
           </div>
 
-          <DialogFooter class="flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              data-testid="user-detail-assign-groups"
-              :disabled="!preferredPrincipalForUser(selectedDetailUser)"
-              @click="openAssignMembershipsDialog(selectedDetailUser)"
-            >
-              <Users class="h-4 w-4" aria-hidden="true" />
-              {{ copy.addUserToGroup }}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              data-testid="user-detail-grant-tags"
-              :disabled="!preferredPrincipalForUser(selectedDetailUser)"
-              @click="openAssignTagOwnershipsDialog(selectedDetailUser)"
-            >
-              <ShieldCheck class="h-4 w-4" aria-hidden="true" />
-              {{ copy.grantTagToUser }}
-            </Button>
-            <Button type="button" variant="outline" data-testid="user-detail-view-machines" @click="jumpToMachinesForUser(selectedDetailUser)">
-              <Network class="h-4 w-4" aria-hidden="true" />
-              {{ copy.viewMachines }}
-            </Button>
-            <Button type="button" data-testid="user-detail-create-auth-key" @click="openInviteDialogForUser(selectedDetailUser)">
-              <KeyRound class="h-4 w-4" aria-hidden="true" />
-              {{ copy.createInvite }}
-            </Button>
-          </DialogFooter>
         </template>
       </DialogContent>
     </Dialog>
