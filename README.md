@@ -74,7 +74,7 @@ Recommended Cloudflare Pages settings:
 
 - Build command: `bun install --frozen-lockfile && bun run build`
 - Build output directory: `dist`
-- Environment variable: `BUN_VERSION=1.3.13`
+- Environment variable: `BUN_VERSION=1.3.14`
 
 The repository includes `public/_redirects` so deep profile URLs are served by
 `index.html`:

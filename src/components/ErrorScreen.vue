@@ -2,7 +2,7 @@
 import { ref } from "vue";
 import { clearAllSecureData } from "@/lib/secure-storage";
 
-defineProps<{ error: unknown }>();
+const props = defineProps<{ error: unknown; reloadPage?: () => void }>();
 
 const resetting = ref(false);
 const resetDone = ref(false);
@@ -14,7 +14,7 @@ async function reset() {
   try {
     await clearAllSecureData();
     resetDone.value = true;
-    setTimeout(() => window.location.reload(), 600);
+    setTimeout(reload, 600);
   } catch (err) {
     resetError.value = err instanceof Error ? err.message : String(err);
   } finally {
@@ -23,7 +23,7 @@ async function reset() {
 }
 
 function reload() {
-  window.location.reload();
+  (props.reloadPage ?? (() => window.location.reload()))();
 }
 
 function describe(err: unknown): string {
@@ -40,6 +40,7 @@ function describe(err: unknown): string {
 <template>
   <div
     class="fixed inset-0 z-[70] flex items-center justify-center bg-background p-4 text-foreground"
+    data-testid="error-screen"
   >
     <div class="w-full max-w-md rounded-lg border bg-card p-6 shadow-sm">
       <h1 class="text-lg font-semibold">Headscale UI failed to start</h1>
@@ -54,6 +55,7 @@ function describe(err: unknown): string {
         <button
           type="button"
           class="inline-flex h-9 items-center justify-center rounded-md border bg-background px-3 text-sm font-medium hover:bg-accent"
+          data-testid="error-reload"
           :disabled="resetting"
           @click="reload"
         >
@@ -62,6 +64,7 @@ function describe(err: unknown): string {
         <button
           type="button"
           class="inline-flex h-9 items-center justify-center rounded-md bg-destructive px-3 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+          data-testid="error-reset"
           :disabled="resetting || resetDone"
           @click="reset"
         >

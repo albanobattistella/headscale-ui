@@ -25,7 +25,10 @@ function collectVueFiles(dir: string): string[] {
   return out;
 }
 
-const SOURCE_FILES = [...collectVueFiles("src/pages"), "src/components/CreateAuthKeyDialog.vue"];
+const COMPONENT_FILES = collectVueFiles("src/components").filter(
+  (file) => !file.startsWith("src/components/ui/"),
+);
+const SOURCE_FILES = [...collectVueFiles("src/pages"), ...COMPONENT_FILES];
 const E2E_FILE = "e2e/headscale-ui.browser.test.ts";
 const FLOW_TAGS = new Set([
   "AlertDialogCancel",
@@ -93,6 +96,17 @@ function readTestIdAttribute(prop: ElementNode["props"][number]) {
   return undefined;
 }
 
+function hasStaticAttribute(node: ElementNode, name: string, value?: string) {
+  return node.props.some((prop) => {
+    if (prop.type !== NodeTypes.ATTRIBUTE || prop.name !== name) return false;
+    return value === undefined || prop.value?.content === value;
+  });
+}
+
+function isDecorativeFlowControl(node: ElementNode) {
+  return node.tag === "Checkbox" && hasStaticAttribute(node, "tabindex", "-1");
+}
+
 async function collectSourceTargets() {
   const targets: SourceTarget[] = [];
   const missingTestIds: SourceTarget[] = [];
@@ -111,7 +125,8 @@ async function collectSourceTargets() {
         const tag = node.tag;
         if (
           FLOW_TAGS.has(tag) &&
-          (node.tagType === ElementTypes.ELEMENT || node.tagType === ElementTypes.COMPONENT)
+          (node.tagType === ElementTypes.ELEMENT || node.tagType === ElementTypes.COMPONENT) &&
+          !isDecorativeFlowControl(node)
         ) {
           const testId = node.props
             .map(readTestIdAttribute)
@@ -157,7 +172,7 @@ function collectInteractions(source: string) {
   }
 
   const helperInteraction =
-    /(?:clickDomTestId|inputDomTestId|selectDomTestId|chooseProfileMenuOption)\(\s*("[^"]+"|`[^`]+`)/g;
+    /(?:clickDomTestId|clickVisibleDomTestId|clickLastByTestIdPrefix|inputDomTestId|inputLastByTestIdPrefix|selectDomTestId|chooseProfileMenuOption)\(\s*("[^"]+"|`[^`]+`)/g;
   for (const match of source.matchAll(helperInteraction)) {
     add(match[1] ?? "");
   }
@@ -167,7 +182,7 @@ function collectInteractions(source: string) {
     add(`section-${match[1] ?? ""}`);
   }
 
-  const prefixClick = /clickLastByTestIdPrefix\(\s*"([^"]+)"/g;
+  const prefixClick = /(?:clickLastByTestIdPrefix|inputLastByTestIdPrefix)\(\s*"([^"]+)"/g;
   for (const match of source.matchAll(prefixClick)) {
     add(`${match[1] ?? ""}*`);
   }

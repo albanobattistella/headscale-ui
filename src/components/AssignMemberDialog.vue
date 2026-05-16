@@ -119,12 +119,11 @@ function closeDialog() {
             @click="toggle(option)"
           >
             <Checkbox
-              class="mt-0.5"
+              class="mt-0.5 pointer-events-none"
               :model-value="selected.has(option.id)"
               :disabled="isSubmitting"
               tabindex="-1"
               :aria-label="option.name"
-              @click.stop="toggle(option)"
             />
             <div class="grid gap-1 text-sm">
               <span class="font-medium break-all">{{ option.name }}</span>

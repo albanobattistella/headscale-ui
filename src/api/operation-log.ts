@@ -6,6 +6,10 @@ export function recordOperationCall(
   url: string,
   payload: unknown,
 ) {
+  if (!import.meta.env.DEV && import.meta.env.MODE !== "test") {
+    return;
+  }
+
   if (typeof window === "undefined") {
     return;
   }

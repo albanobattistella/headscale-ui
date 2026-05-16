@@ -141,7 +141,7 @@ async function clearAll() {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>{{ t("cancel") }}</AlertDialogCancel>
+              <AlertDialogCancel data-testid="unlock-forgot-cancel">{{ t("cancel") }}</AlertDialogCancel>
               <AlertDialogAction
                 class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 data-testid="unlock-forgot-confirm"

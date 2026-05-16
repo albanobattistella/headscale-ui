@@ -218,7 +218,13 @@ async function clearAll() {
         {{ errorMessage }}
       </p>
       <div class="flex justify-end gap-2">
-        <Button type="button" variant="ghost" :disabled="submitting" @click="reset">
+        <Button
+          type="button"
+          variant="ghost"
+          data-testid="security-enable-cancel"
+          :disabled="submitting"
+          @click="reset"
+        >
           {{ t("cancel") }}
         </Button>
         <Button
@@ -253,6 +259,7 @@ async function clearAll() {
           v-model="newPassphrase"
           type="password"
           autocomplete="new-password"
+          data-testid="security-change-new-passphrase"
         />
       </div>
       <div class="space-y-1.5">
@@ -262,6 +269,7 @@ async function clearAll() {
           v-model="confirmPassphrase"
           type="password"
           autocomplete="new-password"
+          data-testid="security-change-confirm-passphrase"
         />
       </div>
       <p
@@ -272,7 +280,13 @@ async function clearAll() {
         {{ errorMessage }}
       </p>
       <div class="flex justify-end gap-2">
-        <Button type="button" variant="ghost" :disabled="submitting" @click="reset">
+        <Button
+          type="button"
+          variant="ghost"
+          data-testid="security-change-cancel"
+          :disabled="submitting"
+          @click="reset"
+        >
           {{ t("cancel") }}
         </Button>
         <Button
@@ -311,7 +325,13 @@ async function clearAll() {
         {{ errorMessage }}
       </p>
       <div class="flex justify-end gap-2">
-        <Button type="button" variant="ghost" :disabled="submitting" @click="reset">
+        <Button
+          type="button"
+          variant="ghost"
+          data-testid="security-disable-cancel"
+          :disabled="submitting"
+          @click="reset"
+        >
           {{ t("cancel") }}
         </Button>
         <Button
@@ -348,7 +368,7 @@ async function clearAll() {
             <AlertDialogDescription>{{ t("encryptionForgotten") }}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{{ t("cancel") }}</AlertDialogCancel>
+            <AlertDialogCancel data-testid="security-clear-all-cancel">{{ t("cancel") }}</AlertDialogCancel>
             <AlertDialogAction
               class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="security-clear-all-confirm"
