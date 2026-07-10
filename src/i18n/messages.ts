@@ -884,6 +884,153 @@ const commonMessagesBase = {
     encryptionUnsupportedHint: "هذا المتصفح لا يدعم التخزين الدائم.",
     encryptionMultiTabNote: "يتطلّب كل علامة تبويب في المتصفح فتح قفلها بشكل منفصل.",
   },
+  it: {
+    appTitle: "Headscale UI",
+  appSubtitle: "Un'interfaccia di controllo tipizzata per le operazioni REST di Headscale v0.28.",
+  connection: "Connessione",
+  serverUrl: "URL del server",
+  apiKey: "Chiave API",
+  apiKeyPlaceholder: "Token Bearer creato tramite headscale apikeys create",
+  connectTitle: "Connetti a Headscale",
+  connectSubtitle:
+    "Inserisci l'indirizzo del server e il token di autorizzazione prima di aprire l'interfaccia di controllo.",
+  profileSelectorTitle: "Scegli un profilo server",
+  profileSelectorDescription:
+    "Scegli un profilo salvato come faresti per l'accesso a un sistema operativo, oppure aggiungi un altro server Headscale.",
+  profile: "Profilo",
+  newProfile: "Nuovo profilo",
+  profileName: "Nome profilo",
+  addServerProfile: "Aggiungi server",
+  connectAsProfile: "Connetti come",
+  updatedProfile: "Aggiornato",
+  saveProfile: "Salva profilo",
+  addProfile: "Aggiungi",
+  addingProfile: "Aggiunta in corso",
+  checkingCredentials: "Verifica delle credenziali",
+  restoringSession: "Riconnessione a {name}…",
+  close: "Chiudi",
+  discardProfileChangesTitle: "Chiudere senza aggiungere questo server?",
+  discardProfileChangesDescription:
+    "I dettagli del profilo sono modificati. Chiudendo ora, le modifiche non salvate andranno perse.",
+  keepEditingProfile: "Continua a modificare",
+  discardProfileChanges: "Scarta modifiche",
+  connectionValidationFailedTitle: "Aggiungere comunque questo server?",
+  connectionValidationFailedDescription:
+    "L'interfaccia utente non ha potuto verificare l'URL del server o la chiave API. Puoi continuare a modificare i dettagli, oppure aggiungere il profilo e sistemarlo in seguito. Puoi modificare questo profilo dall'elenco in qualsiasi momento.",
+  backToEditConnection: "Rivedi i dettagli",
+  saveAnywayButton: "Continua ad aggiungere",
+  savedProfiles: "Profili salvati",
+  useProfile: "Usa",
+  editProfile: "Modifica profilo",
+  deleteProfile: "Elimina profilo",
+  confirmDeleteProfileTitle: "Eliminare questo profilo?",
+  confirmDeleteProfileDescription:
+    "Questo rimuoverà l'URL del server salvato e la chiave API da questo browser.",
+  apiKeyGuideTitle: "Come ottenere una chiave API",
+  apiKeyGuideDescription:
+    "Le chiavi API di Headscale vengono create dalla CLI del server prima che l'interfaccia utente possa connettersi.",
+  apiKeyGuideCommandLabel: "Esegui sul server Headscale",
+  apiKeyGuideStepServer: "Accedi via SSH al server su cui è in esecuzione Headscale.",
+  apiKeyGuideStepCreate: "Crea una chiave API a breve scadenza con la CLI di Headscale.",
+  apiKeyGuideStepCopy: "Copia immediatamente la chiave completa; Headscale la mostra una sola volta.",
+  apiKeyGuideStepPaste: "Incolla qui la chiave insieme al tuo URL HTTPS di Headscale.",
+  apiKeyGuideHint: "Se una chiave viene smarrita o è scaduta, revocala e creane una nuova sul server.",
+  headscaleDocs: "Documentazione di Headscale",
+  rememberConnection: "Ricorda questa connessione in questo browser",
+  cancel: "Annulla",
+  connect: "Connetti",
+  logout: "Disconnetti",
+  mode: "Modalità",
+  mockMode: "Mock",
+  realMode: "Reale",
+  theme: "Tema",
+  language: "Lingua",
+  light: "Chiaro",
+  dark: "Scuro",
+  system: "Sistema",
+  refresh: "Aggiorna",
+  run: "Esegui",
+  running: "In esecuzione",
+  result: "Risultato",
+  operation: "Operazione",
+  method: "Metodo",
+  path: "Percorso",
+  executableOperations: "Operazioni eseguibili",
+  serverBoundaries: "Configurazione e limiti del server",
+  serverBoundariesDescription:
+    "Queste aree di Headscale sono importanti, ma la versione 0.28 non espone endpoint di gestione REST stabili per esse.",
+  stateOverview: "Panoramica dello stato",
+  users: "Utenti",
+  nodes: "Nodi",
+  preAuthKeys: "Chiavi di pre-autenticazione",
+  apiKeys: "Chiavi API",
+  policy: "Politica",
+  routes: "Rotte",
+  health: "Salute",
+  version: "Versione",
+  online: "Online",
+  offline: "Offline",
+  database: "Database",
+  connected: "Connesso",
+  disconnected: "Disconnesso",
+  coverageMatrix: "Matrice di copertura E2E",
+  coverageDescription:
+    "Ogni operazione REST stabile di Headscale riportata di seguito è renderizzata ed eseguibile tramite l'interfaccia utente.",
+  lastResponse: "Ultima risposta",
+  copy: "Copia",
+  copied: "Copiato",
+  noData: "Nessun dato",
+  sensitiveValue: "I valori sensibili vengono mostrati solo quando vengono restituiti da Headscale la prima volta.",
+  unsupportedByApi: "Nessuna API REST stabile in Headscale v0.28",
+  dnsTitle: "DNS e MagicDNS",
+  dnsDescription:
+    "MagicDNS, i server dei nomi, lo split DNS, i domini di ricerca e i record aggiuntivi riguardano il file di configurazione.",
+  oidcTitle: "OIDC e politica di registrazione",
+  oidcDescription:
+    "L'emittente, le impostazioni del client, gli utenti e i gruppi consentiti fanno parte della configurazione del server; l'approvazione dei nodi nella v0.28 utilizza gli endpoint di registrazione dei nodi.",
+  derpTitle: "DERP e mappa dei relè",
+  derpDescription:
+    "Le sorgenti della mappa DERP, il DERP integrato e le impostazioni STUN fanno parte della configurazione del server e della diagnostica.",
+  serveTitle: "Serve, Funnel e Taildrop",
+  serveDescription:
+    "Serve e Funnel sono funzionalità del client Tailscale; Taildrop è una configurazione di Headscale, non un'API di gestione della v0.28.",
+  encryptionSectionTitle: "Crittografia",
+  encryptionEnableLabel: "Usa una passphrase prima di salvare le chiavi API",
+  encryptionEnableHint:
+    "Senza una passphrase, le chiavi salvate sono vincolate solo a questo browser e non possono essere trasferite.",
+  encryptionSetupWarning:
+    "Questa passphrase non può essere recuperata. Se la dimentichi, dovrai cancellare tutti i profili salvati e reinserire le tue chiavi API.",
+  encryptionSetupWarningConfirm: "Ho annotato e salvato questa passphrase in modo sicuro",
+  encryptionSetPassphrase: "Imposta una passphrase",
+  encryptionConfirmPassphrase: "Conferma passphrase",
+  encryptionChangePassphrase: "Cambia passphrase",
+  encryptionDisable: "Disabilita passphrase",
+  encryptionDisableConfirm:
+    "Inserisci la passphrase attuale per disabilitarla. Le chiavi salvate torneranno alla crittografia vincolata al dispositivo.",
+  encryptionUnlockTitle: "Sblocca i profili salvati",
+  encryptionUnlockDescription:
+    "Inserisci la passphrase impostata in precedenza per accedere alle chiavi API salvate.",
+  encryptionUnlockSubmit: "Sblocca",
+  encryptionEnterPassphrase: "Inserisci la passphrase",
+  encryptionLocalityNote:
+    "Le tue chiavi API sono crittografate su questo dispositivo. La passphrase non lascia mai il tuo browser.",
+  encryptionUnlockFailed: "Passphrase errata.",
+  encryptionForgotten:
+    "Hai dimenticato la passphrase? È necessario cancellare tutti i profili salvati e reinserire le chiavi API. La passphrase non può essere recuperata.",
+  encryptionForgottenButton: "Cancella tutti i profili salvati",
+  forgotConfirmTitle: "Cancellare tutti i dati crittografati?",
+  forgotConfirmDescription:
+    "Questo eliminerà permanentemente tutti i {count} profili server salvati e reimposterà la tua passphrase. Sarà necessario aggiungere nuovamente i server e le chiavi API. Questa azione non può essere annullata.",
+  profilesClearedNotice: "Tutti i profili salvati sono stati cancellati. Aggiungi un server per iniziare da zero.",
+  encryptionProfileCorrupted:
+    "I dati di questo profilo sono danneggiati (non si tratta di un problema di passphrase). Reinserisci la chiave API per ripristinare la connessione.",
+  encryptionStorageNote: "Le chiavi API salvate sono crittografate in questo browser.",
+  encryptionSessionOnlyBadge: "Solo sessione",
+  encryptionEncryptedBadge: "Crittografato",
+  encryptionLockedBadge: "Bloccato",
+  encryptionCorruptedBadge: "Danneggiato",
+  encryptionUnsupportedHint: "Questo browser non supporta l'archiviazione persistente.",
+  encryptionMultiTabNote: "Ogni scheda del browser richiede il proprio sblocco.",
 } satisfies Record<SourceLocale, Record<MessageKey, string>>;
 
 export const commonMessages: Record<Locale, Record<MessageKey, string>> = {
@@ -952,6 +1099,15 @@ const groupLabelsBase = {
     apikeys: "مفاتيح API",
     policy: "السياسة",
   },
+  it: {
+    connection: "Connessione",
+    users: "Utenti",
+    preauthkeys: "Chiavi di pre-autenticazione",
+    nodes: "Nodi",
+    auth: "Richieste di autenticazione",
+    routes: "Rotte",
+    apikeys: "Chiavi API",
+    policy: "Politica",
 } satisfies Record<SourceLocale, Record<OperationGroup, string>>;
 
 export const groupLabels: Record<Locale, Record<OperationGroup, string>> = {
@@ -1607,6 +1763,115 @@ const operationMessagesBase = {
       description: "حفظ السياسة التي أنشأها مصمم ACL والمجموعات ومالكي الوسوم المرئي.",
     },
   },
+  it: {
+    "health.check": {
+      title: "Controlla salute",
+      description: "Legge la connettività del database Headscale dall'endpoint di salute.",
+    },
+    "version.get": {
+      title: "Leggi versione",
+      description: "Legge la versione del server Headscale.",
+    },
+    "user.list": {
+      title: "Consulta utenti",
+      description: "Filtra per ID, nome o e-mail; lascia vuoto per elencarli tutti.",
+    },
+    "user.create": {
+      title: "Crea utente",
+      description: "Crea un utente della tailnet con nome visibile, e-mail e avatar opzionali.",
+    },
+    "user.rename": {
+      title: "Rinomina utente",
+      description: "Rinomina un utente tramite ID numerico.",
+    },
+    "user.delete": { title: "Elimina utente", description: "Elimina l'utente selezionato." },
+    "preauthkey.list": {
+      title: "Elenca chiavi pre-auth",
+      description: "Elenca tutte le chiavi di pre-autenticazione.",
+    },
+    "preauthkey.create": {
+      title: "Crea chiave pre-auth",
+      description: "Crea una chiave di autenticazione per dispositivi personali o etichettati.",
+    },
+    "preauthkey.expire": {
+      title: "Fai scadere chiave pre-auth",
+      description: "Fai scadere una chiave di pre-autenticazione tramite ID.",
+    },
+    "preauthkey.delete": {
+      title: "Elimina chiave pre-auth",
+      description: "Elimina una chiave di pre-autenticazione tramite ID.",
+    },
+    "node.list": {
+      title: "Elenca nodi",
+      description: "Elenca tutti i nodi, opzionalmente filtrati per utente.",
+    },
+    "node.get": {
+      title: "Leggi dettagli del nodo",
+      description: "Ottiene il record completo di un nodo tramite ID.",
+    },
+    "node.register": {
+      title: "Registra nodo in attesa",
+      description: "Approva e registra un nodo con una chiave di registrazione.",
+    },
+    "auth.register": {
+      title: "Registra richiesta auth",
+      description: "Assegna a un utente una richiesta di registrazione tramite browser.",
+    },
+    "auth.approve": {
+      title: "Approva richiesta auth",
+      description: "Approva una richiesta di registrazione tramite browser utilizzando l'ID auth.",
+    },
+    "auth.reject": {
+      title: "Rifiuta richiesta auth",
+      description: "Rifiuta una richiesta di registrazione tramite browser utilizzando l'ID auth.",
+    },
+    "node.debugCreate": {
+      title: "Crea nodo di prova",
+      description: "Crea un nodo di prova tramite l'endpoint di debug di Headscale.",
+    },
+    "node.rename": { title: "Rinomina nodo", description: "Cambia il nome assegnato al nodo." },
+    "node.expire": {
+      title: "Fai scadere nodo",
+      description:
+        "Fai scadere un nodo ora, a un'ora specifica, oppure cancella la sua scadenza sui nuovi server.",
+    },
+    "node.delete": { title: "Elimina nodo", description: "Rimuove un nodo dalla tailnet." },
+    "node.setTags": {
+      title: "Definisci etichette del nodo",
+      description: "Sostituisce le etichette attuali del nodo.",
+    },
+    "node.setApprovedRoutes": {
+      title: "Approva rotte del nodo",
+      description: "Sostituisce le rotte approvate, incluse le rotte di sottorete e exit-node.",
+    },
+    "node.backfillIps": {
+      title: "Ripopola IP dei nodi",
+      description: "Esegue l'azione di manutenzione di Headscale per ripopolare gli IP dei nodi.",
+    },
+    "apikey.list": {
+      title: "Elenca chiavi API",
+      description: "Elenca i metadati delle chiavi API del server.",
+    },
+    "apikey.create": {
+      title: "Crea chiave API",
+      description: "Crea una chiave API; il valore completo viene restituito una sola volta.",
+    },
+    "apikey.expire": {
+      title: "Fai scadere chiave API",
+      description: "Fai scadere una chiave API tramite prefisso o ID.",
+    },
+    "apikey.delete": {
+      title: "Elimina chiave API",
+      description: "Elimina una chiave API tramite prefisso e ID opzionale.",
+    },
+    "policy.get": {
+      title: "Leggi policy",
+      description: "Legge il contenuto della policy di Headscale e l'ora del suo aggiornamento.",
+    },
+    "policy.set": {
+      title: "Salva policy",
+      description:
+        "Salva la policy generata dal designer visuale di ACL, gruppi e proprietari delle etichette.",
 } satisfies Record<SourceLocale, OperationText>;
 
 export const operationMessages: Record<Locale, OperationText> = {
