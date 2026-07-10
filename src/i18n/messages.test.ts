@@ -17,7 +17,7 @@ describe("i18n message coverage", () => {
   });
 
   test("does not use prefixed English operation placeholders for UN locales", () => {
-    for (const locale of ["fr", "ru", "es", "ar"] as const) {
+    for (const locale of ["fr", "ru", "es", "ar" "it"] as const) {
       for (const id of OPERATION_IDS) {
         const message = getOperationMessage(locale, id);
         expect(message.title).not.toMatch(/^[A-Z]{2}:/);
@@ -29,5 +29,6 @@ describe("i18n message coverage", () => {
     expect(getOperationMessage("fr", "node.rename").title).toBe("Renommer le nœud");
     expect(getOperationMessage("ru", "apikey.create").title).toBe("Создать API-ключ");
     expect(getOperationMessage("es", "policy.set").title).toBe("Guardar policy");
+    expect(getOperationMessage("it", "node.rename").title).toBe("Rinomina nodo");
   });
 });
