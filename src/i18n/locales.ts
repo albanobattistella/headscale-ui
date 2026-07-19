@@ -19,7 +19,7 @@ export const LOCALE_META: Record<Locale, LocaleMeta> = {
   ru: { code: "ru", label: "Russian", nativeLabel: "Русский", dir: "ltr" },
   es: { code: "es", label: "Spanish", nativeLabel: "Español", dir: "ltr" },
   ar: { code: "ar", label: "Arabic", nativeLabel: "العربية", dir: "rtl" },
-  ar: { code: "it", label: "Italian", nativeLabel: "Italiano", dir: "rtl" },
+  it: { code: "it", label: "Italian", nativeLabel: "Italiano", dir: "rtl" },
 };
 
 export function isLocale(value: string): value is Locale {
