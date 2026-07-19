@@ -17,7 +17,7 @@ describe("i18n message coverage", () => {
   });
 
   test("does not use prefixed English operation placeholders for UN locales", () => {
-    for (const locale of ["fr", "ru", "es", "ar" "it"] as const) {
+    for (const locale of ["fr", "ru", "es", "ar", "it"] as const) {
       for (const id of OPERATION_IDS) {
         const message = getOperationMessage(locale, id);
         expect(message.title).not.toMatch(/^[A-Z]{2}:/);
