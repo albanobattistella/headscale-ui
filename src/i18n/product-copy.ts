@@ -1267,7 +1267,7 @@ const productCopyBase = {
     refreshData: "Aggiorna dati",
     never: "Mai",
     profileNotFound: "Profilo non trovato.",
-    roleOwner: "Propriatario",
+    roleOwner: "Proprietario",
     roleMember: "Membro",
     roleServiceAccount: "Account di servizio",
     errorUserNotFound: "Utente non trovato.",
